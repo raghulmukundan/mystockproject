@@ -172,10 +172,13 @@ export default function Watchlists() {
 
                 <div className="flex items-center justify-between text-sm text-gray-500">
                   <span>Created {new Date(watchlist.created_at).toLocaleDateString()}</span>
-                  <button className="flex items-center text-blue-600 hover:text-blue-700">
+                  <Link 
+                    to={`/watchlists/${watchlist.id}`}
+                    className="flex items-center text-blue-600 hover:text-blue-700 transition-colors"
+                  >
                     <EyeIcon className="h-4 w-4 mr-1" />
                     View Details
-                  </button>
+                  </Link>
                 </div>
               </div>
 

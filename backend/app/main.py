@@ -1,10 +1,20 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.watchlists import router as watchlists_router
 from app.core.database import init_db
 from app.core.scheduler import scheduler
 
-app = FastAPI(title="Stock Watchlist API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    init_db()
+    scheduler.start()
+    yield
+    # Shutdown
+    scheduler.shutdown()
+
+app = FastAPI(title="Stock Watchlist API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,15 +25,6 @@ app.add_middleware(
 )
 
 app.include_router(watchlists_router, prefix="/api")
-
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-    scheduler.start()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    scheduler.shutdown()
 
 @app.get("/")
 async def root():

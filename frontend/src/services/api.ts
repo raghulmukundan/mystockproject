@@ -55,6 +55,21 @@ export const watchlistsApi = {
     const response = await api.delete(`/watchlists/${id}`)
     return response.data
   },
+
+  async addItem(watchlistId: number, item: Omit<WatchlistItem, 'id' | 'created_at'>): Promise<WatchlistItem> {
+    const response = await api.post(`/watchlists/${watchlistId}/items`, item)
+    return response.data
+  },
+
+  async updateItem(watchlistId: number, itemId: number, item: Partial<Omit<WatchlistItem, 'id' | 'created_at'>>): Promise<WatchlistItem> {
+    const response = await api.put(`/watchlists/${watchlistId}/items/${itemId}`, item)
+    return response.data
+  },
+
+  async deleteItem(watchlistId: number, itemId: number): Promise<{ message: string }> {
+    const response = await api.delete(`/watchlists/${watchlistId}/items/${itemId}`)
+    return response.data
+  },
 }
 
 export default api

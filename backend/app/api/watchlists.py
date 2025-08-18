@@ -6,7 +6,7 @@ import io
 from app.core.database import get_db
 from app.models.watchlist import Watchlist
 from app.models.watchlist_item import WatchlistItem
-from app.api.schemas import WatchlistResponse, WatchlistCreate, WatchlistUpdate, UploadResponse
+from app.api.schemas import WatchlistResponse, WatchlistCreate, WatchlistUpdate, WatchlistItemCreate, WatchlistItemUpdate, WatchlistItemResponse, UploadResponse
 from app.services.symbol_validator import symbol_validator
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
@@ -176,3 +176,122 @@ def delete_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": f"Watchlist '{db_watchlist.name}' deleted successfully"}
+
+@router.post("/{watchlist_id}/items", response_model=WatchlistItemResponse)
+async def add_watchlist_item(
+    watchlist_id: int,
+    item: WatchlistItemCreate,
+    db: Session = Depends(get_db)
+):
+    db_watchlist = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
+    if not db_watchlist:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+    
+    valid_symbols, invalid_symbols = await symbol_validator.validate_symbols([item.symbol])
+    
+    if invalid_symbols:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid symbol: {item.symbol}"
+        )
+    
+    existing_item = db.query(WatchlistItem).filter(
+        WatchlistItem.watchlist_id == watchlist_id,
+        WatchlistItem.symbol == item.symbol.upper()
+    ).first()
+    
+    if existing_item:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Symbol {item.symbol} already exists in this watchlist"
+        )
+    
+    watchlist_item = WatchlistItem(
+        watchlist_id=watchlist_id,
+        symbol=item.symbol.upper(),
+        company_name=item.company_name,
+        entry_price=item.entry_price,
+        target_price=item.target_price,
+        stop_loss=item.stop_loss
+    )
+    
+    db.add(watchlist_item)
+    db.commit()
+    db.refresh(watchlist_item)
+    
+    return watchlist_item
+
+@router.put("/{watchlist_id}/items/{item_id}", response_model=WatchlistItemResponse)
+async def update_watchlist_item(
+    watchlist_id: int,
+    item_id: int,
+    item_update: WatchlistItemUpdate,
+    db: Session = Depends(get_db)
+):
+    db_item = db.query(WatchlistItem).filter(
+        WatchlistItem.id == item_id,
+        WatchlistItem.watchlist_id == watchlist_id
+    ).first()
+    
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Watchlist item not found")
+    
+    if item_update.symbol is not None:
+        valid_symbols, invalid_symbols = await symbol_validator.validate_symbols([item_update.symbol])
+        
+        if invalid_symbols:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid symbol: {item_update.symbol}"
+            )
+        
+        existing_item = db.query(WatchlistItem).filter(
+            WatchlistItem.watchlist_id == watchlist_id,
+            WatchlistItem.symbol == item_update.symbol.upper(),
+            WatchlistItem.id != item_id
+        ).first()
+        
+        if existing_item:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Symbol {item_update.symbol} already exists in this watchlist"
+            )
+        
+        db_item.symbol = item_update.symbol.upper()
+    
+    if item_update.company_name is not None:
+        db_item.company_name = item_update.company_name
+    
+    if item_update.entry_price is not None:
+        db_item.entry_price = item_update.entry_price
+    
+    if item_update.target_price is not None:
+        db_item.target_price = item_update.target_price
+    
+    if item_update.stop_loss is not None:
+        db_item.stop_loss = item_update.stop_loss
+    
+    db.commit()
+    db.refresh(db_item)
+    
+    return db_item
+
+@router.delete("/{watchlist_id}/items/{item_id}")
+def delete_watchlist_item(
+    watchlist_id: int,
+    item_id: int,
+    db: Session = Depends(get_db)
+):
+    db_item = db.query(WatchlistItem).filter(
+        WatchlistItem.id == item_id,
+        WatchlistItem.watchlist_id == watchlist_id
+    ).first()
+    
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Watchlist item not found")
+    
+    symbol = db_item.symbol
+    db.delete(db_item)
+    db.commit()
+    
+    return {"message": f"Symbol '{symbol}' removed from watchlist"}

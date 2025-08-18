@@ -32,6 +32,13 @@ class WatchlistUpdate(BaseModel):
     description: Optional[str] = None
     items: Optional[List[WatchlistItemCreate]] = None
 
+class WatchlistItemUpdate(BaseModel):
+    symbol: Optional[str] = None
+    company_name: Optional[str] = None
+    entry_price: Optional[Decimal] = None
+    target_price: Optional[Decimal] = None
+    stop_loss: Optional[Decimal] = None
+
 class WatchlistResponse(BaseModel):
     id: int
     name: str
