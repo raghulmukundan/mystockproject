@@ -1,5 +1,15 @@
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { 
+  ChartBarIcon, 
+  TrophyIcon, 
+  ExclamationTriangleIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon 
+} from '@heroicons/react/24/outline'
 import StockChart from '../components/StockChart'
-import { ChartData, MarkerData } from '../types'
+import { ChartData, MarkerData, Watchlist } from '../types'
+import { watchlistsApi } from '../services/api'
 
 const demoData: ChartData[] = [
   { time: '2024-01-01', open: 150, high: 155, low: 148, close: 152 },
@@ -37,7 +47,82 @@ const overlayLines = [
   { price: 145, color: '#F44336', title: 'Stop Loss' },
 ]
 
+// Mock function to simulate performance data
+const getMockPerformance = (watchlistId: number) => {
+  const performances = [
+    { id: 1, performance: 8.5, trend: 'up' },
+    { id: 2, performance: -2.3, trend: 'down' },
+    { id: 3, performance: 12.1, trend: 'up' },
+    { id: 4, performance: 5.7, trend: 'up' },
+    { id: 5, performance: -0.8, trend: 'down' },
+  ]
+  return performances.find(p => p.id === watchlistId) || { performance: Math.random() * 20 - 5, trend: Math.random() > 0.5 ? 'up' : 'down' }
+}
+
 export default function Dashboard() {
+  const [watchlists, setWatchlists] = useState<Watchlist[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    loadWatchlists()
+  }, [])
+
+  const loadWatchlists = async () => {
+    try {
+      const data = await watchlistsApi.getAll()
+      setWatchlists(data)
+    } catch (err: any) {
+      setError('Failed to load watchlists')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Calculate statistics
+  const totalWatchlists = watchlists.length
+  const allSymbols = watchlists.flatMap(w => w.items.map(item => item.symbol))
+  const uniqueSymbols = new Set(allSymbols).size
+  
+  // Calculate performance metrics
+  const watchlistPerformances = watchlists.map(watchlist => ({
+    ...watchlist,
+    performance: getMockPerformance(watchlist.id)
+  }))
+  
+  const bestPerforming = watchlistPerformances.reduce((best, current) => 
+    current.performance.performance > (best?.performance.performance || -Infinity) ? current : best, 
+    null as typeof watchlistPerformances[0] | null
+  )
+  
+  const worstPerforming = watchlistPerformances.reduce((worst, current) => 
+    current.performance.performance < (worst?.performance.performance || Infinity) ? current : worst,
+    null as typeof watchlistPerformances[0] | null
+  )
+
+  const avgPerformance = watchlistPerformances.length > 0 
+    ? watchlistPerformances.reduce((sum, w) => sum + w.performance.performance, 0) / watchlistPerformances.length 
+    : 0
+
+  const totalMarketValue = watchlists.reduce((total, watchlist) => {
+    return total + watchlist.items.reduce((sum, item) => {
+      const mockPrice = Math.random() * 200 + 50
+      return sum + (item.entry_price ? item.entry_price * 100 : mockPrice * 100)
+    }, 0)
+  }, 0)
+
+  if (loading) {
+    return (
+      <div className="px-4 py-6 sm:px-0">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="mb-8">
@@ -46,6 +131,12 @@ export default function Dashboard() {
           Welcome to your stock watchlist dashboard
         </p>
       </div>
+
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="lg:col-span-2">
@@ -57,73 +148,229 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-6">
-            <h3 className="text-lg font-medium text-gray-900">Quick Stats</h3>
-            <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div className="px-4 py-5 bg-gray-50 overflow-hidden sm:p-6 rounded-lg">
-                <dt className="text-sm font-medium text-gray-500 truncate">
-                  Total Watchlists
-                </dt>
-                <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                  3
-                </dd>
-              </div>
-              <div className="px-4 py-5 bg-gray-50 overflow-hidden sm:p-6 rounded-lg">
-                <dt className="text-sm font-medium text-gray-500 truncate">
-                  Total Symbols
-                </dt>
-                <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                  24
-                </dd>
-              </div>
-            </dl>
+        {/* Quick Stats Grid */}
+        <div className="lg:col-span-2">
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-6">Quick Stats</h3>
+              <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Total Watchlists */}
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-5 sm:p-6 rounded-lg border border-blue-200">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <ChartBarIcon className="h-8 w-8 text-blue-600" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dt className="text-sm font-medium text-blue-700 truncate">
+                        Total Watchlists
+                      </dt>
+                      <dd className="text-2xl font-bold text-blue-900">
+                        {totalWatchlists}
+                      </dd>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Unique Symbols */}
+                <div className="bg-gradient-to-r from-green-50 to-green-100 px-4 py-5 sm:p-6 rounded-lg border border-green-200">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <ArrowTrendingUpIcon className="h-8 w-8 text-green-600" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dt className="text-sm font-medium text-green-700 truncate">
+                        Unique Symbols
+                      </dt>
+                      <dd className="text-2xl font-bold text-green-900">
+                        {uniqueSymbols}
+                      </dd>
+                      <div className="text-xs text-green-600 mt-1">
+                        {allSymbols.length} total positions
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Average Performance */}
+                <div className={`bg-gradient-to-r px-4 py-5 sm:p-6 rounded-lg border ${
+                  avgPerformance >= 0 
+                    ? 'from-emerald-50 to-emerald-100 border-emerald-200' 
+                    : 'from-red-50 to-red-100 border-red-200'
+                }`}>
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      {avgPerformance >= 0 ? (
+                        <ArrowTrendingUpIcon className="h-8 w-8 text-emerald-600" />
+                      ) : (
+                        <ArrowTrendingDownIcon className="h-8 w-8 text-red-600" />
+                      )}
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dt className={`text-sm font-medium truncate ${
+                        avgPerformance >= 0 ? 'text-emerald-700' : 'text-red-700'
+                      }`}>
+                        Avg Performance
+                      </dt>
+                      <dd className={`text-2xl font-bold ${
+                        avgPerformance >= 0 ? 'text-emerald-900' : 'text-red-900'
+                      }`}>
+                        {avgPerformance >= 0 ? '+' : ''}{avgPerformance.toFixed(1)}%
+                      </dd>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Total Market Value */}
+                <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-4 py-5 sm:p-6 rounded-lg border border-purple-200">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <TrophyIcon className="h-8 w-8 text-purple-600" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dt className="text-sm font-medium text-purple-700 truncate">
+                        Est. Portfolio Value
+                      </dt>
+                      <dd className="text-2xl font-bold text-purple-900">
+                        ${(totalMarketValue / 1000).toFixed(0)}K
+                      </dd>
+                    </div>
+                  </div>
+                </div>
+              </dl>
+            </div>
           </div>
         </div>
 
+        {/* Performance Leaderboard */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-6">
-            <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
-            <div className="mt-5">
-              <div className="flow-root">
-                <ul className="-mb-8">
-                  <li>
-                    <div className="relative pb-8">
-                      <div className="relative flex space-x-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500">
-                          <span className="h-4 w-4 text-white">+</span>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div>
-                            <p className="text-sm text-gray-500">
-                              Added <span className="font-medium text-gray-900">AAPL</span> to Tech Stocks
-                            </p>
-                            <p className="mt-1 text-xs text-gray-400">2 hours ago</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                  <li>
-                    <div className="relative pb-8">
-                      <div className="relative flex space-x-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500">
-                          <span className="h-4 w-4 text-white">📊</span>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div>
-                            <p className="text-sm text-gray-500">
-                              Updated target price for <span className="font-medium text-gray-900">MSFT</span>
-                            </p>
-                            <p className="mt-1 text-xs text-gray-400">1 day ago</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                </ul>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Watchlist Performance</h3>
+            {watchlistPerformances.length === 0 ? (
+              <div className="text-center py-8">
+                <ExclamationTriangleIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No watchlists found</p>
+                <Link
+                  to="/upload"
+                  className="mt-2 text-blue-600 hover:text-blue-700"
+                >
+                  Create your first watchlist
+                </Link>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-3">
+                {watchlistPerformances
+                  .sort((a, b) => b.performance.performance - a.performance.performance)
+                  .slice(0, 5)
+                  .map((watchlist, index) => (
+                    <div key={watchlist.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          index === 0 ? 'bg-yellow-100 text-yellow-800' :
+                          index === 1 ? 'bg-gray-100 text-gray-800' :
+                          index === 2 ? 'bg-orange-100 text-orange-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <div>
+                          <Link
+                            to={`/watchlists/${watchlist.id}`}
+                            className="font-medium text-gray-900 hover:text-blue-600"
+                          >
+                            {watchlist.name}
+                          </Link>
+                          <div className="text-sm text-gray-500">
+                            {watchlist.items.length} symbols
+                          </div>
+                        </div>
+                      </div>
+                      <div className={`text-right ${
+                        watchlist.performance.performance >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        <div className="font-semibold">
+                          {watchlist.performance.performance >= 0 ? '+' : ''}
+                          {watchlist.performance.performance.toFixed(1)}%
+                        </div>
+                        <div className="text-xs">
+                          {watchlist.performance.trend === 'up' ? '↗' : '↘'} trend
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Market Insights */}
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Market Insights</h3>
+            {bestPerforming && worstPerforming ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center space-x-3">
+                    <TrophyIcon className="h-6 w-6 text-green-600" />
+                    <div>
+                      <div className="font-medium text-green-900">Best Performer</div>
+                      <Link 
+                        to={`/watchlists/${bestPerforming.id}`}
+                        className="text-sm text-green-700 hover:text-green-800"
+                      >
+                        {bestPerforming.name}
+                      </Link>
+                    </div>
+                  </div>
+                  <div className="text-right text-green-700">
+                    <div className="font-bold">+{bestPerforming.performance.performance.toFixed(1)}%</div>
+                    <div className="text-xs">{bestPerforming.items.length} symbols</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center space-x-3">
+                    <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+                    <div>
+                      <div className="font-medium text-red-900">Needs Attention</div>
+                      <Link 
+                        to={`/watchlists/${worstPerforming.id}`}
+                        className="text-sm text-red-700 hover:text-red-800"
+                      >
+                        {worstPerforming.name}
+                      </Link>
+                    </div>
+                  </div>
+                  <div className="text-right text-red-700">
+                    <div className="font-bold">{worstPerforming.performance.performance.toFixed(1)}%</div>
+                    <div className="text-xs">{worstPerforming.items.length} symbols</div>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="font-medium text-blue-900 mb-2">Portfolio Summary</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <div className="text-blue-700">Diversification</div>
+                      <div className="font-semibold text-blue-900">
+                        {uniqueSymbols} unique symbols across {totalWatchlists} lists
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-blue-700">Performance Spread</div>
+                      <div className="font-semibold text-blue-900">
+                        {bestPerforming.performance.performance.toFixed(1)}% to {worstPerforming.performance.performance.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <ChartBarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500 mb-2">No performance data available</p>
+                <p className="text-sm text-gray-400">Create watchlists to see insights</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
