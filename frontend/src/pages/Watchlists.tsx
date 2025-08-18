@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { EyeIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { EyeIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { watchlistsApi } from '../services/api'
-import { Watchlist } from '../types'
+import { Watchlist, WatchlistItem } from '../types'
+import EditWatchlistModal from '../components/EditWatchlistModal'
+import DeleteConfirmModal from '../components/DeleteConfirmModal'
 
 export default function Watchlists() {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [editingWatchlist, setEditingWatchlist] = useState<Watchlist | null>(null)
+  const [deletingWatchlist, setDeletingWatchlist] = useState<Watchlist | null>(null)
+  const [editLoading, setEditLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   useEffect(() => {
     loadWatchlists()
@@ -22,6 +28,40 @@ export default function Watchlists() {
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleEditWatchlist = async (data: {
+    name: string
+    description: string
+    items: Omit<WatchlistItem, 'id' | 'created_at'>[]
+  }) => {
+    if (!editingWatchlist) return
+
+    setEditLoading(true)
+    try {
+      await watchlistsApi.update(editingWatchlist.id, data)
+      await loadWatchlists()
+      setEditingWatchlist(null)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to update watchlist')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  const handleDeleteWatchlist = async () => {
+    if (!deletingWatchlist) return
+
+    setDeleteLoading(true)
+    try {
+      await watchlistsApi.delete(deletingWatchlist.id)
+      await loadWatchlists()
+      setDeletingWatchlist(null)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to delete watchlist')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -82,10 +122,28 @@ export default function Watchlists() {
             <div key={watchlist.id} className="bg-white shadow rounded-lg overflow-hidden">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">{watchlist.name}</h3>
-                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                    {watchlist.items.length} symbols
-                  </span>
+                  <div className="flex items-center space-x-3">
+                    <h3 className="text-lg font-medium text-gray-900">{watchlist.name}</h3>
+                    <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                      {watchlist.items.length} symbols
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setEditingWatchlist(watchlist)}
+                      className="text-gray-400 hover:text-blue-600 transition-colors"
+                      title="Edit watchlist"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeletingWatchlist(watchlist)}
+                      className="text-gray-400 hover:text-red-600 transition-colors"
+                      title="Delete watchlist"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 
                 {watchlist.description && (
@@ -161,6 +219,24 @@ export default function Watchlists() {
           ))}
         </div>
       )}
+
+      <EditWatchlistModal
+        isOpen={!!editingWatchlist}
+        onClose={() => setEditingWatchlist(null)}
+        onSave={handleEditWatchlist}
+        watchlist={editingWatchlist}
+        isLoading={editLoading}
+      />
+
+      <DeleteConfirmModal
+        isOpen={!!deletingWatchlist}
+        onClose={() => setDeletingWatchlist(null)}
+        onConfirm={handleDeleteWatchlist}
+        title="Delete Watchlist"
+        message={`Are you sure you want to delete "${deletingWatchlist?.name}"? This action cannot be undone and will remove all ${deletingWatchlist?.items.length || 0} items in this watchlist.`}
+        confirmText="Delete Watchlist"
+        isLoading={deleteLoading}
+      />
     </div>
   )
 }

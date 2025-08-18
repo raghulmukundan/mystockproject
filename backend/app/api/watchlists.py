@@ -6,7 +6,7 @@ import io
 from app.core.database import get_db
 from app.models.watchlist import Watchlist
 from app.models.watchlist_item import WatchlistItem
-from app.api.schemas import WatchlistResponse, WatchlistCreate, UploadResponse
+from app.api.schemas import WatchlistResponse, WatchlistCreate, WatchlistUpdate, UploadResponse
 from app.services.symbol_validator import symbol_validator
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
@@ -117,3 +117,62 @@ async def create_watchlist(watchlist: WatchlistCreate, db: Session = Depends(get
     db.refresh(db_watchlist)
     
     return db_watchlist
+
+@router.put("/{watchlist_id}", response_model=WatchlistResponse)
+async def update_watchlist(
+    watchlist_id: int, 
+    watchlist_update: WatchlistUpdate, 
+    db: Session = Depends(get_db)
+):
+    db_watchlist = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
+    if not db_watchlist:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+    
+    if watchlist_update.name is not None:
+        db_watchlist.name = watchlist_update.name
+    
+    if watchlist_update.description is not None:
+        db_watchlist.description = watchlist_update.description
+    
+    if watchlist_update.items is not None:
+        symbols = [item.symbol.upper().strip() for item in watchlist_update.items]
+        valid_symbols, invalid_symbols = await symbol_validator.validate_symbols(symbols)
+        
+        if invalid_symbols:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid symbols: {', '.join(invalid_symbols)}"
+            )
+        
+        db.query(WatchlistItem).filter(WatchlistItem.watchlist_id == watchlist_id).delete()
+        
+        new_items = []
+        for item in watchlist_update.items:
+            if item.symbol.upper() in valid_symbols:
+                watchlist_item = WatchlistItem(
+                    watchlist_id=watchlist_id,
+                    symbol=item.symbol.upper(),
+                    company_name=item.company_name,
+                    entry_price=item.entry_price,
+                    target_price=item.target_price,
+                    stop_loss=item.stop_loss
+                )
+                new_items.append(watchlist_item)
+        
+        db.add_all(new_items)
+    
+    db.commit()
+    db.refresh(db_watchlist)
+    
+    return db_watchlist
+
+@router.delete("/{watchlist_id}")
+def delete_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
+    db_watchlist = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
+    if not db_watchlist:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+    
+    db.delete(db_watchlist)
+    db.commit()
+    
+    return {"message": f"Watchlist '{db_watchlist.name}' deleted successfully"}

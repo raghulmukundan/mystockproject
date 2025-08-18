@@ -27,6 +27,11 @@ class WatchlistCreate(BaseModel):
     description: Optional[str] = None
     items: List[WatchlistItemCreate] = []
 
+class WatchlistUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    items: Optional[List[WatchlistItemCreate]] = None
+
 class WatchlistResponse(BaseModel):
     id: int
     name: str

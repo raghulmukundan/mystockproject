@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Watchlist, UploadResponse } from '../types'
+import { Watchlist, UploadResponse, WatchlistItem } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -39,6 +39,20 @@ export const watchlistsApi = {
         'Content-Type': 'multipart/form-data',
       },
     })
+    return response.data
+  },
+
+  async update(id: number, data: { 
+    name?: string; 
+    description?: string; 
+    items?: Omit<WatchlistItem, 'id' | 'created_at'>[] 
+  }): Promise<Watchlist> {
+    const response = await api.put(`/watchlists/${id}`, data)
+    return response.data
+  },
+
+  async delete(id: number): Promise<{ message: string }> {
+    const response = await api.delete(`/watchlists/${id}`)
     return response.data
   },
 }
