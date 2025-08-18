@@ -1,0 +1,7 @@
+symbol,company_name,entry_price,target_price,stop_loss
+AAPL,Apple Inc.,150.00,200.00,140.00
+GOOGL,Alphabet Inc.,2500.00,3000.00,2300.00
+MSFT,Microsoft Corporation,300.00,400.00,280.00
+TSLA,Tesla Inc.,800.00,1000.00,700.00
+AMZN,Amazon.com Inc.,3200.00,4000.00,2800.00
+NVDA,NVIDIA Corporation,500.00,600.00,450.00
