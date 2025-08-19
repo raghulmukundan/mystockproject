@@ -3,7 +3,7 @@ uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 alembic==1.12.1
 apscheduler==3.10.4
-yfinance==0.2.28
+aiohttp==3.9.1
 pandas==2.1.4
 openpyxl==3.1.2
 python-multipart==0.0.6

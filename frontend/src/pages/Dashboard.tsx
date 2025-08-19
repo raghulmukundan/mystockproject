@@ -10,6 +10,7 @@ import {
 import StockChart from '../components/StockChart'
 import { ChartData, MarkerData, Watchlist } from '../types'
 import { watchlistsApi } from '../services/api'
+import { stockApi, StockPrice } from '../services/stockApi'
 
 const demoData: ChartData[] = [
   { time: '2024-01-01', open: 150, high: 155, low: 148, close: 152 },
@@ -47,22 +48,40 @@ const overlayLines = [
   { price: 145, color: '#F44336', title: 'Stop Loss' },
 ]
 
-// Mock function to simulate performance data
-const getMockPerformance = (watchlistId: number) => {
-  const performances = [
-    { id: 1, performance: 8.5, trend: 'up' },
-    { id: 2, performance: -2.3, trend: 'down' },
-    { id: 3, performance: 12.1, trend: 'up' },
-    { id: 4, performance: 5.7, trend: 'up' },
-    { id: 5, performance: -0.8, trend: 'down' },
-  ]
-  return performances.find(p => p.id === watchlistId) || { performance: Math.random() * 20 - 5, trend: Math.random() > 0.5 ? 'up' : 'down' }
+// Function to calculate real performance data
+const calculateWatchlistPerformance = (watchlist: Watchlist, priceData: Record<string, StockPrice>) => {
+  let totalGainLoss = 0
+  let totalValue = 0
+  let validItems = 0
+
+  for (const item of watchlist.items) {
+    const price = priceData[item.symbol]
+    if (price && item.entry_price) {
+      const gainLoss = price.current_price - item.entry_price
+      const gainLossPercent = (gainLoss / item.entry_price) * 100
+      
+      totalGainLoss += gainLossPercent
+      totalValue += price.current_price
+      validItems++
+    }
+  }
+
+  if (validItems === 0) {
+    return { performance: 0, trend: 'neutral' as const }
+  }
+
+  const avgPerformance = totalGainLoss / validItems
+  return {
+    performance: avgPerformance,
+    trend: avgPerformance >= 0 ? ('up' as const) : ('down' as const)
+  }
 }
 
 export default function Dashboard() {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [priceData, setPriceData] = useState<Record<string, StockPrice>>({})
 
   useEffect(() => {
     loadWatchlists()
@@ -72,6 +91,17 @@ export default function Dashboard() {
     try {
       const data = await watchlistsApi.getAll()
       setWatchlists(data)
+      
+      // Load price data for all unique symbols
+      const allSymbols = Array.from(new Set(data.flatMap(w => w.items.map(item => item.symbol))))
+      if (allSymbols.length > 0) {
+        try {
+          const prices = await stockApi.getMultipleStockPrices(allSymbols)
+          setPriceData(prices)
+        } catch (priceError) {
+          console.error('Failed to load stock prices:', priceError)
+        }
+      }
     } catch (err: any) {
       setError('Failed to load watchlists')
       console.error(err)
@@ -88,7 +118,7 @@ export default function Dashboard() {
   // Calculate performance metrics
   const watchlistPerformances = watchlists.map(watchlist => ({
     ...watchlist,
-    performance: getMockPerformance(watchlist.id)
+    performance: calculateWatchlistPerformance(watchlist, priceData)
   }))
   
   const bestPerforming = watchlistPerformances.reduce((best, current) => 
@@ -107,8 +137,10 @@ export default function Dashboard() {
 
   const totalMarketValue = watchlists.reduce((total, watchlist) => {
     return total + watchlist.items.reduce((sum, item) => {
-      const mockPrice = Math.random() * 200 + 50
-      return sum + (item.entry_price ? item.entry_price * 100 : mockPrice * 100)
+      const price = priceData[item.symbol]
+      const currentPrice = price?.current_price || 0
+      const shares = 100 // Assume 100 shares per position for market value calculation
+      return sum + (currentPrice * shares)
     }, 0)
   }, 0)
 

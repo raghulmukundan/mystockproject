@@ -1,0 +1,81 @@
+const API_BASE_URL = 'http://localhost:8000/api'
+
+export interface StockPrice {
+  symbol: string
+  current_price: number
+  change: number
+  change_percent: number
+  volume: number
+  market_cap?: number
+}
+
+export interface CompanyProfile {
+  symbol: string
+  company_name: string
+  sector: string
+  industry: string
+  market_cap?: number
+  description?: string
+  country?: string
+  exchange: string
+}
+
+class StockApiService {
+  async getStockPrice(symbol: string): Promise<StockPrice> {
+    const response = await fetch(`${API_BASE_URL}/stocks/prices/${symbol}`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stock price for ${symbol}`)
+    }
+    return response.json()
+  }
+
+  async getMultipleStockPrices(symbols: string[]): Promise<Record<string, StockPrice>> {
+    const params = new URLSearchParams()
+    symbols.forEach(symbol => params.append('symbols', symbol))
+    
+    const response = await fetch(`${API_BASE_URL}/stocks/prices?${params}`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch stock prices')
+    }
+    return response.json()
+  }
+
+  async getCompanyProfile(symbol: string): Promise<CompanyProfile> {
+    const response = await fetch(`${API_BASE_URL}/stocks/profile/${symbol}`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch company profile for ${symbol}`)
+    }
+    return response.json()
+  }
+
+  async getMultipleCompanyProfiles(symbols: string[]): Promise<Record<string, CompanyProfile>> {
+    const params = new URLSearchParams()
+    symbols.forEach(symbol => params.append('symbols', symbol))
+    
+    const response = await fetch(`${API_BASE_URL}/stocks/profiles?${params}`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch company profiles')
+    }
+    return response.json()
+  }
+
+  async getCacheStats() {
+    const response = await fetch(`${API_BASE_URL}/stocks/cache-stats`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch cache stats')
+    }
+    return response.json()
+  }
+
+  async clearCache() {
+    const response = await fetch(`${API_BASE_URL}/stocks/clear-cache`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      throw new Error('Failed to clear cache')
+    }
+    return response.json()
+  }
+}
+
+export const stockApi = new StockApiService()

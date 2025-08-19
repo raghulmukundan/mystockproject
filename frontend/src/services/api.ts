@@ -70,6 +70,11 @@ export const watchlistsApi = {
     const response = await api.delete(`/watchlists/${watchlistId}/items/${itemId}`)
     return response.data
   },
+
+  async refreshProfiles(watchlistId: number): Promise<{ message: string; updated_count: number; total_items: number }> {
+    const response = await api.post(`/watchlists/${watchlistId}/refresh-profiles`)
+    return response.data
+  },
 }
 
 export default api

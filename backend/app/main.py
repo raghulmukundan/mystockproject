@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.watchlists import router as watchlists_router
+from app.api.stocks import router as stocks_router
 from app.core.database import init_db
 from app.core.scheduler import scheduler
 
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 
 app.include_router(watchlists_router, prefix="/api")
+app.include_router(stocks_router, prefix="/api")
 
 @app.get("/")
 async def root():

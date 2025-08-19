@@ -151,21 +151,56 @@ export default function Watchlists() {
                 )}
 
                 <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Symbols</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {watchlist.items.slice(0, 8).map((item) => (
-                      <Link
-                        key={item.id}
-                        to={`/chart/${item.symbol}`}
-                        className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-medium px-2 py-1 rounded transition-colors"
-                      >
-                        {item.symbol}
-                      </Link>
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">Items</h4>
+                  <div className="space-y-2">
+                    {watchlist.items.slice(0, 4).map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div className="flex items-center space-x-3">
+                          <Link
+                            to={`/chart/${item.symbol}`}
+                            className="font-medium text-blue-600 hover:text-blue-700"
+                          >
+                            {item.symbol}
+                          </Link>
+                          {item.company_name && (
+                            <span className="text-xs text-gray-500 truncate">
+                              {item.company_name}
+                            </span>
+                          )}
+                          {item.sector && (
+                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                              {item.sector}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2 text-xs">
+                          {item.entry_price && (
+                            <span className="text-gray-600">
+                              Entry: ${item.entry_price}
+                            </span>
+                          )}
+                          {item.target_price && (
+                            <span className="text-green-600">
+                              Target: ${item.target_price}
+                            </span>
+                          )}
+                          {item.stop_loss && (
+                            <span className="text-red-600">
+                              Stop: ${item.stop_loss}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     ))}
-                    {watchlist.items.length > 8 && (
-                      <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded">
-                        +{watchlist.items.length - 8} more
-                      </span>
+                    {watchlist.items.length > 4 && (
+                      <div className="text-center pt-2">
+                        <Link
+                          to={`/watchlists/${watchlist.id}`}
+                          className="text-xs text-blue-600 hover:text-blue-700"
+                        >
+                          View all {watchlist.items.length} items
+                        </Link>
+                      </div>
                     )}
                   </div>
                 </div>

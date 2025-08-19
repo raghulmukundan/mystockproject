@@ -18,6 +18,9 @@ interface EditWatchlistModalProps {
 interface EditableItem {
   symbol: string
   company_name: string
+  sector: string
+  industry: string
+  market_cap: string
   entry_price: string
   target_price: string
   stop_loss: string
@@ -41,6 +44,9 @@ export default function EditWatchlistModal({
       setItems(watchlist.items.map(item => ({
         symbol: item.symbol,
         company_name: item.company_name || '',
+        sector: item.sector || '',
+        industry: item.industry || '',
+        market_cap: item.market_cap?.toString() || '',
         entry_price: item.entry_price?.toString() || '',
         target_price: item.target_price?.toString() || '',
         stop_loss: item.stop_loss?.toString() || ''
@@ -52,6 +58,9 @@ export default function EditWatchlistModal({
     setItems([...items, {
       symbol: '',
       company_name: '',
+      sector: '',
+      industry: '',
+      market_cap: '',
       entry_price: '',
       target_price: '',
       stop_loss: ''
@@ -76,6 +85,9 @@ export default function EditWatchlistModal({
       .map(item => ({
         symbol: item.symbol.trim().toUpperCase(),
         company_name: item.company_name.trim() || undefined,
+        sector: item.sector.trim() || undefined,
+        industry: item.industry.trim() || undefined,
+        market_cap: item.market_cap ? parseFloat(item.market_cap) : undefined,
         entry_price: item.entry_price ? parseFloat(item.entry_price) : undefined,
         target_price: item.target_price ? parseFloat(item.target_price) : undefined,
         stop_loss: item.stop_loss ? parseFloat(item.stop_loss) : undefined
@@ -172,65 +184,102 @@ export default function EditWatchlistModal({
                       </button>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {items.map((item, index) => (
-                        <div key={index} className="grid grid-cols-6 gap-2 p-3 bg-gray-50 rounded-lg">
-                          <div>
-                            <input
-                              type="text"
-                              value={item.symbol}
-                              onChange={(e) => updateItem(index, 'symbol', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="Symbol"
-                            />
-                          </div>
-                          <div>
-                            <input
-                              type="text"
-                              value={item.company_name}
-                              onChange={(e) => updateItem(index, 'company_name', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="Company"
-                            />
-                          </div>
-                          <div>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={item.entry_price}
-                              onChange={(e) => updateItem(index, 'entry_price', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="Entry"
-                            />
-                          </div>
-                          <div>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={item.target_price}
-                              onChange={(e) => updateItem(index, 'target_price', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="Target"
-                            />
-                          </div>
-                          <div>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={item.stop_loss}
-                              onChange={(e) => updateItem(index, 'stop_loss', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="Stop"
-                            />
-                          </div>
-                          <div className="flex justify-center">
-                            <button
-                              type="button"
-                              onClick={() => removeItem(index)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                            </button>
+                        <div key={index} className="p-4 bg-gray-50 rounded-lg border">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Symbol *</label>
+                              <input
+                                type="text"
+                                value={item.symbol}
+                                onChange={(e) => updateItem(index, 'symbol', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="AAPL"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Company</label>
+                              <input
+                                type="text"
+                                value={item.company_name}
+                                onChange={(e) => updateItem(index, 'company_name', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Apple Inc."
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Sector</label>
+                              <input
+                                type="text"
+                                value={item.sector}
+                                onChange={(e) => updateItem(index, 'sector', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Technology"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Industry</label>
+                              <input
+                                type="text"
+                                value={item.industry}
+                                onChange={(e) => updateItem(index, 'industry', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Consumer Electronics"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Market Cap</label>
+                              <input
+                                type="number"
+                                value={item.market_cap}
+                                onChange={(e) => updateItem(index, 'market_cap', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="3000000000"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Entry Price</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={item.entry_price}
+                                onChange={(e) => updateItem(index, 'entry_price', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="150.00"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Target Price</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={item.target_price}
+                                onChange={(e) => updateItem(index, 'target_price', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="180.00"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Stop Loss</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={item.stop_loss}
+                                onChange={(e) => updateItem(index, 'stop_loss', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="130.00"
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <button
+                                type="button"
+                                onClick={() => removeItem(index)}
+                                className="w-full px-3 py-1 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50"
+                              >
+                                <TrashIcon className="h-4 w-4 mx-auto" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}

@@ -6,6 +6,9 @@ from decimal import Decimal
 class WatchlistItemCreate(BaseModel):
     symbol: str
     company_name: Optional[str] = None
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    market_cap: Optional[Decimal] = None
     entry_price: Optional[Decimal] = None
     target_price: Optional[Decimal] = None
     stop_loss: Optional[Decimal] = None
@@ -14,6 +17,9 @@ class WatchlistItemResponse(BaseModel):
     id: int
     symbol: str
     company_name: Optional[str]
+    sector: Optional[str]
+    industry: Optional[str]
+    market_cap: Optional[Decimal]
     entry_price: Optional[Decimal]
     target_price: Optional[Decimal]
     stop_loss: Optional[Decimal]
@@ -35,6 +41,9 @@ class WatchlistUpdate(BaseModel):
 class WatchlistItemUpdate(BaseModel):
     symbol: Optional[str] = None
     company_name: Optional[str] = None
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    market_cap: Optional[Decimal] = None
     entry_price: Optional[Decimal] = None
     target_price: Optional[Decimal] = None
     stop_loss: Optional[Decimal] = None

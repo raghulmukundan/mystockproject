@@ -8,25 +8,27 @@ import {
   EyeIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  PlusIcon
+  PlusIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import { watchlistsApi } from '../services/api'
+import { stockApi, StockPrice, CompanyProfile } from '../services/stockApi'
 import { Watchlist, WatchlistItem } from '../types'
 import EditWatchlistModal from '../components/EditWatchlistModal'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
 import AddItemModal from '../components/AddItemModal'
+import GroupingControls, { GroupingOption } from '../components/GroupingControls'
+import StockDetailsSidebar from '../components/StockDetailsSidebar'
+import { groupWatchlistItems } from '../utils/grouping'
 
-// Mock function to simulate real-time price data
-const getMockPrice = (symbol: string) => {
-  const basePrice = Math.random() * 200 + 50
-  const change = (Math.random() - 0.5) * 10
-  const changePercent = (change / basePrice) * 100
-  
-  return {
-    current: Number(basePrice.toFixed(2)),
-    change: Number(change.toFixed(2)),
-    changePercent: Number(changePercent.toFixed(2)),
-    volume: Math.floor(Math.random() * 1000000) + 100000
+// Function to load real stock prices
+const loadStockPrices = async (symbols: string[]): Promise<Record<string, StockPrice>> => {
+  try {
+    if (symbols.length === 0) return {}
+    return await stockApi.getMultipleStockPrices(symbols)
+  } catch (error) {
+    console.error('Error loading stock prices:', error)
+    return {}
   }
 }
 
@@ -40,11 +42,16 @@ export default function WatchlistDetail() {
   const [deletingWatchlist, setDeletingWatchlist] = useState<Watchlist | null>(null)
   const [editLoading, setEditLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const [priceData, setPriceData] = useState<Record<string, ReturnType<typeof getMockPrice>>>({})
+  const [priceData, setPriceData] = useState<Record<string, StockPrice>>({})
   const [showAddItem, setShowAddItem] = useState(false)
   const [addItemLoading, setAddItemLoading] = useState(false)
   const [deletingItem, setDeletingItem] = useState<WatchlistItem | null>(null)
   const [deleteItemLoading, setDeleteItemLoading] = useState(false)
+  const [groupBy, setGroupBy] = useState<GroupingOption>('none')
+  const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null)
+  const [selectedProfile, setSelectedProfile] = useState<CompanyProfile | null>(null)
+  const [sidebarLoading, setSidebarLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -53,13 +60,11 @@ export default function WatchlistDetail() {
   }, [id])
 
   useEffect(() => {
-    if (watchlist) {
-      // Simulate loading price data for all symbols
-      const prices: Record<string, ReturnType<typeof getMockPrice>> = {}
-      watchlist.items.forEach(item => {
-        prices[item.symbol] = getMockPrice(item.symbol)
+    if (watchlist && watchlist.items.length > 0) {
+      const symbols = watchlist.items.map(item => item.symbol)
+      loadStockPrices(symbols).then(prices => {
+        setPriceData(prices)
       })
-      setPriceData(prices)
     }
   }, [watchlist])
 
@@ -142,14 +147,44 @@ export default function WatchlistDetail() {
     const price = priceData[item.symbol]
     if (!price || !item.entry_price) return null
 
-    const gainLoss = price.current - item.entry_price
+    const gainLoss = price.current_price - item.entry_price
     const gainLossPercent = (gainLoss / item.entry_price) * 100
 
     return {
       gainLoss: Number(gainLoss.toFixed(2)),
       gainLossPercent: Number(gainLossPercent.toFixed(2)),
-      toTarget: item.target_price ? Number(((item.target_price - price.current) / price.current * 100).toFixed(2)) : null,
-      toStopLoss: item.stop_loss ? Number(((price.current - item.stop_loss) / price.current * 100).toFixed(2)) : null
+      toTarget: item.target_price ? Number(((item.target_price - price.current_price) / price.current_price * 100).toFixed(2)) : null,
+      toStopLoss: item.stop_loss ? Number(((price.current_price - item.stop_loss) / price.current_price * 100).toFixed(2)) : null
+    }
+  }
+
+  const handleSymbolClick = async (item: WatchlistItem) => {
+    setSelectedItem(item)
+    setSidebarLoading(true)
+    
+    try {
+      const profile = await stockApi.getCompanyProfile(item.symbol)
+      setSelectedProfile(profile)
+    } catch (error) {
+      console.error('Error fetching company profile:', error)
+      setSelectedProfile(null)
+    } finally {
+      setSidebarLoading(false)
+    }
+  }
+
+  const handleRefreshProfiles = async () => {
+    if (!watchlist) return
+
+    setRefreshing(true)
+    try {
+      await watchlistsApi.refreshProfiles(watchlist.id)
+      await loadWatchlist(watchlist.id)
+      setError('')
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to refresh profile data')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -200,6 +235,15 @@ export default function WatchlistDetail() {
             </div>
           </div>
           <div className="flex items-center space-x-3">
+            <button
+              onClick={handleRefreshProfiles}
+              disabled={refreshing}
+              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              title="Refresh company profile data"
+            >
+              <ArrowPathIcon className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing...' : 'Refresh Data'}
+            </button>
             <button
               onClick={() => setEditingWatchlist(watchlist)}
               className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
@@ -297,13 +341,16 @@ export default function WatchlistDetail() {
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               Watchlist Items
             </h3>
-            <button
-              onClick={() => setShowAddItem(true)}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Add Symbol
-            </button>
+            <div className="flex items-center space-x-4">
+              <GroupingControls value={groupBy} onChange={setGroupBy} />
+              <button
+                onClick={() => setShowAddItem(true)}
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+              >
+                <PlusIcon className="h-4 w-4 mr-2" />
+                Add Symbol
+              </button>
+            </div>
           </div>
           
           {watchlist.items.length === 0 ? (
@@ -317,131 +364,164 @@ export default function WatchlistDetail() {
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Symbol
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Current Price
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Entry Price
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      P&L
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Target
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Stop Loss
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {watchlist.items.map((item) => {
-                    const price = priceData[item.symbol]
-                    const performance = calculatePerformance(item)
-                    
-                    return (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {item.symbol}
-                            </div>
-                            {item.company_name && (
-                              <div className="text-sm text-gray-500">
-                                {item.company_name}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {price ? (
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                ${price.current}
-                              </div>
-                              <div className={`text-sm ${price.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {price.change >= 0 ? '+' : ''}${price.change} ({price.changePercent >= 0 ? '+' : ''}{price.changePercent}%)
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-sm text-gray-500">Loading...</div>
+            (() => {
+              const groupedItems = groupWatchlistItems(watchlist.items, groupBy)
+              return (
+                <div className="space-y-6">
+                  {Object.entries(groupedItems).map(([groupName, items]) => (
+                    <div key={groupName} className="border border-gray-200 rounded-lg overflow-hidden">
+                      {groupBy !== 'none' && (
+                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                          <h4 className="text-sm font-medium text-gray-900">
+                            {groupName} ({items.length} {items.length === 1 ? 'item' : 'items'})
+                          </h4>
+                        </div>
+                      )}
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          {groupBy === 'none' && (
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Symbol
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Current Price
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Entry Price
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  P&L
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Target
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Stop Loss
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {item.entry_price ? `$${item.entry_price}` : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {performance ? (
-                            <div className={`text-sm ${performance.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {performance.gainLoss >= 0 ? '+' : ''}${performance.gainLoss}
-                              <br />
-                              ({performance.gainLossPercent >= 0 ? '+' : ''}{performance.gainLossPercent}%)
-                            </div>
-                          ) : (
-                            <div className="text-sm text-gray-500">-</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {item.target_price ? (
-                            <div>
-                              <div className="text-sm text-gray-900">${item.target_price}</div>
-                              {performance?.toTarget && (
-                                <div className="text-xs text-gray-500">
-                                  {performance.toTarget > 0 ? `+${performance.toTarget}%` : `${performance.toTarget}%`} to go
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-gray-500">-</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {item.stop_loss ? (
-                            <div>
-                              <div className="text-sm text-gray-900">${item.stop_loss}</div>
-                              {performance?.toStopLoss && (
-                                <div className="text-xs text-gray-500">
-                                  {performance.toStopLoss}% buffer
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-gray-500">-</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="flex items-center space-x-3">
-                            <Link
-                              to={`/chart/${item.symbol}`}
-                              className="text-blue-600 hover:text-blue-700"
-                            >
-                              View Chart
-                            </Link>
-                            <button
-                              onClick={() => setDeletingItem(item)}
-                              className="text-red-600 hover:text-red-700"
-                              title="Remove from watchlist"
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {items.map((item) => {
+                              const price = priceData[item.symbol]
+                              const performance = calculatePerformance(item)
+                              
+                              return (
+                                <tr key={item.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div>
+                                      <button
+                                        onClick={() => handleSymbolClick(item)}
+                                        className="text-sm font-medium text-blue-600 hover:text-blue-700 underline"
+                                      >
+                                        {item.symbol}
+                                      </button>
+                                      {item.company_name && (
+                                        <div className="text-sm text-gray-500">
+                                          {item.company_name}
+                                        </div>
+                                      )}
+                                      {item.sector && groupBy !== 'sector' && (
+                                        <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-1 inline-block">
+                                          {item.sector}
+                                        </div>
+                                      )}
+                                      {item.industry && groupBy !== 'industry' && (
+                                        <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded mt-1 inline-block">
+                                          {item.industry}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {price ? (
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-900">
+                                          ${price.current_price}
+                                        </div>
+                                        <div className={`text-sm ${price.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                          {price.change >= 0 ? '+' : ''}${price.change} ({price.change_percent >= 0 ? '+' : ''}{price.change_percent.toFixed(2)}%)
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="text-sm text-gray-500">Loading...</div>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {item.entry_price ? `$${item.entry_price}` : '-'}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {performance ? (
+                                      <div className={`text-sm ${performance.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {performance.gainLoss >= 0 ? '+' : ''}${performance.gainLoss}
+                                        <br />
+                                        ({performance.gainLossPercent >= 0 ? '+' : ''}{performance.gainLossPercent}%)
+                                      </div>
+                                    ) : (
+                                      <div className="text-sm text-gray-500">-</div>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {item.target_price ? (
+                                      <div>
+                                        <div className="text-sm text-gray-900">${item.target_price}</div>
+                                        {performance?.toTarget && (
+                                          <div className="text-xs text-gray-500">
+                                            {performance.toTarget > 0 ? `+${performance.toTarget}%` : `${performance.toTarget}%`} to go
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="text-sm text-gray-500">-</div>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {item.stop_loss ? (
+                                      <div>
+                                        <div className="text-sm text-gray-900">${item.stop_loss}</div>
+                                        {performance?.toStopLoss && (
+                                          <div className="text-xs text-gray-500">
+                                            {performance.toStopLoss}% buffer
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="text-sm text-gray-500">-</div>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <div className="flex items-center space-x-3">
+                                      <Link
+                                        to={`/chart/${item.symbol}`}
+                                        className="text-blue-600 hover:text-blue-700"
+                                      >
+                                        View Chart
+                                      </Link>
+                                      <button
+                                        onClick={() => setDeletingItem(item)}
+                                        className="text-red-600 hover:text-red-700"
+                                        title="Remove from watchlist"
+                                      >
+                                        <TrashIcon className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()
           )}
         </div>
       </div>
@@ -479,6 +559,18 @@ export default function WatchlistDetail() {
         message={`Are you sure you want to remove "${deletingItem?.symbol}" from this watchlist?`}
         confirmText="Remove Symbol"
         isLoading={deleteItemLoading}
+      />
+
+      <StockDetailsSidebar
+        isOpen={!!selectedItem}
+        onClose={() => {
+          setSelectedItem(null)
+          setSelectedProfile(null)
+        }}
+        item={selectedItem}
+        stockPrice={selectedItem ? priceData[selectedItem.symbol] : null}
+        companyProfile={selectedProfile}
+        isLoading={sidebarLoading}
       />
     </div>
   )

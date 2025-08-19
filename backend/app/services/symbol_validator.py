@@ -36,9 +36,7 @@ class SymbolValidator:
         
         valid_symbols = []
         invalid_symbols = []
-        print(symbols)
-        print("*****")
-        print(self.nasdaq_symbols)
+
         for symbol in symbols:
             symbol = symbol.upper().strip()
             if symbol in self.nasdaq_symbols:

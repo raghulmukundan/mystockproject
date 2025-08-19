@@ -8,8 +8,24 @@ from app.models.watchlist import Watchlist
 from app.models.watchlist_item import WatchlistItem
 from app.api.schemas import WatchlistResponse, WatchlistCreate, WatchlistUpdate, WatchlistItemCreate, WatchlistItemUpdate, WatchlistItemResponse, UploadResponse
 from app.services.symbol_validator import symbol_validator
+from app.services.stock_data import stock_data_service
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
+
+async def enrich_item_with_profile(item_data: dict, symbol: str) -> dict:
+    """Enrich item data with company profile information"""
+    try:
+        profile = await stock_data_service.get_company_profile(symbol)
+        if profile:
+            item_data.update({
+                'company_name': item_data.get('company_name') or profile.company_name,
+                'sector': profile.sector,
+                'industry': profile.industry,
+                'market_cap': profile.market_cap
+            })
+    except Exception as e:
+        print(f"Warning: Could not fetch profile for {symbol}: {e}")
+    return item_data
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_watchlist(
@@ -52,6 +68,9 @@ async def upload_watchlist(
                     'target_price': row.get('target_price', None),
                     'stop_loss': row.get('stop_loss', None)
                 }
+                
+                # Enrich with company profile data
+                item_data = await enrich_item_with_profile(item_data, symbol)
                 
                 item_data = {k: v for k, v in item_data.items() if pd.notna(v)}
                 watchlist_item = WatchlistItem(**item_data)
@@ -102,14 +121,19 @@ async def create_watchlist(watchlist: WatchlistCreate, db: Session = Depends(get
     watchlist_items = []
     for item in watchlist.items:
         if item.symbol.upper() in valid_symbols:
-            watchlist_item = WatchlistItem(
-                watchlist_id=db_watchlist.id,
-                symbol=item.symbol.upper(),
-                company_name=item.company_name,
-                entry_price=item.entry_price,
-                target_price=item.target_price,
-                stop_loss=item.stop_loss
-            )
+            item_data = {
+                'watchlist_id': db_watchlist.id,
+                'symbol': item.symbol.upper(),
+                'company_name': item.company_name,
+                'entry_price': item.entry_price,
+                'target_price': item.target_price,
+                'stop_loss': item.stop_loss
+            }
+            
+            # Enrich with company profile data
+            item_data = await enrich_item_with_profile(item_data, item.symbol.upper())
+            
+            watchlist_item = WatchlistItem(**item_data)
             watchlist_items.append(watchlist_item)
     
     db.add_all(watchlist_items)
@@ -149,14 +173,19 @@ async def update_watchlist(
         new_items = []
         for item in watchlist_update.items:
             if item.symbol.upper() in valid_symbols:
-                watchlist_item = WatchlistItem(
-                    watchlist_id=watchlist_id,
-                    symbol=item.symbol.upper(),
-                    company_name=item.company_name,
-                    entry_price=item.entry_price,
-                    target_price=item.target_price,
-                    stop_loss=item.stop_loss
-                )
+                item_data = {
+                    'watchlist_id': watchlist_id,
+                    'symbol': item.symbol.upper(),
+                    'company_name': item.company_name,
+                    'entry_price': item.entry_price,
+                    'target_price': item.target_price,
+                    'stop_loss': item.stop_loss
+                }
+                
+                # Enrich with company profile data
+                item_data = await enrich_item_with_profile(item_data, item.symbol.upper())
+                
+                watchlist_item = WatchlistItem(**item_data)
                 new_items.append(watchlist_item)
         
         db.add_all(new_items)
@@ -206,14 +235,19 @@ async def add_watchlist_item(
             detail=f"Symbol {item.symbol} already exists in this watchlist"
         )
     
-    watchlist_item = WatchlistItem(
-        watchlist_id=watchlist_id,
-        symbol=item.symbol.upper(),
-        company_name=item.company_name,
-        entry_price=item.entry_price,
-        target_price=item.target_price,
-        stop_loss=item.stop_loss
-    )
+    item_data = {
+        'watchlist_id': watchlist_id,
+        'symbol': item.symbol.upper(),
+        'company_name': item.company_name,
+        'entry_price': item.entry_price,
+        'target_price': item.target_price,
+        'stop_loss': item.stop_loss
+    }
+    
+    # Enrich with company profile data
+    item_data = await enrich_item_with_profile(item_data, item.symbol.upper())
+    
+    watchlist_item = WatchlistItem(**item_data)
     
     db.add(watchlist_item)
     db.commit()
@@ -262,6 +296,15 @@ async def update_watchlist_item(
     if item_update.company_name is not None:
         db_item.company_name = item_update.company_name
     
+    if item_update.sector is not None:
+        db_item.sector = item_update.sector
+    
+    if item_update.industry is not None:
+        db_item.industry = item_update.industry
+    
+    if item_update.market_cap is not None:
+        db_item.market_cap = item_update.market_cap
+    
     if item_update.entry_price is not None:
         db_item.entry_price = item_update.entry_price
     
@@ -295,3 +338,38 @@ def delete_watchlist_item(
     db.commit()
     
     return {"message": f"Symbol '{symbol}' removed from watchlist"}
+
+@router.post("/{watchlist_id}/refresh-profiles")
+async def refresh_watchlist_profiles(
+    watchlist_id: int,
+    db: Session = Depends(get_db)
+):
+    """Refresh company profile data for all items in a watchlist"""
+    db_watchlist = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
+    if not db_watchlist:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+    
+    updated_count = 0
+    
+    for item in db_watchlist.items:
+        try:
+            # Get fresh profile data
+            profile = await stock_data_service.get_company_profile(item.symbol)
+            if profile:
+                # Update item with fresh profile data
+                item.company_name = profile.company_name
+                item.sector = profile.sector
+                item.industry = profile.industry
+                item.market_cap = profile.market_cap
+                updated_count += 1
+        except Exception as e:
+            print(f"Error updating profile for {item.symbol}: {e}")
+            continue
+    
+    db.commit()
+    
+    return {
+        "message": f"Updated profile data for {updated_count} items in watchlist '{db_watchlist.name}'",
+        "updated_count": updated_count,
+        "total_items": len(db_watchlist.items)
+    }

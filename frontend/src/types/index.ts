@@ -2,6 +2,9 @@ export interface WatchlistItem {
   id: number
   symbol: string
   company_name?: string
+  sector?: string
+  industry?: string
+  market_cap?: number
   entry_price?: number
   target_price?: number
   stop_loss?: number
