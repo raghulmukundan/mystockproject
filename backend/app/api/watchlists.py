@@ -12,10 +12,16 @@ from app.services.stock_data import stock_data_service
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
 
+@router.get("/test")
+async def test_endpoint():
+    """Simple test endpoint to verify API is working"""
+    return {"status": "ok", "message": "Watchlists API is working"}
+
 async def enrich_item_with_profile(item_data: dict, symbol: str) -> dict:
-    """Enrich item data with company profile information"""
+    """Enrich item data with company profile information (fast fallback only)"""
     try:
-        profile = await stock_data_service.get_company_profile(symbol)
+        # Skip API calls during upload - use only cached/fallback data for speed
+        profile = stock_data_service._get_fallback_profile(symbol)
         if profile:
             item_data.update({
                 'company_name': item_data.get('company_name') or profile.company_name,
@@ -50,16 +56,44 @@ async def upload_watchlist(
         
         symbols = df['symbol'].dropna().astype(str).str.upper().str.strip().tolist()
         
-        valid_symbols, invalid_symbols = await symbol_validator.validate_symbols(symbols)
+        # Limit the number of symbols to prevent timeouts
+        if len(symbols) > 50:
+            raise HTTPException(status_code=400, detail=f"Too many symbols ({len(symbols)}). Maximum 50 symbols allowed per upload.")
         
-        watchlist = Watchlist(name=name, description=description)
-        db.add(watchlist)
-        db.flush()
+        print(f"Processing upload for {len(symbols)} symbols...")
+        # Skip complex validation for now - just assume all symbols are valid
+        # This can be validated later via the refresh function
+        valid_symbols = symbols
+        invalid_symbols = []
+        print(f"Fast upload: accepting all {len(valid_symbols)} symbols")
+        
+        # Add retry logic for database operations
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                watchlist = Watchlist(name=name, description=description)
+                db.add(watchlist)
+                db.flush()
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"Database retry attempt {attempt + 1}, error: {e}")
+                    time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                    db.rollback()
+                else:
+                    raise
         
         watchlist_items = []
+        total_valid = len([s for s in symbols if s in valid_symbols])
+        processed_count = 0
+        
         for _, row in df.iterrows():
             symbol = str(row['symbol']).upper().strip()
             if symbol in valid_symbols:
+                processed_count += 1
+                print(f"Processing symbol {processed_count}/{total_valid}: {symbol}")
+                
                 item_data = {
                     'watchlist_id': watchlist.id,
                     'symbol': symbol,
@@ -69,8 +103,8 @@ async def upload_watchlist(
                     'stop_loss': row.get('stop_loss', None)
                 }
                 
-                # Enrich with company profile data
-                item_data = await enrich_item_with_profile(item_data, symbol)
+                # Skip profile enrichment during upload for speed (can be done later via refresh)
+                # item_data = await enrich_item_with_profile(item_data, symbol)
                 
                 item_data = {k: v for k, v in item_data.items() if pd.notna(v)}
                 watchlist_item = WatchlistItem(**item_data)

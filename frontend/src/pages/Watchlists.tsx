@@ -16,6 +16,7 @@ export default function Watchlists() {
   const [editLoading, setEditLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [priceData, setPriceData] = useState<Record<string, StockPrice>>({})
+  const [loadingPrices, setLoadingPrices] = useState(false)
 
   useEffect(() => {
     loadWatchlists()
@@ -39,9 +40,10 @@ export default function Watchlists() {
       if (allSymbols.length === 0) return
       
       console.log('Loading prices for symbols:', allSymbols)
+      setLoadingPrices(true)
       
       // Progressive loading - load prices in small batches with delays
-      const batchSize = 5 // Small batches to respect rate limits
+      const batchSize = 3 // Even smaller batches to avoid timeouts
       const priceResults: Record<string, any> = {}
       
       for (let i = 0; i < allSymbols.length; i += batchSize) {
@@ -57,7 +59,7 @@ export default function Watchlists() {
           
           // Wait between batches to respect rate limits (50/min = ~1.2s between calls)
           if (i + batchSize < allSymbols.length) {
-            await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
+            await new Promise(resolve => setTimeout(resolve, 3000)) // 3 second delay (increased)
           }
         } catch (error) {
           console.error(`Error loading batch ${Math.floor(i/batchSize) + 1}:`, error)
@@ -67,6 +69,8 @@ export default function Watchlists() {
       console.log('All price data loaded:', priceResults)
     } catch (error) {
       console.error('Error loading stock prices:', error)
+    } finally {
+      setLoadingPrices(false)
     }
   }
 

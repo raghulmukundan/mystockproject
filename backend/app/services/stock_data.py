@@ -235,7 +235,7 @@ class StockDataService:
             try:
                 results = await asyncio.wait_for(
                     asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=30.0  # 30 second timeout per batch
+                    timeout=15.0  # 15 second timeout per batch (reduced)
                 )
                 
                 for symbol, result in zip(batch, results):
