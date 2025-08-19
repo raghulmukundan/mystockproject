@@ -188,6 +188,95 @@ export default function Upload() {
                 />
               </div>
 
+              {/* Column Requirements Section */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <div className="flex items-center mb-4">
+                  <div className="bg-blue-100 p-2 rounded-lg mr-3">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-blue-900">CSV File Requirements</h3>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-6 mb-6">
+                  <div className="bg-white rounded-lg p-5 border border-green-200 shadow-sm">
+                    <div className="flex items-center mb-4">
+                      <div className="bg-green-100 p-2 rounded-full mr-3">
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <h4 className="font-semibold text-green-800 text-base">Required Column</h4>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center">
+                        <span className="bg-green-100 text-green-800 px-4 py-2 text-sm rounded-lg font-mono font-medium">symbol</span>
+                      </div>
+                      <p className="text-sm text-gray-600 leading-relaxed">Stock ticker symbol (e.g., AAPL, GOOGL)</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
+                    <div className="flex items-center mb-4">
+                      <div className="bg-gray-100 p-2 rounded-full mr-3">
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <h4 className="font-semibold text-gray-700 text-base">Optional Columns</h4>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                        <span className="bg-white text-gray-700 px-3 py-1.5 text-sm rounded-md font-mono border">entry_price</span>
+                        <span className="text-sm text-gray-600">Purchase price</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                        <span className="bg-white text-gray-700 px-3 py-1.5 text-sm rounded-md font-mono border">target_price</span>
+                        <span className="text-sm text-gray-600">Target sell price</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                        <span className="bg-white text-gray-700 px-3 py-1.5 text-sm rounded-md font-mono border">stop_loss</span>
+                        <span className="text-sm text-gray-600">Stop loss price</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-lg p-4 border border-blue-200 mb-4">
+                  <div className="flex items-center mb-2">
+                    <div className="bg-blue-100 p-1.5 rounded-full mr-2">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h4 className="font-semibold text-blue-800">Example CSV Format:</h4>
+                  </div>
+                  <div className="bg-gray-50 rounded-md p-3 overflow-x-auto">
+                    <pre className="text-sm font-mono text-gray-700 whitespace-pre">
+symbol,entry_price,target_price,stop_loss
+AAPL,150.00,180.00,130.00
+GOOGL,125.50,150.00,110.00
+MSFT,350.75,400.00,320.00</pre>
+                  </div>
+                </div>
+                
+                <div className="bg-blue-100 rounded-lg p-3">
+                  <div className="flex items-start">
+                    <div className="bg-blue-200 p-1 rounded-full mr-2 mt-0.5">
+                      <svg className="w-3 h-3 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-blue-800">Note:</p>
+                      <p className="text-sm text-blue-700">Company names, sectors, and industries will be automatically populated!</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Upload File *

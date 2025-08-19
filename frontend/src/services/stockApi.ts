@@ -33,11 +33,27 @@ class StockApiService {
     const params = new URLSearchParams()
     symbols.forEach(symbol => params.append('symbols', symbol))
     
-    const response = await fetch(`${API_BASE_URL}/stocks/prices?${params}`)
-    if (!response.ok) {
-      throw new Error('Failed to fetch stock prices')
+    // Add timeout to prevent hanging
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 second timeout
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/stocks/prices?${params}`, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stock prices: ${response.status}`)
+      }
+      return response.json()
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timed out - too many symbols or API is slow')
+      }
+      throw error
     }
-    return response.json()
   }
 
   async getCompanyProfile(symbol: string): Promise<CompanyProfile> {

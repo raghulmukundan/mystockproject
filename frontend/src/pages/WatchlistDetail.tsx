@@ -25,7 +25,10 @@ import { groupWatchlistItems } from '../utils/grouping'
 const loadStockPrices = async (symbols: string[]): Promise<Record<string, StockPrice>> => {
   try {
     if (symbols.length === 0) return {}
-    return await stockApi.getMultipleStockPrices(symbols)
+    console.log('Loading stock prices for symbols:', symbols)
+    const prices = await stockApi.getMultipleStockPrices(symbols)
+    console.log('Received stock prices:', prices)
+    return prices
   } catch (error) {
     console.error('Error loading stock prices:', error)
     return {}
@@ -62,8 +65,12 @@ export default function WatchlistDetail() {
   useEffect(() => {
     if (watchlist && watchlist.items.length > 0) {
       const symbols = watchlist.items.map(item => item.symbol)
+      console.log('Watchlist loaded, fetching prices for symbols:', symbols)
       loadStockPrices(symbols).then(prices => {
+        console.log('Setting price data:', prices)
         setPriceData(prices)
+      }).catch(error => {
+        console.error('Failed to load stock prices:', error)
       })
     }
   }, [watchlist])

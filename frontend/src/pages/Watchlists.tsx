@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { EyeIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { watchlistsApi } from '../services/api'
+import { stockApi, StockPrice } from '../services/stockApi'
 import { Watchlist, WatchlistItem } from '../types'
 import EditWatchlistModal from '../components/EditWatchlistModal'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
@@ -14,10 +15,37 @@ export default function Watchlists() {
   const [deletingWatchlist, setDeletingWatchlist] = useState<Watchlist | null>(null)
   const [editLoading, setEditLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [priceData, setPriceData] = useState<Record<string, StockPrice>>({})
 
   useEffect(() => {
     loadWatchlists()
   }, [])
+
+  useEffect(() => {
+    if (watchlists.length > 0) {
+      loadStockPrices()
+    }
+  }, [watchlists])
+
+  const loadStockPrices = async () => {
+    try {
+      // Get all unique symbols from all watchlists
+      const allSymbols = Array.from(new Set(
+        watchlists.flatMap(watchlist => 
+          watchlist.items.map(item => item.symbol)
+        )
+      ))
+      
+      if (allSymbols.length === 0) return
+      
+      console.log('Loading prices for symbols:', allSymbols)
+      const prices = await stockApi.getMultipleStockPrices(allSymbols)
+      console.log('Received price data:', prices)
+      setPriceData(prices)
+    } catch (error) {
+      console.error('Error loading stock prices:', error)
+    }
+  }
 
   const loadWatchlists = async () => {
     try {
@@ -174,19 +202,26 @@ export default function Watchlists() {
                           )}
                         </div>
                         <div className="flex items-center space-x-2 text-xs">
+                          {priceData[item.symbol] ? (
+                            <span className={`font-medium ${priceData[item.symbol].change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              Current: ${priceData[item.symbol].current_price.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">Loading price...</span>
+                          )}
                           {item.entry_price && (
                             <span className="text-gray-600">
-                              Entry: ${item.entry_price}
+                              Entry: ${parseFloat(item.entry_price).toFixed(2)}
                             </span>
                           )}
                           {item.target_price && (
                             <span className="text-green-600">
-                              Target: ${item.target_price}
+                              Target: ${parseFloat(item.target_price).toFixed(2)}
                             </span>
                           )}
                           {item.stop_loss && (
                             <span className="text-red-600">
-                              Stop: ${item.stop_loss}
+                              Stop: ${parseFloat(item.stop_loss).toFixed(2)}
                             </span>
                           )}
                         </div>

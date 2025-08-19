@@ -8,7 +8,7 @@ services:
     environment:
       - DATABASE_URL=sqlite:///./stock_watchlist.db
       - TZ=America/Chicago
-      - FINNHUB_API_KEY
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
     volumes:
       - ./backend:/app
       - backend_data:/app/data

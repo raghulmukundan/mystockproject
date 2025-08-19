@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any
 from app.services.stock_data import stock_data_service, StockPrice, CompanyProfile
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
@@ -51,7 +54,9 @@ async def get_multiple_stock_prices(symbols: List[str] = Query(..., description=
         if len(symbols) > 50:  # Limit to prevent abuse
             raise HTTPException(status_code=400, detail="Maximum 50 symbols allowed per request")
         
+        logger.info(f"Received request for {len(symbols)} stock prices")
         price_data = await stock_data_service.get_multiple_stock_prices(symbols)
+        logger.info(f"Returning {len(price_data)} stock prices")
         
         response = {}
         for symbol, data in price_data.items():
@@ -66,6 +71,7 @@ async def get_multiple_stock_prices(symbols: List[str] = Query(..., description=
         
         return response
     except Exception as e:
+        logger.error(f"Error in get_multiple_stock_prices: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching stock prices: {str(e)}")
 
 @router.get("/profile/{symbol}", response_model=CompanyProfileResponse)

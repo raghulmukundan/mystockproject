@@ -76,6 +76,13 @@ class StockDataService:
         
         # Rate limiter
         self.rate_limiter = RateLimiter(max_calls=50, time_window=60)
+        
+        # Log API key status for debugging
+        if self.finnhub_api_key == 'demo':
+            logger.warning("FINNHUB_API_KEY not found or set to 'demo' - using mock data")
+        else:
+            logger.info(f"FINNHUB_API_KEY detected (length: {len(self.finnhub_api_key)} chars) - will use real API data")
+            logger.info(f"API key starts with: {self.finnhub_api_key[:10]}...")  # Show first 10 chars for debugging
 
     async def get_stock_price(self, symbol: str) -> Optional[StockPrice]:
         """Get current stock price using Finnhub API"""
@@ -207,17 +214,49 @@ class StockDataService:
         return None
 
     async def get_multiple_stock_prices(self, symbols: List[str]) -> Dict[str, StockPrice]:
-        """Get prices for multiple stocks concurrently"""
-        tasks = [self.get_stock_price(symbol) for symbol in symbols]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        """Get prices for multiple stocks concurrently with batching"""
+        if len(symbols) == 0:
+            return {}
         
+        logger.info(f"Fetching prices for {len(symbols)} symbols")
+        
+        # For large batches, process in smaller chunks to avoid timeouts
+        batch_size = 10 if len(symbols) > 10 else len(symbols)
         price_data = {}
-        for symbol, result in zip(symbols, results):
-            if isinstance(result, StockPrice):
-                price_data[symbol.upper()] = result
-            elif isinstance(result, Exception):
-                logger.error(f"Error fetching {symbol}: {str(result)}")
         
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i + batch_size]
+            logger.info(f"Processing batch {i//batch_size + 1}: {batch}")
+            
+            # Create tasks for this batch
+            tasks = [self.get_stock_price(symbol) for symbol in batch]
+            
+            # Use asyncio.gather with timeout
+            try:
+                results = await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=30.0  # 30 second timeout per batch
+                )
+                
+                for symbol, result in zip(batch, results):
+                    if isinstance(result, StockPrice):
+                        price_data[symbol.upper()] = result
+                    elif isinstance(result, Exception):
+                        logger.error(f"Error fetching {symbol}: {str(result)}")
+                        # Fallback to mock data for failed symbols
+                        mock_price = self._get_mock_price(symbol)
+                        if mock_price:
+                            price_data[symbol.upper()] = mock_price
+                
+            except asyncio.TimeoutError:
+                logger.warning(f"Batch timeout for symbols: {batch}")
+                # Fallback to mock data for timed out batch
+                for symbol in batch:
+                    mock_price = self._get_mock_price(symbol)
+                    if mock_price:
+                        price_data[symbol.upper()] = mock_price
+        
+        logger.info(f"Successfully fetched {len(price_data)} prices")
         return price_data
 
     async def get_company_profile(self, symbol: str) -> Optional[CompanyProfile]:
