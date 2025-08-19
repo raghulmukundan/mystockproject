@@ -39,9 +39,32 @@ export default function Watchlists() {
       if (allSymbols.length === 0) return
       
       console.log('Loading prices for symbols:', allSymbols)
-      const prices = await stockApi.getMultipleStockPrices(allSymbols)
-      console.log('Received price data:', prices)
-      setPriceData(prices)
+      
+      // Progressive loading - load prices in small batches with delays
+      const batchSize = 5 // Small batches to respect rate limits
+      const priceResults: Record<string, any> = {}
+      
+      for (let i = 0; i < allSymbols.length; i += batchSize) {
+        const batch = allSymbols.slice(i, i + batchSize)
+        console.log(`Loading batch ${Math.floor(i/batchSize) + 1}:`, batch)
+        
+        try {
+          const batchPrices = await stockApi.getMultipleStockPrices(batch)
+          Object.assign(priceResults, batchPrices)
+          
+          // Update UI progressively as each batch loads
+          setPriceData(prev => ({ ...prev, ...batchPrices }))
+          
+          // Wait between batches to respect rate limits (50/min = ~1.2s between calls)
+          if (i + batchSize < allSymbols.length) {
+            await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
+          }
+        } catch (error) {
+          console.error(`Error loading batch ${Math.floor(i/batchSize) + 1}:`, error)
+        }
+      }
+      
+      console.log('All price data loaded:', priceResults)
     } catch (error) {
       console.error('Error loading stock prices:', error)
     }
@@ -180,48 +203,65 @@ export default function Watchlists() {
 
                 <div className="mb-4">
                   <h4 className="text-sm font-medium text-gray-900 mb-3">Items</h4>
-                  <div className="space-y-2">
+                  
+                  {/* Column headers */}
+                  <div className="grid grid-cols-6 gap-2 px-2 py-1 text-xs font-medium text-gray-500 border-b">
+                    <div>Symbol</div>
+                    <div className="text-right">Current</div>
+                    <div className="text-right">Entry</div>
+                    <div className="text-right">Target</div>
+                    <div className="text-right">Stop</div>
+                    <div className="text-right">P&L</div>
+                  </div>
+                  
+                  <div className="space-y-1 mt-2">
                     {watchlist.items.slice(0, 4).map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div className="flex items-center space-x-3">
+                      <div key={item.id} className="grid grid-cols-6 gap-2 p-2 bg-gray-50 rounded text-xs items-center">
+                        <div className="flex items-center space-x-2">
                           <Link
                             to={`/chart/${item.symbol}`}
                             className="font-medium text-blue-600 hover:text-blue-700"
+                            title={item.company_name || item.symbol}
                           >
                             {item.symbol}
                           </Link>
-                          {item.company_name && (
-                            <span className="text-xs text-gray-500 truncate">
-                              {item.company_name}
-                            </span>
-                          )}
                           {item.sector && (
-                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
-                              {item.sector}
+                            <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                              {item.sector.substring(0, 3).toUpperCase()}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center space-x-2 text-xs">
+                        
+                        <div className="text-right">
                           {priceData[item.symbol] ? (
                             <span className={`font-medium ${priceData[item.symbol].change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              Current: ${priceData[item.symbol].current_price.toFixed(2)}
+                              ${priceData[item.symbol].current_price.toFixed(2)}
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-xs">Loading price...</span>
+                            <span className="text-gray-400">Loading...</span>
                           )}
-                          {item.entry_price && (
-                            <span className="text-gray-600">
-                              Entry: ${parseFloat(item.entry_price).toFixed(2)}
-                            </span>
-                          )}
-                          {item.target_price && (
-                            <span className="text-green-600">
-                              Target: ${parseFloat(item.target_price).toFixed(2)}
-                            </span>
-                          )}
-                          {item.stop_loss && (
-                            <span className="text-red-600">
-                              Stop: ${parseFloat(item.stop_loss).toFixed(2)}
+                        </div>
+                        
+                        <div className="text-right text-gray-600">
+                          {item.entry_price ? `$${parseFloat(item.entry_price).toFixed(2)}` : '-'}
+                        </div>
+                        
+                        <div className="text-right text-green-600">
+                          {item.target_price ? `$${parseFloat(item.target_price).toFixed(2)}` : '-'}
+                        </div>
+                        
+                        <div className="text-right text-red-600">
+                          {item.stop_loss ? `$${parseFloat(item.stop_loss).toFixed(2)}` : '-'}
+                        </div>
+                        
+                        <div className="text-right">
+                          {priceData[item.symbol] && item.entry_price && (
+                            <span className={`text-xs ${
+                              priceData[item.symbol].current_price > parseFloat(item.entry_price) 
+                                ? 'text-green-600' 
+                                : 'text-red-600'
+                            }`}>
+                              {((priceData[item.symbol].current_price - parseFloat(item.entry_price)) / parseFloat(item.entry_price) * 100).toFixed(1)}%
                             </span>
                           )}
                         </div>
@@ -252,42 +292,6 @@ export default function Watchlists() {
                 </div>
               </div>
 
-              {watchlist.items.length > 0 && (
-                <div className="bg-gray-50 px-6 py-4">
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Avg Entry:</span>
-                      <div className="font-medium text-gray-900">
-                        ${watchlist.items
-                          .filter(item => item.entry_price)
-                          .reduce((sum, item) => sum + (item.entry_price || 0), 0) / 
-                          Math.max(watchlist.items.filter(item => item.entry_price).length, 1)
-                        }.toFixed(2)
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Avg Target:</span>
-                      <div className="font-medium text-green-600">
-                        ${watchlist.items
-                          .filter(item => item.target_price)
-                          .reduce((sum, item) => sum + (item.target_price || 0), 0) / 
-                          Math.max(watchlist.items.filter(item => item.target_price).length, 1)
-                        }.toFixed(2)
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Avg Stop:</span>
-                      <div className="font-medium text-red-600">
-                        ${watchlist.items
-                          .filter(item => item.stop_loss)
-                          .reduce((sum, item) => sum + (item.stop_loss || 0), 0) / 
-                          Math.max(watchlist.items.filter(item => item.stop_loss).length, 1)
-                        }.toFixed(2)
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
