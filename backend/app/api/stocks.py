@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any
 from app.services.stock_data import stock_data_service, StockPrice, CompanyProfile
+from app.services.cache_service import cache_service
 from pydantic import BaseModel
 import logging
 
@@ -237,10 +238,19 @@ async def get_multiple_company_profiles(symbols: List[str] = Query(..., descript
 @router.get("/cache-stats")
 async def get_cache_stats():
     """Get cache statistics for monitoring"""
-    return stock_data_service.get_cache_stats()
+    return {
+        "global_cache": cache_service.get_stats(),
+        "legacy_cache": stock_data_service.get_cache_stats()
+    }
 
 @router.post("/clear-cache")
 async def clear_cache():
     """Clear the stock data cache"""
     stock_data_service.clear_cache()
+    cache_service.clear()
     return {"message": "Cache cleared successfully"}
+
+@router.get("/market-status")
+async def get_market_status():
+    """Get current market status and next refresh time"""
+    return cache_service.get_market_status()

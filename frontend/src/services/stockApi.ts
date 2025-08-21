@@ -1,3 +1,5 @@
+import { ChartData } from '../types'
+
 const API_BASE_URL = 'http://localhost:8000/api'
 
 export interface StockPrice {
@@ -91,6 +93,27 @@ class StockApiService {
       throw new Error('Failed to clear cache')
     }
     return response.json()
+  }
+
+  async getCandles(symbol: string, range: string = '6m'): Promise<ChartData[]> {
+    const params = new URLSearchParams({ symbol, range })
+    const response = await fetch(`${API_BASE_URL}/market/candles?${params}`)
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch candle data for ${symbol}`)
+    }
+    
+    const data = await response.json()
+    
+    // Convert API format to ChartData format
+    return data.bars.map((bar: any) => ({
+      time: bar.date,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+      volume: bar.volume
+    }))
   }
 }
 

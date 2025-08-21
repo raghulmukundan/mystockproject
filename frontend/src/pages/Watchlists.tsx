@@ -1,11 +1,61 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { EyeIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { EyeIcon, PlusIcon, PencilIcon, TrashIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice } from '../services/stockApi'
 import { Watchlist, WatchlistItem } from '../types'
 import EditWatchlistModal from '../components/EditWatchlistModal'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
+
+// Market hours utilities (same as Dashboard)
+const isMarketOpen = (): boolean => {
+  const now = new Date()
+  const cstTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Chicago"}))
+  const day = cstTime.getDay() // 0 = Sunday, 6 = Saturday
+  const hours = cstTime.getHours()
+  const minutes = cstTime.getMinutes()
+  const totalMinutes = hours * 60 + minutes
+  
+  // Market closed on weekends
+  if (day === 0 || day === 6) return false
+  
+  // Market hours: 8:30 AM - 3:00 PM CST
+  const marketOpen = 8 * 60 + 30  // 8:30 AM
+  const marketClose = 15 * 60     // 3:00 PM
+  
+  return totalMinutes >= marketOpen && totalMinutes < marketClose
+}
+
+const getNextRefreshTime = (intervalMinutes: number = 30): Date => {
+  const now = new Date()
+  
+  // If market is open, next refresh is in 30 minutes
+  if (isMarketOpen()) {
+    const nextRefresh = new Date(now)
+    nextRefresh.setMinutes(Math.ceil(now.getMinutes() / intervalMinutes) * intervalMinutes, 0, 0)
+    return nextRefresh
+  }
+  
+  // If market is closed, next refresh is at next market open (8:30 AM CST next trading day)
+  const cstTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Chicago"}))
+  const nextOpen = new Date(cstTime)
+  
+  // Set to 8:30 AM CST
+  nextOpen.setHours(8, 30, 0, 0)
+  
+  // If we're past 8:30 AM today or it's weekend, move to next day
+  if (cstTime.getHours() >= 8 && cstTime.getMinutes() >= 30 || cstTime.getDay() === 0 || cstTime.getDay() === 6) {
+    nextOpen.setDate(nextOpen.getDate() + 1)
+  }
+  
+  // Skip weekends
+  while (nextOpen.getDay() === 0 || nextOpen.getDay() === 6) {
+    nextOpen.setDate(nextOpen.getDate() + 1)
+  }
+  
+  // Convert back to local time
+  return new Date(nextOpen.toLocaleString("en-US", {timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone}))
+}
 
 export default function Watchlists() {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([])
@@ -17,9 +67,29 @@ export default function Watchlists() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [priceData, setPriceData] = useState<Record<string, StockPrice>>({})
   const [loadingPrices, setLoadingPrices] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [nextRefresh, setNextRefresh] = useState<Date>(getNextRefreshTime())
+  const [timeUntilRefresh, setTimeUntilRefresh] = useState<string>('')
 
   useEffect(() => {
     loadWatchlists()
+    
+    // Update countdown timer every second
+    const timer = setInterval(updateCountdown, 1000)
+    
+    // Refresh data every 30 minutes, but only during market hours
+    const refreshInterval = setInterval(() => {
+      if (isMarketOpen()) {
+        refreshAllData()
+      } else {
+        console.log('Market closed, skipping price refresh on watchlists page')
+      }
+    }, 30 * 60 * 1000) // 30 minutes
+    
+    return () => {
+      clearInterval(timer)
+      clearInterval(refreshInterval)
+    }
   }, [])
 
   useEffect(() => {
@@ -27,6 +97,29 @@ export default function Watchlists() {
       loadStockPrices()
     }
   }, [watchlists])
+
+  const updateCountdown = () => {
+    const now = new Date()
+    const diff = nextRefresh.getTime() - now.getTime()
+    
+    if (diff <= 0) {
+      setNextRefresh(getNextRefreshTime())
+      return
+    }
+    
+    const minutes = Math.floor(diff / 60000)
+    const seconds = Math.floor((diff % 60000) / 1000)
+    setTimeUntilRefresh(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+  }
+
+  const refreshAllData = async () => {
+    console.log('Refreshing watchlist data...')
+    setLastRefresh(new Date())
+    setNextRefresh(getNextRefreshTime())
+    
+    // Reload watchlists and prices
+    await loadWatchlists()
+  }
 
   const loadStockPrices = async () => {
     try {
@@ -39,11 +132,14 @@ export default function Watchlists() {
       
       if (allSymbols.length === 0) return
       
+      // Note: Market hours check is now handled by the backend
+      // The backend will serve cached data during market close or allow first-time fetching
+      
       console.log('Loading prices for symbols:', allSymbols)
       setLoadingPrices(true)
       
-      // Progressive loading - load prices in small batches with delays
-      const batchSize = 3 // Even smaller batches to avoid timeouts
+      // Optimized: Backend now handles cache efficiently, so larger batches with shorter delays
+      const batchSize = 15 // Larger batches since backend is cache-optimized
       const priceResults: Record<string, any> = {}
       
       for (let i = 0; i < allSymbols.length; i += batchSize) {
@@ -57,9 +153,9 @@ export default function Watchlists() {
           // Update UI progressively as each batch loads
           setPriceData(prev => ({ ...prev, ...batchPrices }))
           
-          // Wait between batches to respect rate limits (50/min = ~1.2s between calls)
+          // Shorter delay since backend is cache-optimized
           if (i + batchSize < allSymbols.length) {
-            await new Promise(resolve => setTimeout(resolve, 3000)) // 3 second delay (increased)
+            await new Promise(resolve => setTimeout(resolve, 1000)) // Reduced to 1 second
           }
         } catch (error) {
           console.error(`Error loading batch ${Math.floor(i/batchSize) + 1}:`, error)
@@ -140,13 +236,34 @@ export default function Watchlists() {
             Manage your stock watchlists and monitor performance
           </p>
         </div>
-        <Link
-          to="/upload"
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
-        >
-          <PlusIcon className="h-4 w-4 mr-2" />
-          Create Watchlist
-        </Link>
+        <div className="flex items-center space-x-4">
+          <div className="text-right">
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <ClockIcon className="h-4 w-4" />
+              <span>
+                {isMarketOpen() ? 'Market Open' : 'Market Closed'} • 
+                {isMarketOpen() 
+                  ? `Next refresh: ${timeUntilRefresh || 'Loading...'}` 
+                  : `Next refresh: ${timeUntilRefresh || 'Next market open'}`
+                }
+              </span>
+            </div>
+            <div className="text-xs text-gray-400">
+              Last updated: {lastRefresh.toLocaleTimeString('en-US', {
+                timeZone: 'America/Chicago',
+                hour: 'numeric',
+                minute: '2-digit'
+              })} CST
+            </div>
+          </div>
+          <Link
+            to="/upload"
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
+          >
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Create Watchlist
+          </Link>
+        </div>
       </div>
 
       {error && (

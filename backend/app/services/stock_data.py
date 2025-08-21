@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import logging
 import os
 from collections import deque
+from .cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -87,17 +88,33 @@ class StockDataService:
     async def get_stock_price(self, symbol: str) -> Optional[StockPrice]:
         """Get current stock price using Finnhub API"""
         try:
-            # Check cache first
-            cache_key = symbol.upper()
-            if cache_key in self.price_cache:
-                cached_data, timestamp = self.price_cache[cache_key]
-                if datetime.now() - timestamp < self.cache_duration:
-                    return cached_data
+            # Check global cache first
+            cache_key = f"stock_price_{symbol.upper()}"
+            cached_price = cache_service.get(cache_key)
+            if cached_price:
+                logger.debug(f"Using cached price for {symbol}")
+                return cached_price
 
+            # Check market status and cache existence for API call decision
+            market_open = cache_service.should_fetch_data(cache_key)
+            if not market_open:
+                logger.info(f"Market closed, no cache for {symbol} - allowing first-time fetch")
+                # Continue to API call for first-time fetch during market close
+            else:
+                logger.debug(f"Market open, proceeding with API call for {symbol}")
+            
             # Check if we have a valid API key (not demo)
             if self.finnhub_api_key == 'demo':
                 logger.info(f"Using demo key, falling back to mock data for {symbol}")
-                return self._get_mock_price(symbol)
+                mock_price = self._get_mock_price(symbol)
+                if mock_price:
+                    # Cache mock data with extended TTL if market is closed
+                    if not market_open:
+                        cache_service.set(cache_key, mock_price, extended_ttl=True)
+                        logger.info(f"Cached mock price for {symbol} until next market open")
+                    else:
+                        cache_service.set(cache_key, mock_price)
+                return mock_price
             
             # Apply rate limiting before making API call
             await self.rate_limiter.acquire()
@@ -158,8 +175,12 @@ class StockDataService:
                             last_updated=datetime.now()
                         )
                         
-                        # Cache the result
-                        self.price_cache[cache_key] = (stock_price, datetime.now())
+                        # Cache the result using global cache service with extended TTL if market is closed
+                        if not market_open:
+                            cache_service.set(cache_key, stock_price, extended_ttl=True)
+                            logger.info(f"Cached price for {symbol} until next market open")
+                        else:
+                            cache_service.set(cache_key, stock_price)
                         return stock_price
                     else:
                         logger.warning(f"Finnhub API error for {symbol}: {response.status}")
@@ -173,29 +194,34 @@ class StockDataService:
     def _get_mock_price(self, symbol: str) -> Optional[StockPrice]:
         """Get mock price data for common stocks"""
         mock_prices = {
+            # Major Market Indexes
+            'SPY': 485.50,   # S&P 500 ETF
+            'QQQ': 415.30,   # NASDAQ 100 ETF  
+            'DIA': 385.75,   # Dow Jones ETF
+            
             # Technology
-            'AAPL': 175.50, 'GOOGL': 125.30, 'MSFT': 350.75, 'NVDA': 420.30, 'META': 285.90,
-            'AMD': 102.85, 'INTC': 35.40, 'CRM': 245.70, 'ORCL': 118.60, 'IBM': 142.30,
-            'AVGO': 825.40, 'PLTR': 28.45,
+            'AAPL': 175.50, 'GOOGL': 140.30, 'MSFT': 415.75, 'NVDA': 465.30, 'META': 315.90,
+            'AMD': 145.85, 'INTC': 35.40, 'CRM': 245.70, 'ORCL': 118.60, 'IBM': 142.30,
+            'AVGO': 915.40, 'PLTR': 28.45, 'NFLX': 450.85,
             
             # Electric Vehicles & Auto
-            'TSLA': 245.60,
+            'TSLA': 240.60,
             
             # E-commerce & Retail
-            'AMZN': 145.20, 'COST': 685.40, 'HD': 285.90, 'TPR': 45.20,
+            'AMZN': 145.20, 'COST': 785.40, 'HD': 325.90, 'TPR': 42.20,
             
             # Financial Services
-            'JPM': 165.25, 'BAC': 34.80, 'WFC': 45.95, 'MA': 385.20, 'V': 245.80,
-            'GS': 385.60,
+            'JPM': 150.25, 'BAC': 32.80, 'WFC': 45.95, 'MA': 415.20, 'V': 255.80,
+            'GS': 375.60,
             
             # Healthcare & Pharma
-            'UNH': 485.30, 'JNJ': 158.75, 'PFE': 28.95, 'LLY': 685.20, 'ABBV': 165.80,
+            'UNH': 515.30, 'JNJ': 165.75, 'PFE': 29.95, 'LLY': 485.20, 'ABBV': 145.80,
             
             # Industrial
-            'GE': 115.80, 'DE': 420.15, 'CAT': 285.90, 'HWM': 32.10, 'EXP': 155.30,
+            'GE': 115.80, 'DE': 385.15, 'CAT': 295.90, 'HWM': 32.10, 'EXP': 155.30,
             
             # Energy
-            'XOM': 95.75, 'CVX': 142.60, 'SLB': 42.35, 'COP': 95.40, 'OXY': 58.90
+            'XOM': 115.75, 'CVX': 165.60, 'SLB': 45.35, 'COP': 115.40, 'OXY': 62.90
         }
         
         if symbol.upper() in mock_prices:
@@ -214,50 +240,98 @@ class StockDataService:
         return None
 
     async def get_multiple_stock_prices(self, symbols: List[str]) -> Dict[str, StockPrice]:
-        """Get prices for multiple stocks concurrently with batching"""
+        """Get prices for multiple stocks with cache-first strategy"""
         if len(symbols) == 0:
             return {}
         
         logger.info(f"Fetching prices for {len(symbols)} symbols")
         
-        # For large batches, process in smaller chunks to avoid timeouts
-        batch_size = 10 if len(symbols) > 10 else len(symbols)
+        # STEP 1: Check cache for ALL symbols first (super fast)
         price_data = {}
+        uncached_symbols = []
         
-        for i in range(0, len(symbols), batch_size):
-            batch = symbols[i:i + batch_size]
-            logger.info(f"Processing batch {i//batch_size + 1}: {batch}")
+        for symbol in symbols:
+            cache_key = f"stock_price_{symbol.upper()}"
+            cached_price = cache_service.get(cache_key)
+            if cached_price:
+                price_data[symbol.upper()] = cached_price
+                logger.debug(f"Cache hit: {symbol}")
+            else:
+                uncached_symbols.append(symbol)
+        
+        logger.info(f"Cache results: {len(price_data)} cached, {len(uncached_symbols)} need fetching")
+        
+        # STEP 2: For uncached symbols, check if we should fetch from API
+        if uncached_symbols:
+            market_open = cache_service.should_fetch_data()
             
+            if not market_open:
+                logger.info(f"Market closed - proceeding with first-time fetch for {len(uncached_symbols)} symbols")
+                # During market close, use smaller batches and shorter timeout
+                batch_size = 3
+                timeout = 8.0
+            else:
+                logger.info(f"Market open - fetching {len(uncached_symbols)} symbols")
+                batch_size = 8
+                timeout = 15.0
+            
+            # STEP 3: Process uncached symbols in small batches
+            for i in range(0, len(uncached_symbols), batch_size):
+                batch = uncached_symbols[i:i + batch_size]
+                logger.info(f"API batch {i//batch_size + 1}: {batch}")
+                
+                # Process batch with individual API calls but with timeout
+                batch_results = await self._process_price_batch(batch, timeout)
+                price_data.update(batch_results)
+                
+                # Small delay between batches during market close
+                if not market_open and i + batch_size < len(uncached_symbols):
+                    await asyncio.sleep(1.0)
+        
+        logger.info(f"Final result: {len(price_data)} prices returned")
+        return price_data
+    
+    async def _process_price_batch(self, symbols: List[str], timeout: float) -> Dict[str, StockPrice]:
+        """Process a small batch of symbols with fallback to mock data"""
+        batch_results = {}
+        
+        try:
             # Create tasks for this batch
-            tasks = [self.get_stock_price(symbol) for symbol in batch]
+            tasks = [self.get_stock_price(symbol) for symbol in symbols]
             
-            # Use asyncio.gather with timeout
-            try:
-                results = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=15.0  # 15 second timeout per batch (reduced)
-                )
-                
-                for symbol, result in zip(batch, results):
-                    if isinstance(result, StockPrice):
-                        price_data[symbol.upper()] = result
-                    elif isinstance(result, Exception):
-                        logger.error(f"Error fetching {symbol}: {str(result)}")
-                        # Fallback to mock data for failed symbols
-                        mock_price = self._get_mock_price(symbol)
-                        if mock_price:
-                            price_data[symbol.upper()] = mock_price
-                
-            except asyncio.TimeoutError:
-                logger.warning(f"Batch timeout for symbols: {batch}")
-                # Fallback to mock data for timed out batch
-                for symbol in batch:
+            # Execute with timeout
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=timeout
+            )
+            
+            # Process results
+            for symbol, result in zip(symbols, results):
+                if isinstance(result, StockPrice):
+                    batch_results[symbol.upper()] = result
+                    logger.debug(f"API success: {symbol}")
+                elif isinstance(result, Exception):
+                    logger.warning(f"API error for {symbol}: {str(result)}")
+                    # Fallback to mock data
                     mock_price = self._get_mock_price(symbol)
                     if mock_price:
-                        price_data[symbol.upper()] = mock_price
+                        batch_results[symbol.upper()] = mock_price
+                        # Cache mock data too
+                        cache_service.set(f"stock_price_{symbol.upper()}", mock_price)
+                        logger.info(f"Using mock data for {symbol}")
+                
+        except asyncio.TimeoutError:
+            logger.warning(f"Batch timeout for symbols: {symbols} (timeout: {timeout}s)")
+            # Fallback ALL symbols in batch to mock data
+            for symbol in symbols:
+                mock_price = self._get_mock_price(symbol)
+                if mock_price:
+                    batch_results[symbol.upper()] = mock_price
+                    # Cache mock data
+                    cache_service.set(f"stock_price_{symbol.upper()}", mock_price)
+                    logger.info(f"Mock fallback for {symbol} due to timeout")
         
-        logger.info(f"Successfully fetched {len(price_data)} prices")
-        return price_data
+        return batch_results
 
     async def get_company_profile(self, symbol: str) -> Optional[CompanyProfile]:
         """Get company profile data using Finnhub API"""

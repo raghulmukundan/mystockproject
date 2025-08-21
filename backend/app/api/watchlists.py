@@ -103,8 +103,8 @@ async def upload_watchlist(
                     'stop_loss': row.get('stop_loss', None)
                 }
                 
-                # Skip profile enrichment during upload for speed (can be done later via refresh)
-                # item_data = await enrich_item_with_profile(item_data, symbol)
+                # Enrich with fast fallback profile data (no API calls)
+                item_data = await enrich_item_with_profile(item_data, symbol)
                 
                 item_data = {k: v for k, v in item_data.items() if pd.notna(v)}
                 watchlist_item = WatchlistItem(**item_data)
@@ -387,15 +387,16 @@ async def refresh_watchlist_profiles(
     
     for item in db_watchlist.items:
         try:
-            # Get fresh profile data
-            profile = await stock_data_service.get_company_profile(item.symbol)
+            # Use only fast fallback profile data (no API calls)
+            profile = stock_data_service._get_fallback_profile(item.symbol)
             if profile:
-                # Update item with fresh profile data
+                # Update item with fallback profile data
                 item.company_name = profile.company_name
                 item.sector = profile.sector
                 item.industry = profile.industry
                 item.market_cap = profile.market_cap
                 updated_count += 1
+                print(f"Updated profile for {item.symbol}: {profile.company_name}")
         except Exception as e:
             print(f"Error updating profile for {item.symbol}: {e}")
             continue
