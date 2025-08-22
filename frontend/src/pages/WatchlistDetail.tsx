@@ -9,7 +9,10 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   PlusIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  TrophyIcon
 } from '@heroicons/react/24/outline'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice, CompanyProfile } from '../services/stockApi'
@@ -18,7 +21,8 @@ import EditWatchlistModal from '../components/EditWatchlistModal'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
 import AddItemModal from '../components/AddItemModal'
 import GroupingControls, { GroupingOption } from '../components/GroupingControls'
-import StockDetailsSidebar from '../components/StockDetailsSidebar'
+import FinancialWidget from '../components/FinancialWidget'
+import TradingViewWidget from '../components/TradingViewWidget'
 import { groupWatchlistItems } from '../utils/grouping'
 
 // Function to load real stock prices
@@ -51,14 +55,16 @@ export default function WatchlistDetail() {
   const [deletingItem, setDeletingItem] = useState<WatchlistItem | null>(null)
   const [deleteItemLoading, setDeleteItemLoading] = useState(false)
   const [groupBy, setGroupBy] = useState<GroupingOption>('none')
-  const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null)
-  const [selectedProfile, setSelectedProfile] = useState<CompanyProfile | null>(null)
-  const [sidebarLoading, setSidebarLoading] = useState(false)
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [allWatchlists, setAllWatchlists] = useState<Watchlist[]>([])
+  const [currentIndex, setCurrentIndex] = useState<number>(-1)
+  const [selectedAnalysisSymbol, setSelectedAnalysisSymbol] = useState<string | null>(null)
 
   useEffect(() => {
     if (id) {
       loadWatchlist(parseInt(id))
+      loadAllWatchlists()
     }
   }, [id])
 
@@ -86,6 +92,44 @@ export default function WatchlistDetail() {
       setLoading(false)
     }
   }
+
+  const loadAllWatchlists = async () => {
+    try {
+      const data = await watchlistsApi.getAll()
+      setAllWatchlists(data)
+      
+      // Find current watchlist index
+      if (id) {
+        const index = data.findIndex(w => w.id === parseInt(id))
+        setCurrentIndex(index)
+      }
+    } catch (err: any) {
+      console.error('Failed to load all watchlists:', err)
+    }
+  }
+
+  const navigateToWatchlist = (direction: 'prev' | 'next') => {
+    if (allWatchlists.length === 0 || currentIndex === -1) return
+    
+    let newIndex: number
+    if (direction === 'prev') {
+      newIndex = currentIndex === 0 ? allWatchlists.length - 1 : currentIndex - 1
+    } else {
+      newIndex = currentIndex === allWatchlists.length - 1 ? 0 : currentIndex + 1
+    }
+    
+    const targetWatchlist = allWatchlists[newIndex]
+    navigate(`/watchlists/${targetWatchlist.id}`)
+  }
+
+  const canNavigatePrev = allWatchlists.length > 1
+  const canNavigateNext = allWatchlists.length > 1
+  const prevWatchlist = canNavigatePrev && currentIndex !== -1 
+    ? allWatchlists[currentIndex === 0 ? allWatchlists.length - 1 : currentIndex - 1]
+    : null
+  const nextWatchlist = canNavigateNext && currentIndex !== -1
+    ? allWatchlists[currentIndex === allWatchlists.length - 1 ? 0 : currentIndex + 1] 
+    : null
 
   const handleEditWatchlist = async (data: {
     name: string
@@ -165,19 +209,9 @@ export default function WatchlistDetail() {
     }
   }
 
-  const handleSymbolClick = async (item: WatchlistItem) => {
-    setSelectedItem(item)
-    setSidebarLoading(true)
-    
-    try {
-      const profile = await stockApi.getCompanyProfile(item.symbol)
-      setSelectedProfile(profile)
-    } catch (error) {
-      console.error('Error fetching company profile:', error)
-      setSelectedProfile(null)
-    } finally {
-      setSidebarLoading(false)
-    }
+  const handleSymbolClick = (symbol: string) => {
+    setSelectedAnalysisSymbol(symbol)
+    setAnalysisModalOpen(true)
   }
 
   const handleRefreshProfiles = async () => {
@@ -231,16 +265,42 @@ export default function WatchlistDetail() {
             <Link
               to="/watchlists"
               className="text-gray-400 hover:text-gray-600 transition-colors"
+              title="Back to Watchlists"
             >
               <ArrowLeftIcon className="h-6 w-6" />
             </Link>
+            
+            {/* Previous/Next Navigation */}
+            {canNavigatePrev && (
+              <button
+                onClick={() => navigateToWatchlist('prev')}
+                className="text-gray-400 hover:text-blue-600 transition-colors"
+                title={`Previous: ${prevWatchlist?.name || ''}`}
+              >
+                <ChevronLeftIcon className="h-5 w-5" />
+              </button>
+            )}
+            
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{watchlist.name}</h1>
-              {watchlist.description && (
-                <p className="mt-2 text-gray-600">{watchlist.description}</p>
+              {allWatchlists.length > 1 && currentIndex !== -1 && (
+                <p className="text-sm text-gray-500">
+                  {currentIndex + 1} of {allWatchlists.length} watchlists
+                </p>
               )}
             </div>
+            
+            {canNavigateNext && (
+              <button
+                onClick={() => navigateToWatchlist('next')}
+                className="text-gray-400 hover:text-blue-600 transition-colors"
+                title={`Next: ${nextWatchlist?.name || ''}`}
+              >
+                <ChevronRightIcon className="h-5 w-5" />
+              </button>
+            )}
           </div>
+          
           <div className="flex items-center space-x-3">
             <button
               onClick={handleRefreshProfiles}
@@ -267,7 +327,14 @@ export default function WatchlistDetail() {
             </button>
           </div>
         </div>
+        
+        {watchlist.description && (
+          <p className="mt-2 text-gray-600">{watchlist.description}</p>
+        )}
+      </div>
 
+      {/* Statistics Cards */}
+      <div className="mb-8">
         <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-4">
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
@@ -423,7 +490,7 @@ export default function WatchlistDetail() {
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     <div>
                                       <button
-                                        onClick={() => handleSymbolClick(item)}
+                                        onClick={() => handleSymbolClick(item.symbol)}
                                         className="text-sm font-medium text-blue-600 hover:text-blue-700 underline"
                                       >
                                         {item.symbol}
@@ -503,12 +570,13 @@ export default function WatchlistDetail() {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     <div className="flex items-center space-x-3">
-                                      <Link
-                                        to={`/chart/${item.symbol}`}
+                                      <button
+                                        onClick={() => handleSymbolClick(item.symbol)}
                                         className="text-blue-600 hover:text-blue-700"
+                                        title="View detailed analysis"
                                       >
-                                        View Chart
-                                      </Link>
+                                        Analyze
+                                      </button>
                                       <button
                                         onClick={() => setDeletingItem(item)}
                                         className="text-red-600 hover:text-red-700"
@@ -532,6 +600,153 @@ export default function WatchlistDetail() {
           )}
         </div>
       </div>
+
+      {/* Stock Analysis Modal */}
+      {analysisModalOpen && selectedAnalysisSymbol && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-4 text-center">
+            {/* Background overlay */}
+            <div 
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => {
+                setAnalysisModalOpen(false)
+                setSelectedAnalysisSymbol(null)
+              }}
+            ></div>
+
+            {/* Modal content - Smaller size */}
+            <div className="inline-block align-middle bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white px-4 pt-4 pb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Stock Analysis: {selectedAnalysisSymbol}
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setAnalysisModalOpen(false)
+                      setSelectedAnalysisSymbol(null)
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Modal Content Grid - Smaller widgets */}
+                <div className="space-y-4">
+                  {/* Top Row - Chart and Overview */}
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
+                        <ChartBarIcon className="h-4 w-4 text-blue-600 mr-2" />
+                        Price Chart
+                      </h3>
+                      <div className="h-64">
+                        <TradingViewWidget
+                          symbol={selectedAnalysisSymbol}
+                          height="100%"
+                          width="100%"
+                          colorTheme="light"
+                          chartOnly={false}
+                          dateRange="6M"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
+                        <ArrowTrendingUpIcon className="h-4 w-4 text-green-600 mr-2" />
+                        Overview
+                      </h3>
+                      <div className="h-64">
+                        <FinancialWidget
+                          type="symbol-overview"
+                          symbol={selectedAnalysisSymbol}
+                          height="100%"
+                          width="100%"
+                          colorTheme="light"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Middle Row - Technical Analysis & Fundamental Data */}
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
+                        <ChartBarIcon className="h-4 w-4 text-purple-600 mr-2" />
+                        Technical Analysis
+                      </h3>
+                      <div className="h-52">
+                        <FinancialWidget
+                          type="technical-analysis"
+                          symbol={selectedAnalysisSymbol}
+                          height="100%"
+                          width="100%"
+                          colorTheme="light"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
+                        <EyeIcon className="h-4 w-4 text-orange-600 mr-2" />
+                        Fundamental Data
+                      </h3>
+                      <div className="h-52">
+                        <FinancialWidget
+                          type="fundamental-data"
+                          symbol={selectedAnalysisSymbol}
+                          height="100%"
+                          width="100%"
+                          colorTheme="light"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Row - Company Profile & Financials */}
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
+                        <TrophyIcon className="h-4 w-4 text-blue-600 mr-2" />
+                        Company Profile
+                      </h3>
+                      <div className="h-52">
+                        <FinancialWidget
+                          type="company-profile"
+                          symbol={selectedAnalysisSymbol}
+                          height="100%"
+                          width="100%"
+                          colorTheme="light"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
+                        <ArrowTrendingUpIcon className="h-4 w-4 text-green-600 mr-2" />
+                        Financial Reports
+                      </h3>
+                      <div className="h-52">
+                        <FinancialWidget
+                          type="financials"
+                          symbol={selectedAnalysisSymbol}
+                          height="100%"
+                          width="100%"
+                          colorTheme="light"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <EditWatchlistModal
         isOpen={!!editingWatchlist}
@@ -568,17 +783,6 @@ export default function WatchlistDetail() {
         isLoading={deleteItemLoading}
       />
 
-      <StockDetailsSidebar
-        isOpen={!!selectedItem}
-        onClose={() => {
-          setSelectedItem(null)
-          setSelectedProfile(null)
-        }}
-        item={selectedItem}
-        stockPrice={selectedItem ? priceData[selectedItem.symbol] : null}
-        companyProfile={selectedProfile}
-        isLoading={sidebarLoading}
-      />
     </div>
   )
 }
