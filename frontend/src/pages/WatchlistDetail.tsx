@@ -643,7 +643,7 @@ export default function WatchlistDetail() {
                         <ChartBarIcon className="h-4 w-4 text-blue-600 mr-2" />
                         Price Chart
                       </h3>
-                      <div className="h-64">
+                      <div className="h-80">
                         <TradingViewWidget
                           symbol={selectedAnalysisSymbol}
                           height="100%"
@@ -660,7 +660,7 @@ export default function WatchlistDetail() {
                         <ArrowTrendingUpIcon className="h-4 w-4 text-green-600 mr-2" />
                         Overview
                       </h3>
-                      <div className="h-64">
+                      <div className="h-80">
                         <FinancialWidget
                           type="symbol-overview"
                           symbol={selectedAnalysisSymbol}
@@ -679,7 +679,7 @@ export default function WatchlistDetail() {
                         <ChartBarIcon className="h-4 w-4 text-purple-600 mr-2" />
                         Technical Analysis
                       </h3>
-                      <div className="h-52">
+                      <div className="h-72">
                         <FinancialWidget
                           type="technical-analysis"
                           symbol={selectedAnalysisSymbol}
@@ -695,7 +695,7 @@ export default function WatchlistDetail() {
                         <EyeIcon className="h-4 w-4 text-orange-600 mr-2" />
                         Fundamental Data
                       </h3>
-                      <div className="h-52">
+                      <div className="h-72">
                         <FinancialWidget
                           type="fundamental-data"
                           symbol={selectedAnalysisSymbol}
@@ -714,7 +714,7 @@ export default function WatchlistDetail() {
                         <TrophyIcon className="h-4 w-4 text-blue-600 mr-2" />
                         Company Profile
                       </h3>
-                      <div className="h-52">
+                      <div className="h-72">
                         <FinancialWidget
                           type="company-profile"
                           symbol={selectedAnalysisSymbol}
@@ -730,7 +730,7 @@ export default function WatchlistDetail() {
                         <ArrowTrendingUpIcon className="h-4 w-4 text-green-600 mr-2" />
                         Financial Reports
                       </h3>
-                      <div className="h-52">
+                      <div className="h-72">
                         <FinancialWidget
                           type="financials"
                           symbol={selectedAnalysisSymbol}

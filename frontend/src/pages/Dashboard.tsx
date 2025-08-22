@@ -393,10 +393,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
-      </div>
-
       {/* Financial Widgets Section */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 mt-8">
         {/* Economic Calendar */}
