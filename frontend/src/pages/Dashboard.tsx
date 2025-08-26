@@ -321,38 +321,52 @@ export default function Dashboard() {
             </p>
           </div>
           
-          <div className="text-right">
-            <div className="flex items-center space-x-3 text-sm">
-              {/* Market Status */}
-              <div className="flex items-center space-x-1">
-                {isMarketOpen() ? (
-                  <CheckCircleIcon className="h-4 w-4 text-green-600" />
-                ) : (
-                  <XCircleIcon className="h-4 w-4 text-red-600" />
-                )}
-                <span className={isMarketOpen() ? 'text-green-600' : 'text-red-600'}>
-                  Market {isMarketOpen() ? 'Open' : 'Closed'}
-                </span>
-              </div>
-              
-              {/* Next Refresh */}
-              <div className="flex items-center space-x-1 text-gray-500">
-                <ArrowPathIcon className="h-4 w-4" />
-                <span>Next: {timeUntilRefresh || '...'}</span>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="bg-white shadow-sm rounded-md px-3 py-2 border border-gray-200">
+              <div className="flex items-center space-x-3 text-sm">
+                {/* Market Status */}
+                <div className="flex items-center space-x-1">
+                  {isMarketOpen() ? (
+                    <CheckCircleIcon className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircleIcon className="h-4 w-4 text-red-600" />
+                  )}
+                  <span className={isMarketOpen() ? 'text-green-600' : 'text-red-600'}>
+                    Market {isMarketOpen() ? 'Open' : 'Closed'}
+                  </span>
+                </div>
+                
+                <div className="h-4 w-px bg-gray-200"></div>
+                
+                {/* Next Refresh */}
+                <div className="flex items-center space-x-1 text-gray-500">
+                  <ArrowPathIcon className="h-4 w-4" />
+                  <span>Next: {timeUntilRefresh || '...'}</span>
+                </div>
+                
+                <div className="h-4 w-px bg-gray-200"></div>
+                
+                {/* Last Updated */}
+                <div className="flex items-center space-x-1 text-xs text-gray-400">
+                  <ClockIcon className="h-3 w-3" />
+                  <span>
+                    {lastRefresh.toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
               </div>
             </div>
             
-            {/* Last Updated */}
-            <div className="flex items-center justify-end space-x-1 text-xs text-gray-400 mt-1">
-              <ClockIcon className="h-3 w-3" />
-              <span>
-                {lastRefresh.toLocaleTimeString('en-US', {
-                  timeZone: 'America/Chicago',
-                  hour: 'numeric',
-                  minute: '2-digit'
-                })} CST
-              </span>
-            </div>
+            <button
+              onClick={refreshAllData}
+              disabled={pricesLoading}
+              className="flex items-center justify-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:bg-blue-400"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${pricesLoading ? 'animate-spin' : ''}`} />
+              <span>{pricesLoading ? 'Refreshing...' : 'Refresh Now'}</span>
+            </button>
           </div>
         </div>
       </div>
