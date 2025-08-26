@@ -35,7 +35,7 @@ interface StockDetailViewProps {
   onAddToWatchlist?: () => void
 }
 
-type Tab = 'overview' | 'chart' | 'fundamentals' | 'news' | 'alerts' | 'notes'
+type Tab = 'overview' | 'chart' | 'fundamentals' | 'technical' | 'profile' | 'news' | 'alerts' | 'notes'
 
 export default function StockDetailView({
   symbol,
@@ -227,6 +227,26 @@ export default function StockDetailView({
                     Chart
                   </button>
                   <button
+                    onClick={() => setActiveTab('technical')}
+                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'technical' 
+                        ? 'border-blue-600 text-blue-600' 
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Technical
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('profile')}
+                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'profile' 
+                        ? 'border-blue-600 text-blue-600' 
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Profile
+                  </button>
+                  <button
                     onClick={() => setActiveTab('fundamentals')}
                     className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'fundamentals' 
@@ -274,20 +294,19 @@ export default function StockDetailView({
             <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
               {activeTab === 'overview' && (
                 <div className="p-6">
-                  {/* Overview Layout */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left column */}
-                    <div className="lg:col-span-2 space-y-6">
-                      {/* Chart Widget */}
+                  {/* Overview Layout - Simplified with chart and position summary only */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Price Chart - Spans 2 columns on medium screens, full width on small */}
+                    <div className="md:col-span-2">
                       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
                           <h3 className="text-lg font-medium text-gray-900">Price Chart</h3>
-                          <div className="flex items-center space-x-2 text-sm">
-                            {['1D', '5D', '1M', '3M', '6M', '12M', '60M', 'ALL'].map((range) => (
+                          <div className="flex items-center space-x-1 overflow-x-auto hide-scrollbar">
+                            {['1D', '5D', '1M', '3M', '6M', '12M', 'ALL'].map((range) => (
                               <button
                                 key={range}
                                 onClick={() => setDateRange(range as any)}
-                                className={`px-2 py-1 rounded ${
+                                className={`px-2 py-1 rounded text-xs ${
                                   dateRange === range 
                                     ? 'bg-blue-600 text-white' 
                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -309,32 +328,15 @@ export default function StockDetailView({
                           />
                         </div>
                       </div>
-                      
-                      {/* Technical Analysis */}
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                        <div className="px-4 py-3 border-b border-gray-200">
-                          <h3 className="text-lg font-medium text-gray-900">Technical Analysis</h3>
-                        </div>
-                        <div className="p-4 h-56">
-                          <FinancialWidget
-                            type="technical-analysis"
-                            symbol={symbol}
-                            height="100%"
-                            width="100%"
-                            colorTheme="light"
-                          />
-                        </div>
-                      </div>
                     </div>
                     
-                    {/* Right column */}
-                    <div className="space-y-6">
-                      {/* Position Summary */}
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    {/* Position Summary - Single column */}
+                    <div className="md:col-span-1">
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full">
                         <div className="px-4 py-3 border-b border-gray-200">
                           <h3 className="text-lg font-medium text-gray-900">Position Summary</h3>
                         </div>
-                        <div className="p-4 space-y-4">
+                        <div className="p-4 space-y-3">
                           {price && (
                             <>
                               {/* Current Price */}
@@ -421,7 +423,9 @@ export default function StockDetailView({
                               <div className="grid grid-cols-2 gap-2">
                                 <div className="bg-gray-50 p-2 rounded">
                                   <div className="text-xs text-gray-500">Entry</div>
-                                  <div className="text-sm font-medium text-gray-900">${entryPrice.toFixed(2)}</div>
+                                  <div className="text-sm font-medium text-gray-900">
+                                    ${typeof entryPrice === 'number' ? entryPrice.toFixed(2) : '0.00'}
+                                  </div>
                                 </div>
                                 {performance && (
                                   <div className="bg-gray-50 p-2 rounded">
@@ -434,13 +438,17 @@ export default function StockDetailView({
                                 {targetPrice && (
                                   <div className="bg-gray-50 p-2 rounded">
                                     <div className="text-xs text-gray-500">Target</div>
-                                    <div className="text-sm font-medium text-green-600">${targetPrice.toFixed(2)}</div>
+                                    <div className="text-sm font-medium text-green-600">
+                                      ${typeof targetPrice === 'number' ? targetPrice.toFixed(2) : '0.00'}
+                                    </div>
                                   </div>
                                 )}
                                 {stopLoss && (
                                   <div className="bg-gray-50 p-2 rounded">
                                     <div className="text-xs text-gray-500">Stop</div>
-                                    <div className="text-sm font-medium text-red-600">${stopLoss.toFixed(2)}</div>
+                                    <div className="text-sm font-medium text-red-600">
+                                      ${typeof stopLoss === 'number' ? stopLoss.toFixed(2) : '0.00'}
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -474,22 +482,6 @@ export default function StockDetailView({
                           </div>
                         </div>
                       </div>
-                      
-                      {/* Company Info */}
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                        <div className="px-4 py-3 border-b border-gray-200">
-                          <h3 className="text-lg font-medium text-gray-900">Company Profile</h3>
-                        </div>
-                        <div className="p-4 h-64">
-                          <FinancialWidget
-                            type="company-profile"
-                            symbol={symbol}
-                            height="100%"
-                            width="100%"
-                            colorTheme="light"
-                          />
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -516,7 +508,7 @@ export default function StockDetailView({
                         ))}
                       </div>
                     </div>
-                    <div className="p-4" style={{ height: '600px' }}>
+                    <div className="p-4" style={{ height: '350px' }}>
                       <TradingViewWidget
                         symbol={symbol}
                         height="100%"
@@ -524,6 +516,44 @@ export default function StockDetailView({
                         colorTheme="light"
                         chartOnly={false}
                         dateRange={dateRange}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'technical' && (
+                <div className="p-6">
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="px-4 py-3 border-b border-gray-200">
+                      <h3 className="text-lg font-medium text-gray-900">Technical Analysis</h3>
+                    </div>
+                    <div className="p-4" style={{ height: '400px' }}>
+                      <FinancialWidget
+                        type="technical-analysis"
+                        symbol={symbol}
+                        height="100%"
+                        width="100%"
+                        colorTheme="light"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'profile' && (
+                <div className="p-6">
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="px-4 py-3 border-b border-gray-200">
+                      <h3 className="text-lg font-medium text-gray-900">Company Profile</h3>
+                    </div>
+                    <div className="p-4" style={{ height: '400px' }}>
+                      <FinancialWidget
+                        type="company-profile"
+                        symbol={symbol}
+                        height="100%"
+                        width="100%"
+                        colorTheme="light"
                       />
                     </div>
                   </div>

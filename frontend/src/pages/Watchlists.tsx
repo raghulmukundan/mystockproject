@@ -31,6 +31,7 @@ import EditWatchlistModal from '../components/EditWatchlistModal'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
 import FinancialWidget from '../components/FinancialWidget'
 import TradingViewWidget from '../components/TradingViewWidget'
+import StockDetailView from '../components/StockDetailView'
 
 // Function to calculate watchlist performance for color coding
 const calculateWatchlistPerformance = (watchlist: Watchlist, priceData: Record<string, StockPrice>) => {
@@ -1194,151 +1195,32 @@ export default function Watchlists() {
         </>
       )}
 
-      {/* Stock Analysis Modal */}
+      {/* Stock Analysis View */}
       {analysisModalOpen && selectedAnalysisSymbol && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-4 text-center">
-            {/* Background overlay */}
-            <div 
-              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-              onClick={() => {
-                setAnalysisModalOpen(false)
-                setSelectedAnalysisSymbol(null)
-              }}
-            ></div>
-
-            {/* Modal content - Smaller size */}
-            <div className="inline-block align-middle bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="bg-white px-4 pt-4 pb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">
-                    Stock Analysis: {selectedAnalysisSymbol}
-                  </h2>
-                  <button
-                    onClick={() => {
-                      setAnalysisModalOpen(false)
-                      setSelectedAnalysisSymbol(null)
-                    }}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Modal Content Grid - Smaller widgets */}
-                <div className="space-y-4">
-                  {/* Top Row - Chart and Overview */}
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
-                        <ChartBarIcon className="h-4 w-4 text-blue-600 mr-2" />
-                        Price Chart
-                      </h3>
-                      <div className="h-80">
-                        <TradingViewWidget
-                          symbol={selectedAnalysisSymbol}
-                          height="100%"
-                          width="100%"
-                          colorTheme="light"
-                          chartOnly={false}
-                          dateRange="6M"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
-                        <ArrowTrendingUpIcon className="h-4 w-4 text-green-600 mr-2" />
-                        Overview
-                      </h3>
-                      <div className="h-80">
-                        <FinancialWidget
-                          type="symbol-overview"
-                          symbol={selectedAnalysisSymbol}
-                          height="100%"
-                          width="100%"
-                          colorTheme="light"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Middle Row - Technical Analysis & Fundamental Data */}
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
-                        <ChartBarIcon className="h-4 w-4 text-purple-600 mr-2" />
-                        Technical Analysis
-                      </h3>
-                      <div className="h-72">
-                        <FinancialWidget
-                          type="technical-analysis"
-                          symbol={selectedAnalysisSymbol}
-                          height="100%"
-                          width="100%"
-                          colorTheme="light"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
-                        <EyeIcon className="h-4 w-4 text-orange-600 mr-2" />
-                        Fundamental Data
-                      </h3>
-                      <div className="h-72">
-                        <FinancialWidget
-                          type="fundamental-data"
-                          symbol={selectedAnalysisSymbol}
-                          height="100%"
-                          width="100%"
-                          colorTheme="light"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bottom Row - Company Profile & Financials */}
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
-                        <TrophyIcon className="h-4 w-4 text-blue-600 mr-2" />
-                        Company Profile
-                      </h3>
-                      <div className="h-72">
-                        <FinancialWidget
-                          type="company-profile"
-                          symbol={selectedAnalysisSymbol}
-                          height="100%"
-                          width="100%"
-                          colorTheme="light"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h3 className="text-base font-medium text-gray-900 mb-2 flex items-center">
-                        <ArrowTrendingUpIcon className="h-4 w-4 text-green-600 mr-2" />
-                        Financial Reports
-                      </h3>
-                      <div className="h-72">
-                        <FinancialWidget
-                          type="financials"
-                          symbol={selectedAnalysisSymbol}
-                          height="100%"
-                          width="100%"
-                          colorTheme="light"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StockDetailView 
+          symbol={selectedAnalysisSymbol}
+          isOpen={analysisModalOpen}
+          onClose={() => {
+            setAnalysisModalOpen(false)
+            setSelectedAnalysisSymbol(null)
+          }}
+          priceData={priceData[selectedAnalysisSymbol]}
+          entryPrice={
+            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.entry_price
+              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.entry_price.toString())
+              : undefined
+          }
+          targetPrice={
+            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.target_price
+              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.target_price.toString())
+              : undefined
+          }
+          stopLoss={
+            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.stop_loss
+              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.stop_loss.toString())
+              : undefined
+          }
+        />
       )}
 
       {/* Modals */}
