@@ -735,9 +735,19 @@ export default function Watchlists() {
                         
                         <div className="text-right">
                           {priceData[item.symbol] ? (
-                            <span className={`font-medium ${priceData[item.symbol].change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              ${priceData[item.symbol].current_price.toFixed(2)}
-                            </span>
+                            <div>
+                              <span className={`font-medium ${priceData[item.symbol].change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                ${priceData[item.symbol].current_price.toFixed(2)}
+                              </span>
+                              {priceData[item.symbol].high_52w && priceData[item.symbol].low_52w && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  <span title="52-week range">52W: </span>
+                                  <span className="text-red-600">${priceData[item.symbol].low_52w}</span>
+                                  <span> - </span>
+                                  <span className="text-green-600">${priceData[item.symbol].high_52w}</span>
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-gray-400">Loading...</span>
                           )}
@@ -745,6 +755,20 @@ export default function Watchlists() {
                         
                         <div className="text-right text-gray-600">
                           {item.entry_price ? `$${parseFloat(item.entry_price).toFixed(2)}` : '-'}
+                          {priceData[item.symbol]?.change_week !== undefined && (
+                            <div className="text-xs mt-1">
+                              <span title="1-week change" className={priceData[item.symbol].change_week >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                W: {priceData[item.symbol].change_week >= 0 ? '+' : ''}{priceData[item.symbol].change_week.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
+                          {priceData[item.symbol]?.change_month !== undefined && (
+                            <div className="text-xs mt-0.5">
+                              <span title="1-month change" className={priceData[item.symbol].change_month >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                M: {priceData[item.symbol].change_month >= 0 ? '+' : ''}{priceData[item.symbol].change_month.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="text-right text-green-600">

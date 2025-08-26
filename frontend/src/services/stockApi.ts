@@ -9,6 +9,10 @@ export interface StockPrice {
   change_percent: number
   volume: number
   market_cap?: number
+  high_52w?: number
+  low_52w?: number
+  change_week?: number
+  change_month?: number
 }
 
 export interface CompanyProfile {

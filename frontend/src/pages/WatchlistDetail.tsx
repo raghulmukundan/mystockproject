@@ -463,16 +463,19 @@ export default function WatchlistDetail() {
                                   Current Price
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  52W High/Low
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Changes
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                   Entry Price
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                   P&L
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Target
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Stop Loss
+                                  Target/Stop
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                   Actions
@@ -526,6 +529,57 @@ export default function WatchlistDetail() {
                                       <div className="text-sm text-gray-500">Loading...</div>
                                     )}
                                   </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {price && price.high_52w && price.low_52w ? (
+                                      <div className="text-xs">
+                                        <div className="flex items-center">
+                                          <span className="text-green-600 font-medium">H:</span> 
+                                          <span className="ml-1 text-gray-900">${price.high_52w}</span>
+                                        </div>
+                                        <div className="flex items-center mt-1">
+                                          <span className="text-red-600 font-medium">L:</span> 
+                                          <span className="ml-1 text-gray-900">${price.low_52w}</span>
+                                        </div>
+                                        {price.current_price && price.high_52w && price.low_52w && (
+                                          <div className="mt-1 text-gray-500">
+                                            {((price.current_price - price.low_52w) / (price.high_52w - price.low_52w) * 100).toFixed(0)}% of range
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="text-sm text-gray-500">-</div>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {price ? (
+                                      <div className="text-xs">
+                                        <div className="flex items-center">
+                                          <span className="font-medium text-gray-700">1D:</span> 
+                                          <span className={`ml-1 ${price.change_percent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {price.change_percent >= 0 ? '+' : ''}{price.change_percent.toFixed(2)}%
+                                          </span>
+                                        </div>
+                                        {price.change_week !== undefined && (
+                                          <div className="flex items-center mt-1">
+                                            <span className="font-medium text-gray-700">1W:</span> 
+                                            <span className={`ml-1 ${price.change_week >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                              {price.change_week >= 0 ? '+' : ''}{price.change_week.toFixed(2)}%
+                                            </span>
+                                          </div>
+                                        )}
+                                        {price.change_month !== undefined && (
+                                          <div className="flex items-center mt-1">
+                                            <span className="font-medium text-gray-700">1M:</span> 
+                                            <span className={`ml-1 ${price.change_month >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                              {price.change_month >= 0 ? '+' : ''}{price.change_month.toFixed(2)}%
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="text-sm text-gray-500">-</div>
+                                    )}
+                                  </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {item.entry_price ? `$${item.entry_price}` : '-'}
                                   </td>
@@ -541,32 +595,38 @@ export default function WatchlistDetail() {
                                     )}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
-                                    {item.target_price ? (
+                                    <div className="flex gap-4">
                                       <div>
-                                        <div className="text-sm text-gray-900">${item.target_price}</div>
-                                        {performance?.toTarget && (
-                                          <div className="text-xs text-gray-500">
-                                            {performance.toTarget > 0 ? `+${performance.toTarget}%` : `${performance.toTarget}%`} to go
+                                        {item.target_price ? (
+                                          <div>
+                                            <div className="text-xs font-medium text-green-600">Target:</div>
+                                            <div className="text-sm text-gray-900">${item.target_price}</div>
+                                            {performance?.toTarget && (
+                                              <div className="text-xs text-gray-500">
+                                                {performance.toTarget > 0 ? `+${performance.toTarget}%` : `${performance.toTarget}%`} to go
+                                              </div>
+                                            )}
                                           </div>
+                                        ) : (
+                                          <div className="text-sm text-gray-500">-</div>
                                         )}
                                       </div>
-                                    ) : (
-                                      <div className="text-sm text-gray-500">-</div>
-                                    )}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    {item.stop_loss ? (
                                       <div>
-                                        <div className="text-sm text-gray-900">${item.stop_loss}</div>
-                                        {performance?.toStopLoss && (
-                                          <div className="text-xs text-gray-500">
-                                            {performance.toStopLoss}% buffer
+                                        {item.stop_loss ? (
+                                          <div>
+                                            <div className="text-xs font-medium text-red-600">Stop:</div>
+                                            <div className="text-sm text-gray-900">${item.stop_loss}</div>
+                                            {performance?.toStopLoss && (
+                                              <div className="text-xs text-gray-500">
+                                                {performance.toStopLoss}% buffer
+                                              </div>
+                                            )}
                                           </div>
+                                        ) : (
+                                          <div className="text-sm text-gray-500">-</div>
                                         )}
                                       </div>
-                                    ) : (
-                                      <div className="text-sm text-gray-500">-</div>
-                                    )}
+                                    </div>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     <div className="flex items-center space-x-3">
