@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   BellIcon,
   ExclamationTriangleIcon,
@@ -11,11 +11,15 @@ import {
   TrashIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  AdjustmentsHorizontalIcon
+  ChevronRightIcon,
+  AdjustmentsHorizontalIcon,
+  CheckIcon,
+  FolderIcon
 } from '@heroicons/react/24/outline'
 import { Alert, AlertSummary, alertsApi } from '../services/alertsApi'
 import CreateAlertModal from '../components/CreateAlertModal'
 
+// Alert type color mappings
 const getSeverityColor = (severity: string) => {
   switch (severity) {
     case 'critical': return 'text-red-600 bg-red-50 border-red-200'
@@ -58,44 +62,109 @@ const getAlertAge = (dateString: string) => {
   return `${Math.ceil(diffDays / 30)} months ago`
 }
 
+// Alert categories for tabs
+const ALERT_CATEGORIES = {
+  ALL: 'all',
+  CRITICAL: 'critical',
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  LOW: 'low',
+  UNREAD: 'unread'
+}
+
 export default function Alerts() {
+  // Core data states
   const [alertsByWatchlist, setAlertsByWatchlist] = useState<Record<string, Alert[]>>({})
   const [oldAlerts, setOldAlerts] = useState<Alert[]>([])
   const [summary, setSummary] = useState<AlertSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
+  
+  // UI states
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showOldAlerts, setShowOldAlerts] = useState(false)
-  const [collapsedWatchlists, setCollapsedWatchlists] = useState<Set<string>>(new Set())
-  const [severityFilter, setSeverityFilter] = useState<string>('')
-  const [unreadOnly, setUnreadOnly] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
+  const [activeTab, setActiveTab] = useState(ALERT_CATEGORIES.ALL)
+  const [selectedWatchlist, setSelectedWatchlist] = useState<string | null>(null)
+  const [expandedAlerts, setExpandedAlerts] = useState<Set<number>>(new Set())
+  const [page, setPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(12)
+  
+  // Selection mode states
   const [selectedAlerts, setSelectedAlerts] = useState<Set<number>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
+  
+  // Filters
+  const [showFilters, setShowFilters] = useState(false)
+  const [severityFilter, setSeverityFilter] = useState<string>('')
+  const [unreadOnly, setUnreadOnly] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
 
+  // Refs
+  const alertsContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Load initial data
   useEffect(() => {
     loadAlerts()
     loadSummary()
-  }, [severityFilter, unreadOnly])
-
-  const loadAlerts = async () => {
+  }, [])
+  
+  // Filter alerts when filter changes
+  useEffect(() => {
+    if (!loading) {
+      applyFilters()
+    }
+  }, [activeTab, selectedWatchlist, searchTerm, severityFilter, unreadOnly])
+  
+  // Function to apply all active filters
+  const applyFilters = () => {
+    loadAlerts(true)
+  }
+  
+  // Main data loading function
+  const loadAlerts = async (keepCurrentFilters = false) => {
     try {
-      setLoading(true)
+      if (!keepCurrentFilters) {
+        setLoading(true)
+      }
+      
+      // Reset pagination when filters change
+      if (keepCurrentFilters) {
+        setPage(1)
+      }
+      
+      // Determine active filters based on tab or manual filters
+      const activeFilters = {
+        severity: activeTab !== ALERT_CATEGORIES.ALL && activeTab !== ALERT_CATEGORIES.UNREAD 
+          ? activeTab 
+          : severityFilter,
+        unread_only: activeTab === ALERT_CATEGORIES.UNREAD || unreadOnly,
+        watchlist: selectedWatchlist,
+        search: searchTerm.trim()
+      }
+      
+      // Load all alerts first
       const [recentAlerts, oldAlertsData] = await Promise.all([
         alertsApi.getAlertsByWatchlist(true),
         alertsApi.getOldAlerts(7, 100)
       ])
       
-      // Apply filters if needed
-      if (severityFilter || unreadOnly) {
+      // Apply filters locally
+      if (activeFilters.severity || activeFilters.unread_only || activeFilters.watchlist || activeFilters.search) {
+        // Filter watchlist alerts
         const filteredAlerts: Record<string, Alert[]> = {}
         
         for (const [watchlistName, alerts] of Object.entries(recentAlerts)) {
+          // Apply all filters except watchlist selection
           const filteredWatchlistAlerts = alerts.filter(alert => {
-            const matchesSeverity = !severityFilter || alert.severity === severityFilter
-            const matchesReadStatus = !unreadOnly || !alert.is_read
-            return matchesSeverity && matchesReadStatus
+            const matchesSeverity = !activeFilters.severity || alert.severity === activeFilters.severity
+            const matchesReadStatus = !activeFilters.unread_only || !alert.is_read
+            const matchesSearch = !activeFilters.search || 
+              alert.title.toLowerCase().includes(activeFilters.search.toLowerCase()) ||
+              alert.message.toLowerCase().includes(activeFilters.search.toLowerCase()) ||
+              (alert.symbol && alert.symbol.toLowerCase().includes(activeFilters.search.toLowerCase()))
+            
+            return matchesSeverity && matchesReadStatus && matchesSearch
           })
           
           if (filteredWatchlistAlerts.length > 0) {
@@ -104,15 +173,24 @@ export default function Alerts() {
         }
         
         setAlertsByWatchlist(filteredAlerts)
+        
+        // Filter old alerts
+        setOldAlerts(oldAlertsData.filter(alert => {
+          const matchesSeverity = !activeFilters.severity || alert.severity === activeFilters.severity
+          const matchesReadStatus = !activeFilters.unread_only || !alert.is_read
+          const matchesSearch = !activeFilters.search || 
+            alert.title.toLowerCase().includes(activeFilters.search.toLowerCase()) ||
+            alert.message.toLowerCase().includes(activeFilters.search.toLowerCase()) ||
+            (alert.symbol && alert.symbol.toLowerCase().includes(activeFilters.search.toLowerCase()))
+          const matchesWatchlist = !activeFilters.watchlist || 
+            (alert.watchlist_id?.toString() === activeFilters.watchlist)
+          
+          return matchesSeverity && matchesReadStatus && matchesSearch && matchesWatchlist
+        }))
       } else {
         setAlertsByWatchlist(recentAlerts)
+        setOldAlerts(oldAlertsData)
       }
-      
-      setOldAlerts(oldAlertsData.filter(alert => {
-        const matchesSeverity = !severityFilter || alert.severity === severityFilter
-        const matchesReadStatus = !unreadOnly || !alert.is_read
-        return matchesSeverity && matchesReadStatus
-      }))
     } catch (err: any) {
       setError('Failed to load alerts')
       console.error(err)
@@ -212,67 +290,14 @@ export default function Alerts() {
     loadSummary()
   }
 
-  const toggleWatchlistCollapse = (watchlistName: string) => {
-    const newCollapsed = new Set(collapsedWatchlists)
-    if (newCollapsed.has(watchlistName)) {
-      newCollapsed.delete(watchlistName)
+  const toggleAlertExpand = (alertId: number) => {
+    const newExpanded = new Set(expandedAlerts)
+    if (newExpanded.has(alertId)) {
+      newExpanded.delete(alertId)
     } else {
-      newCollapsed.add(watchlistName)
+      newExpanded.add(alertId)
     }
-    setCollapsedWatchlists(newCollapsed)
-  }
-
-  const expandAllWatchlists = () => {
-    setCollapsedWatchlists(new Set())
-  }
-
-  const collapseAllWatchlists = () => {
-    setCollapsedWatchlists(new Set(Object.keys(alertsByWatchlist)))
-  }
-
-  const resetFilters = () => {
-    setSeverityFilter('')
-    setUnreadOnly(false)
-    setShowFilters(false)
-  }
-
-  const markAllAsRead = async () => {
-    try {
-      // Collect all unread alert IDs
-      const unreadAlertIds: number[] = []
-      
-      Object.values(alertsByWatchlist).forEach(alerts => {
-        alerts.forEach(alert => {
-          if (!alert.is_read) {
-            unreadAlertIds.push(alert.id)
-          }
-        })
-      })
-      
-      oldAlerts.forEach(alert => {
-        if (!alert.is_read) {
-          unreadAlertIds.push(alert.id)
-        }
-      })
-      
-      // Mark each as read (could be optimized with a batch endpoint)
-      for (const alertId of unreadAlertIds) {
-        await alertsApi.markAsRead(alertId)
-      }
-      
-      // Update local state
-      const updatedAlerts = { ...alertsByWatchlist }
-      for (const watchlistName in updatedAlerts) {
-        updatedAlerts[watchlistName] = updatedAlerts[watchlistName].map(alert => ({ ...alert, is_read: true }))
-      }
-      setAlertsByWatchlist(updatedAlerts)
-      setOldAlerts(oldAlerts.map(alert => ({ ...alert, is_read: true })))
-      
-      loadSummary()
-    } catch (err: any) {
-      setError('Failed to mark all alerts as read')
-      console.error(err)
-    }
+    setExpandedAlerts(newExpanded)
   }
 
   const toggleSelectAlert = (alertId: number) => {
@@ -339,506 +364,802 @@ export default function Alerts() {
     await deleteSelectedAlerts()
   }
 
-  const renderAlert = (alert: Alert) => (
-    <div key={alert.id} 
-      className={`p-4 rounded-lg shadow-sm mb-3 border-t-4 ${
-        getSeverityColor(alert.severity)
-      } ${
-        !alert.is_read ? 'bg-blue-50' : 'bg-white'
-      } ${
-        selectedAlerts.has(alert.id) ? 'ring-2 ring-blue-500' : ''
-      }`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          {selectMode && (
-            <input
-              type="checkbox"
-              checked={selectedAlerts.has(alert.id)}
-              onChange={() => toggleSelectAlert(alert.id)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-            />
-          )}
+  const resetFilters = () => {
+    setSeverityFilter('')
+    setUnreadOnly(false)
+    setSearchTerm('')
+    setShowFilters(false)
+    setActiveTab(ALERT_CATEGORIES.ALL)
+    setSelectedWatchlist(null)
+  }
+
+  const markAllAsRead = async () => {
+    try {
+      // Collect all unread alert IDs
+      const unreadAlertIds: number[] = []
+      
+      Object.values(alertsByWatchlist).forEach(alerts => {
+        alerts.forEach(alert => {
+          if (!alert.is_read) {
+            unreadAlertIds.push(alert.id)
+          }
+        })
+      })
+      
+      oldAlerts.forEach(alert => {
+        if (!alert.is_read) {
+          unreadAlertIds.push(alert.id)
+        }
+      })
+      
+      // Mark each as read (could be optimized with a batch endpoint)
+      for (const alertId of unreadAlertIds) {
+        await alertsApi.markAsRead(alertId)
+      }
+      
+      // Update local state
+      const updatedAlerts = { ...alertsByWatchlist }
+      for (const watchlistName in updatedAlerts) {
+        updatedAlerts[watchlistName] = updatedAlerts[watchlistName].map(alert => ({ ...alert, is_read: true }))
+      }
+      setAlertsByWatchlist(updatedAlerts)
+      setOldAlerts(oldAlerts.map(alert => ({ ...alert, is_read: true })))
+      
+      loadSummary()
+    } catch (err: any) {
+      setError('Failed to mark all alerts as read')
+      console.error(err)
+    }
+  }
+
+  // Helper to get alerts for the current view
+  const getCurrentAlerts = () => {
+    // Always return all alerts, regardless of selection
+    return Object.values(alertsByWatchlist).flat()
+  }
+  
+  // Get watchlist abbreviation (first 3 letters)
+  const getWatchlistAbbreviation = (watchlistName: string) => {
+    return watchlistName.substring(0, 3).toUpperCase();
+  };
+
+  // Find which watchlist an alert belongs to
+  const findAlertWatchlist = (alertId: number) => {
+    for (const [watchlistName, alerts] of Object.entries(alertsByWatchlist)) {
+      if (alerts.some(a => a.id === alertId)) {
+        return watchlistName;
+      }
+    }
+    return null;
+  };
+
+  // Render compact alert card
+  const renderAlertCard = (alert: Alert, showWatchlistTag = false) => {
+    const isExpanded = expandedAlerts.has(alert.id)
+    
+    return (
+      <div key={alert.id} 
+        className={`rounded-lg shadow-sm border-t-4 mb-0 ${
+          getSeverityColor(alert.severity)
+        } ${
+          !alert.is_read ? 'bg-blue-50' : 'bg-white'
+        } ${
+          selectedAlerts.has(alert.id) ? 'ring-2 ring-blue-500' : ''
+        } transition-all overflow-hidden`}
+      >
+        <div className="p-3">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              {selectMode && (
+                <input
+                  type="checkbox"
+                  checked={selectedAlerts.has(alert.id)}
+                  onChange={() => toggleSelectAlert(alert.id)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+              )}
+              
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                alert.severity === 'critical' ? 'bg-red-100 text-red-800' :
+                alert.severity === 'high' ? 'bg-orange-100 text-orange-800' :
+                alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-blue-100 text-blue-800'
+              }`}>
+                {alert.severity}
+              </span>
+              
+              {!alert.is_read && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  New
+                </span>
+              )}
+            </div>
+            
+            {!selectMode && (
+              <div className="flex items-center space-x-1">
+                {!alert.is_read && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleMarkAsRead(alert.id) }}
+                    className="p-1 text-gray-400 hover:text-blue-600 transition-colors rounded-full hover:bg-blue-50"
+                    title="Mark as read"
+                  >
+                    <EyeIcon className="h-4 w-4" />
+                  </button>
+                )}
+                
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDismissAlert(alert.id) }}
+                  className="p-1 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
+                  title="Dismiss alert"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+                
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleAlertExpand(alert.id) }}
+                  className="p-1 text-gray-400 hover:text-blue-600 transition-colors rounded-full hover:bg-blue-50"
+                  title={isExpanded ? "Collapse details" : "Expand details"}
+                >
+                  {isExpanded ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+                </button>
+              </div>
+            )}
+          </div>
           
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-            alert.severity === 'critical' ? 'bg-red-100 text-red-800' :
-            alert.severity === 'high' ? 'bg-orange-100 text-orange-800' :
-            alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-            'bg-blue-100 text-blue-800'
-          }`}>
-            {alert.severity}
-          </span>
+          <h4 
+            className="text-sm font-medium text-gray-900 mb-1 cursor-pointer hover:text-blue-700"
+            onClick={() => toggleAlertExpand(alert.id)}
+          >
+            {alert.title}
+          </h4>
           
-          {!alert.is_read && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              New
+          {/* Always visible content */}
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="flex items-center">
+              <ClockIcon className="h-3 w-3 mr-1" />
+              {getAlertAge(alert.created_at)}
             </span>
-          )}
-          
-          <span className="text-xs text-gray-500 flex items-center">
-            <ClockIcon className="h-3 w-3 mr-1" />
-            {getAlertAge(alert.created_at)}
-          </span>
-        </div>
-        
-        {!selectMode && (
-          <div className="flex items-center space-x-1">
-            {!alert.is_read && (
-              <button
-                onClick={() => handleMarkAsRead(alert.id)}
-                className="p-1 text-gray-400 hover:text-blue-600 transition-colors rounded-full hover:bg-blue-50"
-                title="Mark as read"
-              >
-                <EyeIcon className="h-4 w-4" />
-              </button>
+            
+            {alert.symbol && (
+              <span className="font-mono text-blue-600">{alert.symbol}</span>
             )}
             
-            <button
-              onClick={() => handleDismissAlert(alert.id)}
-              className="p-1 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
-              title="Dismiss alert"
-            >
-              <XMarkIcon className="h-4 w-4" />
-            </button>
+            {/* Show watchlist tag when viewing all watchlists */}
+            {showWatchlistTag && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-purple-100 text-xs font-medium text-purple-800">
+                {getWatchlistAbbreviation(findAlertWatchlist(alert.id) || "UNK")}
+              </span>
+            )}
           </div>
-        )}
+          
+          {/* Expandable content */}
+          <div className={`overflow-hidden transition-all duration-200 ${isExpanded ? 'max-h-96 mt-2' : 'max-h-0'}`}>
+            <p className="text-sm text-gray-700 mb-2">{alert.message}</p>
+            
+            <div className="flex items-center flex-wrap gap-2 mt-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                {formatAlertType(alert.alert_type)}
+              </span>
+              
+              {alert.value !== undefined && alert.value !== null && alert.threshold !== undefined && alert.threshold !== null && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                  Value: {alert.value.toFixed(2)} / Threshold: {alert.threshold.toFixed(2)}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-      
-      <h4 className="text-sm font-medium text-gray-900 mb-2">{alert.title}</h4>
-      <p className="text-sm text-gray-700 mb-3">{alert.message}</p>
-      
-      <div className="flex items-center flex-wrap gap-2 mt-auto">
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
-          {formatAlertType(alert.alert_type)}
-        </span>
-        
-        {alert.symbol && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 font-mono text-xs text-blue-600">
-            {alert.symbol}
-          </span>
-        )}
-        
-        {alert.value !== undefined && alert.value !== null && alert.threshold !== undefined && alert.threshold !== null && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
-            Value: {alert.value.toFixed(2)} / Threshold: {alert.threshold.toFixed(2)}
-          </span>
-        )}
-      </div>
-    </div>
-  )
+    )
+  }
 
   if (loading) {
     return (
       <div className="px-4 py-6 sm:px-0">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading alerts...</p>
         </div>
       </div>
     )
   }
 
-  const totalAlerts = Object.values(alertsByWatchlist).reduce((sum, alerts) => sum + alerts.length, 0)
+  // Counts for the UI
+  const totalAlerts = Object.values(alertsByWatchlist).reduce((sum, alerts) => sum + alerts.length, 0) + oldAlerts.length
   const hasUnreadAlerts = summary && summary.unread_alerts > 0
   const watchlistsCount = Object.keys(alertsByWatchlist).length
-
+  
+  // Get all watchlists for the sidebar
+  const allWatchlists = Object.keys(alertsByWatchlist)
+  
+  // Current alerts based on filtering
+  const currentAlerts = getCurrentAlerts()
+  
+  // Calculate pagination
+  const totalPages = Math.ceil(currentAlerts.length / itemsPerPage)
+  const paginatedAlerts = currentAlerts.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+  
   return (
-    <div className="px-4 py-6 sm:px-0">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Smart Alerts</h1>
-            <p className="mt-1 text-gray-600">
-              AI-powered portfolio insights organized by watchlist
-            </p>
+    <div className="flex flex-col h-full">
+      {/* Header with Tabs */}
+      <div className="border-b border-gray-200 bg-white shadow-sm">
+        <div className="px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Smart Alerts</h1>
+              <p className="text-sm text-gray-600">
+                {totalAlerts} alerts {selectedWatchlist ? `in ${selectedWatchlist}` : 'across all watchlists'}
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+              >
+                <PlusIcon className="h-4 w-4 mr-1.5" />
+                Create Alert
+              </button>
+              
+              <button
+                onClick={handleTriggerAnalysis}
+                disabled={analyzing}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+              >
+                <ArrowPathIcon className={`h-4 w-4 mr-1.5 ${analyzing ? 'animate-spin' : ''}`} />
+                {analyzing ? 'Analyzing...' : 'Run Analysis'}
+              </button>
+              
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md ${
+                  searchTerm || severityFilter || unreadOnly
+                    ? 'text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100'
+                    : 'text-gray-700 bg-white hover:bg-gray-50'
+                }`}
+              >
+                <FunnelIcon className="h-4 w-4 mr-1.5" />
+                Filters {(searchTerm || severityFilter || unreadOnly) && '(Active)'}
+              </button>
+            </div>
           </div>
           
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
-            >
-              <PlusIcon className="h-4 w-4 mr-1.5" />
-              Create Alert
-            </button>
-            
-            <button
-              onClick={handleTriggerAnalysis}
-              disabled={analyzing}
-              className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-            >
-              <ArrowPathIcon className={`h-4 w-4 mr-1.5 ${analyzing ? 'animate-spin' : ''}`} />
-              {analyzing ? 'Analyzing...' : 'Run Analysis'}
-            </button>
-            
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md ${
-                severityFilter || unreadOnly
-                  ? 'text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100'
-                  : 'text-gray-700 bg-white hover:bg-gray-50'
-              }`}
-            >
-              <FunnelIcon className="h-4 w-4 mr-1.5" />
-              Filters {(severityFilter || unreadOnly) && '(Active)'}
-            </button>
-            
-            {hasUnreadAlerts && (
+          {/* Filters Panel */}
+          {showFilters && (
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="w-full sm:w-auto">
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Search</label>
+                  <input 
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search alerts..."
+                    className="w-full sm:w-auto px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Severity</label>
+                  <select
+                    value={severityFilter}
+                    onChange={(e) => setSeverityFilter(e.target.value)}
+                    className="rounded-md border-gray-300 text-sm py-1.5"
+                  >
+                    <option value="">All Severities</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <label className="flex items-center cursor-pointer h-9">
+                    <input
+                      type="checkbox"
+                      checked={unreadOnly}
+                      onChange={(e) => setUnreadOnly(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Unread only</span>
+                  </label>
+                </div>
+                
+                <div className="ml-auto self-end">
+                  <button
+                    onClick={resetFilters}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Error Message */}
+          {error && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+          
+          {/* Summary Bar (Compact) */}
+          {summary && (
+            <div className="mt-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+              <div className="grid grid-cols-5 divide-x divide-gray-200">
+                <div className="p-3 text-center">
+                  <span className="block text-xs text-gray-500">Total</span>
+                  <span className="text-lg font-semibold text-gray-900">{summary.total_alerts}</span>
+                </div>
+                
+                <div className="p-3 text-center">
+                  <span className="block text-xs text-gray-500">Unread</span>
+                  <span className="text-lg font-semibold text-blue-600">{summary.unread_alerts}</span>
+                </div>
+                
+                <div className="p-3 text-center">
+                  <span className="block text-xs text-red-500">Critical</span>
+                  <span className="text-lg font-semibold text-red-600">{summary.critical_alerts}</span>
+                </div>
+                
+                <div className="p-3 text-center">
+                  <span className="block text-xs text-orange-500">High</span>
+                  <span className="text-lg font-semibold text-orange-600">{summary.high_alerts}</span>
+                </div>
+                
+                <div className="p-3 text-center">
+                  <span className="block text-xs text-yellow-500">Medium</span>
+                  <span className="text-lg font-semibold text-yellow-600">{summary.medium_alerts}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Tabs */}
+          <div className="mt-5 border-b border-gray-200">
+            <nav className="-mb-px flex space-x-4 overflow-x-auto scrollbar-hide">
               <button
-                onClick={markAllAsRead}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                onClick={() => {
+                  setActiveTab(ALERT_CATEGORIES.ALL)
+                  setSeverityFilter('')
+                  setUnreadOnly(false)
+                }}
+                className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === ALERT_CATEGORIES.ALL
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
               >
-                <EyeIcon className="h-4 w-4 mr-1.5" />
-                Mark All Read
+                All Alerts
               </button>
-            )}
-            
-            {oldAlerts.length > 0 && (
+              
               <button
-                onClick={handleCleanupOldAlerts}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                onClick={() => {
+                  setActiveTab(ALERT_CATEGORIES.UNREAD)
+                  setSeverityFilter('')
+                  setUnreadOnly(true)
+                }}
+                className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === ALERT_CATEGORIES.UNREAD
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
               >
-                <TrashIcon className="h-4 w-4 mr-1.5" />
-                Clean Old
+                Unread
+                {summary && summary.unread_alerts > 0 && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {summary.unread_alerts}
+                  </span>
+                )}
               </button>
-            )}
+              
+              <button
+                onClick={() => {
+                  setActiveTab(ALERT_CATEGORIES.CRITICAL)
+                  setSeverityFilter('critical')
+                  setUnreadOnly(false)
+                }}
+                className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === ALERT_CATEGORIES.CRITICAL
+                    ? 'border-red-500 text-red-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Critical
+                {summary && summary.critical_alerts > 0 && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    {summary.critical_alerts}
+                  </span>
+                )}
+              </button>
+              
+              <button
+                onClick={() => {
+                  setActiveTab(ALERT_CATEGORIES.HIGH)
+                  setSeverityFilter('high')
+                  setUnreadOnly(false)
+                }}
+                className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === ALERT_CATEGORIES.HIGH
+                    ? 'border-orange-500 text-orange-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                High
+                {summary && summary.high_alerts > 0 && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                    {summary.high_alerts}
+                  </span>
+                )}
+              </button>
+              
+              <button
+                onClick={() => {
+                  setActiveTab(ALERT_CATEGORIES.MEDIUM)
+                  setSeverityFilter('medium')
+                  setUnreadOnly(false)
+                }}
+                className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === ALERT_CATEGORIES.MEDIUM
+                    ? 'border-yellow-500 text-yellow-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Medium
+                {summary && summary.medium_alerts > 0 && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    {summary.medium_alerts}
+                  </span>
+                )}
+              </button>
+              
+              <button
+                onClick={() => {
+                  setActiveTab(ALERT_CATEGORIES.LOW)
+                  setSeverityFilter('low')
+                  setUnreadOnly(false)
+                }}
+                className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === ALERT_CATEGORIES.LOW
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Low
+                {summary && summary.low_alerts > 0 && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {summary.low_alerts}
+                  </span>
+                )}
+              </button>
+            </nav>
           </div>
         </div>
       </div>
-
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-700">{error}</p>
+      
+      {/* Main Content Area with Sidebar and Alerts */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Watchlist Sidebar */}
+        <div className="w-64 border-r border-gray-200 bg-white hidden md:block overflow-y-auto">
+          <div className="p-4">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Watchlists</h2>
+            
+            <ul className="mt-3 space-y-1">
+              <li>
+                <button
+                  onClick={() => setSelectedWatchlist(null)}
+                  className={`flex items-center px-3 py-2 text-sm rounded-md w-full text-left ${
+                    selectedWatchlist === null
+                      ? 'bg-blue-50 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FolderIcon className="h-4 w-4 mr-2 text-gray-400" />
+                  All Watchlists
+                </button>
+              </li>
+              
+              {allWatchlists.map(watchlist => (
+                <li key={watchlist}>
+                  <button
+                    onClick={() => setSelectedWatchlist(watchlist)}
+                    className={`flex items-center justify-between px-3 py-2 text-sm rounded-md w-full text-left ${
+                      selectedWatchlist === watchlist
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="flex items-center">
+                      <FolderIcon className="h-4 w-4 mr-2 text-gray-400" />
+                      {watchlist}
+                    </span>
+                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">
+                      {alertsByWatchlist[watchlist].length}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            
+            {oldAlerts.length > 0 && (
+              <div className="mt-6">
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Other</h2>
+                <ul className="mt-3 space-y-1">
+                  <li>
+                    <button
+                      onClick={() => setShowOldAlerts(!showOldAlerts)}
+                      className="flex items-center justify-between px-3 py-2 text-sm rounded-md w-full text-left text-gray-700 hover:bg-gray-50"
+                    >
+                      <span className="flex items-center">
+                        <ClockIcon className="h-4 w-4 mr-2 text-gray-400" />
+                        Older Alerts
+                      </span>
+                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">
+                        {oldAlerts.length}
+                      </span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            )}
+            
+            {hasUnreadAlerts && (
+              <div className="mt-6">
+                <button
+                  onClick={markAllAsRead}
+                  className="inline-flex items-center px-3 py-1.5 w-full border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  <CheckIcon className="h-4 w-4 mr-1.5" />
+                  Mark All Read
+                </button>
+              </div>
+            )}
+            
+            {(Object.keys(alertsByWatchlist).length > 0 || oldAlerts.length > 0) && (
+              <div className="mt-2">
+                <button
+                  onClick={() => setSelectMode(!selectMode)}
+                  className={`inline-flex items-center px-3 py-1.5 w-full border rounded-md text-sm font-medium ${selectMode 
+                    ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
+                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}`}
+                >
+                  {selectMode ? 'Cancel Selection' : 'Select Alerts'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      )}
-
-      {/* Filters Panel */}
-      {showFilters && (
-        <div className="mb-6 bg-white shadow rounded-lg p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">Severity:</label>
+        
+        {/* Main Content */}
+        <div className="flex-1 overflow-y-auto bg-gray-50" ref={alertsContainerRef}>
+          <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6">
+            {/* Mobile Watchlist Selector */}
+            <div className="md:hidden mb-4">
+              <label htmlFor="watchlist-select" className="sr-only">Select Watchlist</label>
               <select
-                value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value)}
-                className="rounded-md border-gray-300 text-sm py-1.5"
+                id="watchlist-select"
+                value={selectedWatchlist || ''}
+                onChange={(e) => setSelectedWatchlist(e.target.value || null)}
+                className="w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
               >
-                <option value="">All Severities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
+                <option value="">All Watchlists</option>
+                {allWatchlists.map(watchlist => (
+                  <option key={watchlist} value={watchlist}>{watchlist}</option>
+                ))}
               </select>
             </div>
-
-            <div className="flex items-center">
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={unreadOnly}
-                  onChange={(e) => setUnreadOnly(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">Unread only</span>
-              </label>
-            </div>
             
-            <div className="ml-auto">
-              <button
-                onClick={resetFilters}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                Reset Filters
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Summary Cards */}
-      {summary && (
-        <div className="mb-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
-            <div className="p-3">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <BellIcon className="h-5 w-5 text-gray-400" />
-                </div>
-                <div className="ml-3 w-0 flex-1">
-                  <dl>
-                    <dt className="text-xs font-medium text-gray-500 truncate">Total</dt>
-                    <dd className="text-lg font-medium text-gray-900">{summary.total_alerts}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
-            <div className="p-3">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <ExclamationTriangleIcon className="h-5 w-5 text-blue-500" />
-                </div>
-                <div className="ml-3 w-0 flex-1">
-                  <dl>
-                    <dt className="text-xs font-medium text-gray-500 truncate">Unread</dt>
-                    <dd className="text-lg font-medium text-blue-900">{summary.unread_alerts}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-red-50 overflow-hidden shadow-sm rounded-lg border border-red-200">
-            <div className="p-3">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
-                </div>
-                <div className="ml-3 w-0 flex-1">
-                  <dl>
-                    <dt className="text-xs font-medium text-red-700 truncate">Critical</dt>
-                    <dd className="text-lg font-medium text-red-900">{summary.critical_alerts}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-orange-50 overflow-hidden shadow-sm rounded-lg border border-orange-200">
-            <div className="p-3">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <ExclamationTriangleIcon className="h-5 w-5 text-orange-600" />
-                </div>
-                <div className="ml-3 w-0 flex-1">
-                  <dl>
-                    <dt className="text-xs font-medium text-orange-700 truncate">High</dt>
-                    <dd className="text-lg font-medium text-orange-900">{summary.high_alerts}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-yellow-50 overflow-hidden shadow-sm rounded-lg border border-yellow-200">
-            <div className="p-3">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <BellIcon className="h-5 w-5 text-yellow-600" />
-                </div>
-                <div className="ml-3 w-0 flex-1">
-                  <dl>
-                    <dt className="text-xs font-medium text-yellow-700 truncate">Medium</dt>
-                    <dd className="text-lg font-medium text-yellow-900">{summary.medium_alerts}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-blue-50 overflow-hidden shadow-sm rounded-lg border border-blue-200">
-            <div className="p-3">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <BellIcon className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="ml-3 w-0 flex-1">
-                  <dl>
-                    <dt className="text-xs font-medium text-blue-700 truncate">Low</dt>
-                    <dd className="text-lg font-medium text-blue-900">{summary.low_alerts}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Watchlist Controls */}
-      {watchlistsCount > 1 && (
-        <div className="mb-4 flex justify-end">
-          <div className="inline-flex rounded-md shadow-sm">
-            <button
-              onClick={expandAllWatchlists}
-              className="relative inline-flex items-center rounded-l-md bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:z-10"
-            >
-              <ChevronDownIcon className="h-4 w-4 mr-1.5" />
-              Expand All
-            </button>
-            <button
-              onClick={collapseAllWatchlists}
-              className="relative -ml-px inline-flex items-center rounded-r-md bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:z-10"
-            >
-              <ChevronUpIcon className="h-4 w-4 mr-1.5" />
-              Collapse All
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Watchlist Groups */}
-      {/* Selection Controls */}
-      {(Object.keys(alertsByWatchlist).length > 0 || oldAlerts.length > 0) && (
-        <div className="mb-4 flex justify-between items-center">
-          <button
-            onClick={() => setSelectMode(!selectMode)}
-            className={`inline-flex items-center px-3 py-1.5 border rounded-md text-sm font-medium ${selectMode 
-              ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
-              : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}`}
-          >
-            {selectMode ? 'Cancel Selection' : 'Select Alerts'}
-          </button>
-          
-          {selectMode && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">
-                {selectedAlerts.size} selected
-              </span>
-              
-              <button
-                onClick={selectAllAlerts}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                Select All
-              </button>
-              
-              <button
-                onClick={deselectAllAlerts}
-                className="text-sm text-blue-600 hover:text-blue-800"
-                disabled={selectedAlerts.size === 0}
-              >
-                Deselect All
-              </button>
-              
-              <button
-                onClick={deleteSelectedAlerts}
-                disabled={selectedAlerts.size === 0}
-                className={`inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium ${selectedAlerts.size === 0 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                  : 'bg-red-600 text-white hover:bg-red-700'}`}
-              >
-                <TrashIcon className="h-4 w-4 mr-1.5" />
-                Delete Selected
-              </button>
-              
-              <button
-                onClick={deleteAllAlerts}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium bg-red-600 text-white hover:bg-red-700"
-              >
-                <TrashIcon className="h-4 w-4 mr-1.5" />
-                Delete All
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="space-y-4">
-        {Object.keys(alertsByWatchlist).length === 0 ? (
-          <div className="text-center py-10 bg-white rounded-lg shadow">
-            <BellIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No alerts found</h3>
-            <p className="text-gray-600 mb-4 max-w-md mx-auto">
-              {severityFilter || unreadOnly 
-                ? 'Try adjusting your filters or run a new analysis.' 
-                : 'Run an analysis to generate smart alerts for your portfolio.'}
-            </p>
-            <div className="flex flex-wrap justify-center gap-3">
-              <button
-                onClick={handleTriggerAnalysis}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-              >
-                <ArrowPathIcon className="h-4 w-4 mr-1.5" />
-                Run Analysis
-              </button>
-              
-              {(severityFilter || unreadOnly) && (
-                <button
-                  onClick={resetFilters}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          Object.entries(alertsByWatchlist).map(([watchlistName, alerts]) => {
-            const isCollapsed = collapsedWatchlists.has(watchlistName)
-            return (
-              <div key={watchlistName} className="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div 
-                  className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 rounded-t-lg"
-                  onClick={() => toggleWatchlistCollapse(watchlistName)}
-                >
-                  <div className="flex items-center space-x-2">
-                    <h2 className="text-base font-medium text-gray-900">{watchlistName}</h2>
-                    <div className="flex items-center gap-1.5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {alerts.length}
-                      </span>
-                      
-                      {alerts.some(a => !a.is_read) && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {alerts.filter(a => !a.is_read).length} new
-                        </span>
-                      )}
-                      
-                      {alerts.some(a => a.severity === 'critical') && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          {alerts.filter(a => a.severity === 'critical').length} critical
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {isCollapsed ? 
-                    <ChevronDownIcon className="h-5 w-5 text-gray-400" /> : 
-                    <ChevronUpIcon className="h-5 w-5 text-gray-400" />
-                  }
+            {/* Selection Controls for Mobile */}
+            {selectMode && (
+              <div className="md:hidden mb-4 flex flex-wrap items-center gap-2 bg-white p-3 rounded-lg shadow-sm">
+                <span className="text-sm text-gray-600">
+                  {selectedAlerts.size} selected
+                </span>
+                
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={selectAllAlerts}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Select All
+                  </button>
+                  
+                  <button
+                    onClick={deselectAllAlerts}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                    disabled={selectedAlerts.size === 0}
+                  >
+                    Deselect All
+                  </button>
                 </div>
                 
-                {!isCollapsed && (
-                  <div className="p-4 border-t border-gray-100">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {alerts.map(renderAlert)}
+                <div className="flex items-center gap-2 w-full mt-2">
+                  <button
+                    onClick={deleteSelectedAlerts}
+                    disabled={selectedAlerts.size === 0}
+                    className={`flex-1 inline-flex items-center justify-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium ${selectedAlerts.size === 0 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                      : 'bg-red-600 text-white hover:bg-red-700'}`}
+                  >
+                    <TrashIcon className="h-4 w-4 mr-1.5" />
+                    Delete Selected
+                  </button>
+                  
+                  <button
+                    onClick={deleteAllAlerts}
+                    className="flex-1 inline-flex items-center justify-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+                  >
+                    <TrashIcon className="h-4 w-4 mr-1.5" />
+                    Delete All
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* No Alerts State */}
+            {totalAlerts === 0 ? (
+              <div className="text-center py-10 bg-white rounded-lg shadow">
+                <BellIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No alerts found</h3>
+                <p className="text-gray-600 mb-4 max-w-md mx-auto">
+                  {searchTerm || severityFilter || unreadOnly || activeTab !== ALERT_CATEGORIES.ALL || selectedWatchlist
+                    ? 'Try adjusting your filters or run a new analysis.' 
+                    : 'Run an analysis to generate smart alerts for your portfolio.'}
+                </p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <button
+                    onClick={handleTriggerAnalysis}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                  >
+                    <ArrowPathIcon className="h-4 w-4 mr-1.5" />
+                    Run Analysis
+                  </button>
+                  
+                  {(searchTerm || severityFilter || unreadOnly || activeTab !== ALERT_CATEGORIES.ALL || selectedWatchlist) && (
+                    <button
+                      onClick={resetFilters}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Selection Controls for Desktop */}
+                {selectMode && !selectedWatchlist && (
+                  <div className="hidden md:flex mb-4 items-center justify-between bg-white p-3 rounded-lg shadow-sm">
+                    <span className="text-sm text-gray-600">
+                      {selectedAlerts.size} selected
+                    </span>
+                    
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={selectAllAlerts}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        Select All
+                      </button>
+                      
+                      <button
+                        onClick={deselectAllAlerts}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                        disabled={selectedAlerts.size === 0}
+                      >
+                        Deselect All
+                      </button>
+                      
+                      <button
+                        onClick={deleteSelectedAlerts}
+                        disabled={selectedAlerts.size === 0}
+                        className={`inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium ${selectedAlerts.size === 0 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'bg-red-600 text-white hover:bg-red-700'}`}
+                      >
+                        <TrashIcon className="h-4 w-4 mr-1.5" />
+                        Delete Selected
+                      </button>
+                      
+                      <button
+                        onClick={deleteAllAlerts}
+                        className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+                      >
+                        <TrashIcon className="h-4 w-4 mr-1.5" />
+                        Delete All
+                      </button>
                     </div>
                   </div>
                 )}
-              </div>
-            )
-          })
-        )}
-      </div>
-
-      {/* Old Alerts Section */}
-      {oldAlerts.length > 0 && (
-        <div className="mt-6">
-          <button
-            onClick={() => setShowOldAlerts(!showOldAlerts)}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-3"
-          >
-            <ClockIcon className="h-5 w-5" />
-            <span>Older Alerts ({oldAlerts.length})</span>
-            {showOldAlerts ? 
-              <ChevronUpIcon className="h-4 w-4" /> : 
-              <ChevronDownIcon className="h-4 w-4" />
-            }
-          </button>
-          
-          {showOldAlerts && (
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <p className="text-sm text-gray-600 mb-3">Alerts older than 7 days:</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {oldAlerts.map(renderAlert)}
-              </div>
-            </div>
-          )}
+                
+                {/* Alert Cards */}
+                {selectedWatchlist ? (
+                  <div className="mb-6">
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                      <div className="px-4 py-3 border-b border-gray-200">
+                        <h3 className="text-lg font-medium text-gray-900">{selectedWatchlist}</h3>
+                        <p className="text-sm text-gray-600">{alertsByWatchlist[selectedWatchlist]?.length || 0} alerts</p>
+                      </div>
+                      <div className="p-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                          {alertsByWatchlist[selectedWatchlist]?.map(alert => renderAlertCard(alert, true)) || (
+                            <p className="text-gray-500">No alerts in this watchlist.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <h3 className="text-lg font-medium text-gray-900 mb-3">Other Watchlists</h3>
+                    <div className="grid grid-cols-1 gap-4">
+                      {Object.entries(alertsByWatchlist)
+                        .filter(([name]) => name !== selectedWatchlist)
+                        .map(([watchlistName, alerts]) => (
+                          <div key={watchlistName} className="bg-white rounded-lg shadow-sm border border-gray-200">
+                            <div className="px-4 py-3 border-b border-gray-200">
+                              <h3 className="text-lg font-medium text-gray-900">{watchlistName}</h3>
+                              <p className="text-sm text-gray-600">{alerts.length} alerts</p>
+                            </div>
+                            <div className="p-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                {alerts.map(alert => renderAlertCard(alert, true))}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {paginatedAlerts.map(alert => renderAlertCard(alert, true))}
+                  </div>
+                )}
+                
+                {/* Pagination - only show when not in watchlist view */}
+                {!selectedWatchlist && totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 bg-white p-3 rounded-lg shadow-sm">
+                    <div>
+                      <p className="text-sm text-gray-700">
+                        Showing <span className="font-medium">{(page - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(page * itemsPerPage, currentAlerts.length)}</span> of{' '}
+                        <span className="font-medium">{currentAlerts.length}</span> alerts
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setPage(Math.max(1, page - 1))}
+                        disabled={page === 1}
+                        className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setPage(Math.min(totalPages, page + 1))}
+                        disabled={page === totalPages}
+                        className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Old Alerts (Only show in mobile or when explicitly selected) */}
+                {showOldAlerts && oldAlerts.length > 0 && (
+                  <div className="mt-6 bg-white rounded-lg p-4 shadow-sm">
+                    <h3 className="text-lg font-medium text-gray-900 mb-3">Older Alerts</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                      {oldAlerts.map(alert => renderAlertCard(alert, true))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      )}
-
+      </div>
+      
       {/* Create Alert Modal */}
       <CreateAlertModal
         isOpen={showCreateModal}
