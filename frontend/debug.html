@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Alerts API</title>
+</head>
+<body>
+    <h1>Debug Alerts API</h1>
+    <div id="output"></div>
+    
+    <script>
+        async function testAlertsAPI() {
+            const output = document.getElementById('output');
+            
+            try {
+                output.innerHTML += '<p>Testing alerts API...</p>';
+                
+                const response = await fetch('http://localhost:8000/api/alerts/');
+                output.innerHTML += `<p>Response status: ${response.status}</p>`;
+                
+                if (response.ok) {
+                    const alerts = await response.json();
+                    output.innerHTML += `<p>Alerts count: ${alerts.length}</p>`;
+                    output.innerHTML += `<p>First alert: ${JSON.stringify(alerts[0], null, 2)}</p>`;
+                } else {
+                    output.innerHTML += '<p>Error: Failed to fetch alerts</p>';
+                }
+                
+                // Test summary
+                const summaryResponse = await fetch('http://localhost:8000/api/alerts/summary');
+                if (summaryResponse.ok) {
+                    const summary = await summaryResponse.json();
+                    output.innerHTML += `<p>Summary: ${JSON.stringify(summary, null, 2)}</p>`;
+                }
+                
+            } catch (error) {
+                output.innerHTML += `<p>Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Run test when page loads
+        testAlertsAPI();
+    </script>
+</body>
+</html>

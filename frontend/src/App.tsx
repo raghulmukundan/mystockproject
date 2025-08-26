@@ -5,6 +5,7 @@ import Watchlists from './pages/Watchlists'
 import WatchlistDetail from './pages/WatchlistDetail'
 import Upload from './pages/Upload'
 import Chart from './pages/Chart'
+import Alerts from './pages/Alerts'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/watchlists/:id" element={<WatchlistDetail />} />
         <Route path="/upload" element={<Upload />} />
         <Route path="/chart/:symbol" element={<Chart />} />
+        <Route path="/alerts" element={<Alerts />} />
       </Routes>
     </Layout>
   )

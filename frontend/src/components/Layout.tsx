@@ -3,9 +3,11 @@ import {
   ChartBarIcon, 
   DocumentArrowUpIcon, 
   ViewColumnsIcon,
-  HomeIcon 
+  HomeIcon,
+  BellIcon
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
+import AlertBadge from './AlertBadge'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -14,6 +16,7 @@ interface LayoutProps {
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Watchlists', href: '/watchlists', icon: ViewColumnsIcon },
+  { name: 'Alerts', href: '/alerts', icon: BellIcon },
   { name: 'Upload', href: '/upload', icon: DocumentArrowUpIcon },
 ]
 
@@ -52,6 +55,9 @@ export default function Layout({ children }: LayoutProps) {
                   )
                 })}
               </div>
+            </div>
+            <div className="flex items-center">
+              <AlertBadge />
             </div>
           </div>
         </div>

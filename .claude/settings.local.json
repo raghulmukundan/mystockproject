@@ -10,7 +10,11 @@
       "Bash(docker compose:*)",
       "Bash(rm:*)",
       "Bash(cat:*)",
-      "Bash(docker logs:*)"
+      "Bash(docker logs:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm install)",
+      "Bash(npx vite:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test React Loading</title>
+</head>
+<body>
+    <div id="root">Initial content</div>
+    <script>
+        // Test basic fetch to the backend
+        fetch('http://localhost:8000/api/alerts/')
+            .then(response => {
+                console.log('API Response status:', response.status);
+                document.getElementById('root').innerHTML += `<p>API Status: ${response.status}</p>`;
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('root').innerHTML += `<p>Alerts: ${data.length}</p>`;
+            })
+            .catch(error => {
+                console.error('API Error:', error);
+                document.getElementById('root').innerHTML += `<p>Error: ${error.message}</p>`;
+            });
+    </script>
+</body>
+</html>

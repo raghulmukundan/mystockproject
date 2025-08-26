@@ -3,12 +3,16 @@ from sqlalchemy.orm import Session
 from typing import List
 import pandas as pd
 import io
+import logging
 from app.core.database import get_db
 from app.models.watchlist import Watchlist
 from app.models.watchlist_item import WatchlistItem
 from app.api.schemas import WatchlistResponse, WatchlistCreate, WatchlistUpdate, WatchlistItemCreate, WatchlistItemUpdate, WatchlistItemResponse, UploadResponse
 from app.services.symbol_validator import symbol_validator
 from app.services.stock_data import stock_data_service
+from app.services.alert_service import SmartAlertService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
 
@@ -114,6 +118,14 @@ async def upload_watchlist(
         db.commit()
         db.refresh(watchlist)
         
+        # Automatically create alerts for the new watchlist
+        try:
+            alert_service = SmartAlertService(db)
+            await alert_service.analyze_specific_watchlist(watchlist.id)
+            logger.info(f"Auto-created alerts for uploaded watchlist: {watchlist.name}")
+        except Exception as e:
+            logger.warning(f"Failed to auto-create alerts for watchlist {watchlist.name}: {e}")
+        
         return UploadResponse(
             watchlist=WatchlistResponse.model_validate(watchlist),
             valid_symbols=valid_symbols,
@@ -173,6 +185,14 @@ async def create_watchlist(watchlist: WatchlistCreate, db: Session = Depends(get
     db.add_all(watchlist_items)
     db.commit()
     db.refresh(db_watchlist)
+    
+    # Automatically create alerts for the new watchlist
+    try:
+        alert_service = SmartAlertService(db)
+        await alert_service.analyze_specific_watchlist(db_watchlist.id)
+        logger.info(f"Auto-created alerts for new watchlist: {db_watchlist.name}")
+    except Exception as e:
+        logger.warning(f"Failed to auto-create alerts for watchlist {db_watchlist.name}: {e}")
     
     return db_watchlist
 
