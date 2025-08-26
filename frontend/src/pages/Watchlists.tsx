@@ -739,12 +739,16 @@ export default function Watchlists() {
                               <span className={`font-medium ${priceData[item.symbol].change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 ${priceData[item.symbol].current_price.toFixed(2)}
                               </span>
-                              {priceData[item.symbol].high_52w && priceData[item.symbol].low_52w && (
+                              {priceData[item.symbol] && (
                                 <div className="text-xs text-gray-500 mt-1">
                                   <span title="52-week range">52W: </span>
-                                  <span className="text-red-600">${priceData[item.symbol].low_52w}</span>
+                                  <span className="text-red-600">
+                                    {priceData[item.symbol].low_52w ? `$${Number(priceData[item.symbol].low_52w).toFixed(2)}` : '—'}
+                                  </span>
                                   <span> - </span>
-                                  <span className="text-green-600">${priceData[item.symbol].high_52w}</span>
+                                  <span className="text-green-600">
+                                    {priceData[item.symbol].high_52w ? `$${Number(priceData[item.symbol].high_52w).toFixed(2)}` : '—'}
+                                  </span>
                                 </div>
                               )}
                             </div>

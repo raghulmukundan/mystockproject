@@ -530,15 +530,19 @@ export default function WatchlistDetail() {
                                     )}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
-                                    {price && price.high_52w && price.low_52w ? (
+                                    {price ? (
                                       <div className="text-xs">
                                         <div className="flex items-center">
                                           <span className="text-green-600 font-medium">H:</span> 
-                                          <span className="ml-1 text-gray-900">${price.high_52w}</span>
+                                          <span className="ml-1 text-gray-900">
+                                            {price.high_52w ? `$${Number(price.high_52w).toFixed(2)}` : '—'}
+                                          </span>
                                         </div>
                                         <div className="flex items-center mt-1">
                                           <span className="text-red-600 font-medium">L:</span> 
-                                          <span className="ml-1 text-gray-900">${price.low_52w}</span>
+                                          <span className="ml-1 text-gray-900">
+                                            {price.low_52w ? `$${Number(price.low_52w).toFixed(2)}` : '—'}
+                                          </span>
                                         </div>
                                         {price.current_price && price.high_52w && price.low_52w && (
                                           <div className="mt-1 text-gray-500">
@@ -547,7 +551,7 @@ export default function WatchlistDetail() {
                                         )}
                                       </div>
                                     ) : (
-                                      <div className="text-sm text-gray-500">-</div>
+                                      <div className="text-sm text-gray-500">Loading...</div>
                                     )}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">

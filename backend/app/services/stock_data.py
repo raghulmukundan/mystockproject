@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+import json
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -156,17 +157,59 @@ class StockDataService:
                                 if profile_response.status == 200:
                                     profile_data = await profile_response.json()
                                     metrics = profile_data.get('metric', {})
+                                    
+                                    # Log the entire metrics response for debugging
+                                    logger.info(f"FINNHUB METRICS RESPONSE FOR {symbol}:")
+                                    logger.info(f"Full response: {json.dumps(profile_data, indent=2)}")
+                                    
+                                    # Log all metrics keys to see what's available
+                                    logger.info(f"Available metric keys: {sorted(metrics.keys())}")
+                                    
                                     market_cap_millions = metrics.get('marketCapitalization')
                                     if market_cap_millions:
                                         market_cap = int(market_cap_millions * 1000000)  # Convert to actual value
-                                        
-                                    # Extract 52-week high/low
+                                    
+                                    # Extract and log 52-week high/low
+                                    # First try the standard field names
                                     high_52w = metrics.get('52WeekHigh')
                                     low_52w = metrics.get('52WeekLow')
+                                    logger.info(f"52-week high for {symbol}: {high_52w}")
+                                    logger.info(f"52-week low for {symbol}: {low_52w}")
+                                    
+                                    # Check for alternative field names if standard ones are not found
+                                    if high_52w is None:
+                                        high_field_candidates = []
+                                        for key in metrics.keys():
+                                            if ('high' in key.lower() or 'max' in key.lower()) and ('52' in key or 'week' in key.lower()):
+                                                high_field_candidates.append((key, metrics[key]))
+                                                logger.info(f"Potential 52-week high field: {key} = {metrics[key]}")
+                                        
+                                        # Use the first non-null candidate if available
+                                        for key, value in high_field_candidates:
+                                            if value is not None:
+                                                high_52w = value
+                                                logger.info(f"Using alternative 52-week high field: {key} = {value}")
+                                                break
+                                    
+                                    if low_52w is None:
+                                        low_field_candidates = []
+                                        for key in metrics.keys():
+                                            if ('low' in key.lower() or 'min' in key.lower()) and ('52' in key or 'week' in key.lower()):
+                                                low_field_candidates.append((key, metrics[key]))
+                                                logger.info(f"Potential 52-week low field: {key} = {metrics[key]}")
+                                        
+                                        # Use the first non-null candidate if available
+                                        for key, value in low_field_candidates:
+                                            if value is not None:
+                                                low_52w = value
+                                                logger.info(f"Using alternative 52-week low field: {key} = {value}")
+                                                break
                                     
                                     # Extract price changes for different periods
                                     change_week = metrics.get('52WeekPriceReturnDaily')
                                     change_month = metrics.get('3MonthPriceReturnDaily')
+                                    logger.info(f"Weekly change for {symbol}: {change_week}")
+                                    logger.info(f"Monthly change for {symbol}: {change_month}")
                         except Exception as e:
                             logger.debug(f"Could not fetch market cap for {symbol}: {e}")
                         

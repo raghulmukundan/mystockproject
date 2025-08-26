@@ -15,7 +15,8 @@
       "Bash(npm run dev:*)",
       "Bash(npm install)",
       "Bash(npx vite:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []
