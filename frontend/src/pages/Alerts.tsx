@@ -71,6 +71,8 @@ export default function Alerts() {
   const [severityFilter, setSeverityFilter] = useState<string>('')
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [selectedAlerts, setSelectedAlerts] = useState<Set<number>>(new Set())
+  const [selectMode, setSelectMode] = useState(false)
 
   useEffect(() => {
     loadAlerts()
@@ -273,86 +275,154 @@ export default function Alerts() {
     }
   }
 
+  const toggleSelectAlert = (alertId: number) => {
+    const newSelected = new Set(selectedAlerts)
+    if (newSelected.has(alertId)) {
+      newSelected.delete(alertId)
+    } else {
+      newSelected.add(alertId)
+    }
+    setSelectedAlerts(newSelected)
+  }
+
+  const selectAllAlerts = () => {
+    const allIds = new Set<number>()
+    Object.values(alertsByWatchlist).forEach(alerts => {
+      alerts.forEach(alert => allIds.add(alert.id))
+    })
+    oldAlerts.forEach(alert => allIds.add(alert.id))
+    setSelectedAlerts(allIds)
+  }
+
+  const deselectAllAlerts = () => {
+    setSelectedAlerts(new Set())
+  }
+
+  const deleteSelectedAlerts = async () => {
+    try {
+      // Delete each selected alert
+      const promises = Array.from(selectedAlerts).map(alertId =>
+        alertsApi.deleteAlert(alertId)
+      )
+      await Promise.all(promises)
+      
+      // Update local state
+      const updatedAlerts = { ...alertsByWatchlist }
+      for (const watchlistName in updatedAlerts) {
+        updatedAlerts[watchlistName] = updatedAlerts[watchlistName].filter(
+          alert => !selectedAlerts.has(alert.id)
+        )
+        if (updatedAlerts[watchlistName].length === 0) {
+          delete updatedAlerts[watchlistName]
+        }
+      }
+      setAlertsByWatchlist(updatedAlerts)
+      
+      // Update old alerts
+      setOldAlerts(oldAlerts.filter(alert => !selectedAlerts.has(alert.id)))
+      
+      // Reset selection
+      setSelectedAlerts(new Set())
+      setSelectMode(false)
+      
+      loadSummary()
+    } catch (err: any) {
+      setError('Failed to delete selected alerts')
+      console.error(err)
+    }
+  }
+
+  const deleteAllAlerts = async () => {
+    // First select all alerts
+    selectAllAlerts()
+    // Then delete all selected
+    await deleteSelectedAlerts()
+  }
+
   const renderAlert = (alert: Alert) => (
     <div key={alert.id} 
-      className={`p-4 rounded-lg shadow-sm mb-3 border-l-4 ${
+      className={`p-4 rounded-lg shadow-sm mb-3 border-t-4 ${
         getSeverityColor(alert.severity)
       } ${
         !alert.is_read ? 'bg-blue-50' : 'bg-white'
+      } ${
+        selectedAlerts.has(alert.id) ? 'ring-2 ring-blue-500' : ''
       }`}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-3 flex-1">
-          {/* Alert Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center flex-wrap gap-2 mb-1">
-              <h4 className="text-sm font-medium text-gray-900">{alert.title}</h4>
-              
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                  alert.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                  alert.severity === 'high' ? 'bg-orange-100 text-orange-800' :
-                  alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-blue-100 text-blue-800'
-                }`}>
-                  {alert.severity}
-                </span>
-                
-                {!alert.is_read && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    New
-                  </span>
-                )}
-                
-                <span className="text-xs text-gray-500 flex items-center">
-                  <ClockIcon className="h-3 w-3 mr-1" />
-                  {getAlertAge(alert.created_at)}
-                </span>
-              </div>
-            </div>
-            
-            <p className="text-sm text-gray-700 mb-2">{alert.message}</p>
-            
-            <div className="flex items-center flex-wrap gap-3 text-xs text-gray-500">
-              <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100">
-                {formatAlertType(alert.alert_type)}
-              </span>
-              
-              {alert.symbol && (
-                <span className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 font-mono text-blue-600">
-                  {alert.symbol}
-                </span>
-              )}
-              
-              {alert.value !== undefined && alert.value !== null && alert.threshold !== undefined && alert.threshold !== null && (
-                <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100">
-                  Value: {alert.value.toFixed(2)} / Threshold: {alert.threshold.toFixed(2)}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Actions */}
-        <div className="flex items-center space-x-1 ml-2">
-          {!alert.is_read && (
-            <button
-              onClick={() => handleMarkAsRead(alert.id)}
-              className="p-1 text-gray-400 hover:text-blue-600 transition-colors rounded-full hover:bg-blue-50"
-              title="Mark as read"
-            >
-              <EyeIcon className="h-4 w-4" />
-            </button>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {selectMode && (
+            <input
+              type="checkbox"
+              checked={selectedAlerts.has(alert.id)}
+              onChange={() => toggleSelectAlert(alert.id)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+            />
           )}
           
-          <button
-            onClick={() => handleDismissAlert(alert.id)}
-            className="p-1 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
-            title="Dismiss alert"
-          >
-            <XMarkIcon className="h-4 w-4" />
-          </button>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            alert.severity === 'critical' ? 'bg-red-100 text-red-800' :
+            alert.severity === 'high' ? 'bg-orange-100 text-orange-800' :
+            alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+            'bg-blue-100 text-blue-800'
+          }`}>
+            {alert.severity}
+          </span>
+          
+          {!alert.is_read && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              New
+            </span>
+          )}
+          
+          <span className="text-xs text-gray-500 flex items-center">
+            <ClockIcon className="h-3 w-3 mr-1" />
+            {getAlertAge(alert.created_at)}
+          </span>
         </div>
+        
+        {!selectMode && (
+          <div className="flex items-center space-x-1">
+            {!alert.is_read && (
+              <button
+                onClick={() => handleMarkAsRead(alert.id)}
+                className="p-1 text-gray-400 hover:text-blue-600 transition-colors rounded-full hover:bg-blue-50"
+                title="Mark as read"
+              >
+                <EyeIcon className="h-4 w-4" />
+              </button>
+            )}
+            
+            <button
+              onClick={() => handleDismissAlert(alert.id)}
+              className="p-1 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
+              title="Dismiss alert"
+            >
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+      
+      <h4 className="text-sm font-medium text-gray-900 mb-2">{alert.title}</h4>
+      <p className="text-sm text-gray-700 mb-3">{alert.message}</p>
+      
+      <div className="flex items-center flex-wrap gap-2 mt-auto">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+          {formatAlertType(alert.alert_type)}
+        </span>
+        
+        {alert.symbol && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 font-mono text-xs text-blue-600">
+            {alert.symbol}
+          </span>
+        )}
+        
+        {alert.value !== undefined && alert.value !== null && alert.threshold !== undefined && alert.threshold !== null && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+            Value: {alert.value.toFixed(2)} / Threshold: {alert.threshold.toFixed(2)}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -610,6 +680,62 @@ export default function Alerts() {
       )}
 
       {/* Watchlist Groups */}
+      {/* Selection Controls */}
+      {(Object.keys(alertsByWatchlist).length > 0 || oldAlerts.length > 0) && (
+        <div className="mb-4 flex justify-between items-center">
+          <button
+            onClick={() => setSelectMode(!selectMode)}
+            className={`inline-flex items-center px-3 py-1.5 border rounded-md text-sm font-medium ${selectMode 
+              ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
+              : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}`}
+          >
+            {selectMode ? 'Cancel Selection' : 'Select Alerts'}
+          </button>
+          
+          {selectMode && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                {selectedAlerts.size} selected
+              </span>
+              
+              <button
+                onClick={selectAllAlerts}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                Select All
+              </button>
+              
+              <button
+                onClick={deselectAllAlerts}
+                className="text-sm text-blue-600 hover:text-blue-800"
+                disabled={selectedAlerts.size === 0}
+              >
+                Deselect All
+              </button>
+              
+              <button
+                onClick={deleteSelectedAlerts}
+                disabled={selectedAlerts.size === 0}
+                className={`inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium ${selectedAlerts.size === 0 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : 'bg-red-600 text-white hover:bg-red-700'}`}
+              >
+                <TrashIcon className="h-4 w-4 mr-1.5" />
+                Delete Selected
+              </button>
+              
+              <button
+                onClick={deleteAllAlerts}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+              >
+                <TrashIcon className="h-4 w-4 mr-1.5" />
+                Delete All
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="space-y-4">
         {Object.keys(alertsByWatchlist).length === 0 ? (
           <div className="text-center py-10 bg-white rounded-lg shadow">
@@ -676,7 +802,9 @@ export default function Alerts() {
                 
                 {!isCollapsed && (
                   <div className="p-4 border-t border-gray-100">
-                    {alerts.map(renderAlert)}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {alerts.map(renderAlert)}
+                    </div>
                   </div>
                 )}
               </div>
@@ -703,7 +831,9 @@ export default function Alerts() {
           {showOldAlerts && (
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <p className="text-sm text-gray-600 mb-3">Alerts older than 7 days:</p>
-              {oldAlerts.map(renderAlert)}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {oldAlerts.map(renderAlert)}
+              </div>
             </div>
           )}
         </div>
