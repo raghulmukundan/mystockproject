@@ -542,158 +542,311 @@ export default function WatchlistDetail() {
     <div className="min-h-[calc(100vh-64px)] bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-4 py-3 sm:px-6 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+        <div className="px-4 py-4 sm:px-6 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
             <Link
               to="/watchlists"
-              className="text-gray-500 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 transition-colors rounded-full p-1 hover:bg-gray-100"
               title="Back to Watchlists"
             >
               <ArrowLeftIcon className="h-5 w-5" />
             </Link>
             
-            <button
-              onClick={() => navigateToWatchlist('prev')}
-              disabled={!canNavigatePrev}
-              className="text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-30"
-            >
-              <ChevronLeftIcon className="h-5 w-5" />
-            </button>
+            {/* Previous/Next Navigation */}
+            {canNavigatePrev && (
+              <button
+                onClick={() => navigateToWatchlist('prev')}
+                className="text-gray-400 hover:text-blue-600 transition-colors rounded-full p-1 hover:bg-gray-100"
+                title={`Previous: ${prevWatchlist?.name || ''}`}
+              >
+                <ChevronLeftIcon className="h-5 w-5" />
+              </button>
+            )}
             
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-gray-900 mr-2">{watchlist.name}</h1>
               <button
                 onClick={toggleFavorite}
-                className={`${isFavorite ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'}`}
+                className={`text-gray-400 hover:text-yellow-500 transition-colors ${isFavorite ? 'text-yellow-500' : ''}`}
               >
                 {isFavorite ? <StarIconSolid className="h-5 w-5" /> : <StarIcon className="h-5 w-5" />}
               </button>
+              {allWatchlists.length > 1 && currentIndex !== -1 && (
+                <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                  {currentIndex + 1} of {allWatchlists.length}
+                </span>
+              )}
             </div>
             
-            <span className="text-sm text-gray-500">
-              {currentIndex + 1} of {allWatchlists.length}
-            </span>
-            
-            <button
-              onClick={() => navigateToWatchlist('next')}
-              disabled={!canNavigateNext}
-              className="text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-30"
-            >
-              <ChevronRightIcon className="h-5 w-5" />
-            </button>
+            {canNavigateNext && (
+              <button
+                onClick={() => navigateToWatchlist('next')}
+                className="text-gray-400 hover:text-blue-600 transition-colors rounded-full p-1 hover:bg-gray-100"
+                title={`Next: ${nextWatchlist?.name || ''}`}
+              >
+                <ChevronRightIcon className="h-5 w-5" />
+              </button>
+            )}
           </div>
           
           <div className="flex items-center space-x-2">
             <button
               onClick={handleRefreshProfiles}
               disabled={refreshing}
-              className="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               title="Refresh data"
             >
-              <ArrowPathIcon className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="sr-only">Refresh</span>
+              <ArrowPathIcon className={`h-4 w-4 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
             <button
               onClick={() => setShowAddItem(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md text-white bg-blue-600 hover:bg-blue-700"
+              className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
             >
-              <PlusIcon className="h-5 w-5 mr-1" />
+              <PlusIcon className="h-4 w-4 mr-1.5" />
               Add Symbol
             </button>
             <button
               onClick={() => setEditingWatchlist(watchlist)}
-              className="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
             >
-              <PencilIcon className="h-5 w-5" />
-              <span className="sr-only">Edit</span>
+              <PencilIcon className="h-4 w-4 mr-1.5" />
+              Edit
+            </button>
+            <button
+              onClick={() => setDeletingWatchlist(watchlist)}
+              className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+            >
+              <TrashIcon className="h-4 w-4 mr-1.5" />
+              Delete
             </button>
           </div>
         </div>
+        
+        {/* Description */}
+        {watchlist.description && (
+          <div className="px-4 pb-3 sm:px-6">
+            <p className="text-sm text-gray-600">{watchlist.description}</p>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col min-h-[calc(100vh-120px)]">
-        {/* Main Content Area */}
-        <div className="flex-1 p-6">
-          {/* Filters Row */}
-          <div className="mb-4 flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md ${
-                filterType === 'all' 
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-gray-200'
-              }`}
-            >
-              <ListBulletIcon className="h-3.5 w-3.5 mr-1" />
-              All
-            </button>
-            <button
-              onClick={() => setFilterType('gainers')}
-              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md ${
-                filterType === 'gainers' 
-                  ? 'bg-green-50 text-green-700 border border-green-200' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-gray-200'
-              }`}
-            >
-              <ArrowTrendingUpIcon className="h-3.5 w-3.5 mr-1" />
-              Gainers
-            </button>
-            <button
-              onClick={() => setFilterType('losers')}
-              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md ${
-                filterType === 'losers' 
-                  ? 'bg-red-50 text-red-700 border border-red-200' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-gray-200'
-              }`}
-            >
-              <ArrowTrendingDownIcon className="h-3.5 w-3.5 mr-1" />
-              Losers
-            </button>
-            <button
-              onClick={() => setFilterType('targets')}
-              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md ${
-                filterType === 'targets' 
-                  ? 'bg-purple-50 text-purple-700 border border-purple-200' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-gray-200'
-              }`}
-            >
-              <TrophyIcon className="h-3.5 w-3.5 mr-1" />
-              With Targets
-            </button>
-            <button
-              onClick={() => { setFilterType('sectors'); setGroupBy('sector'); }}
-              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md ${
-                filterType === 'sectors' 
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-gray-200'
-              }`}
-            >
-              <ChartPieIcon className="h-3.5 w-3.5 mr-1" />
-              By Sector
-            </button>
-            <button
-              onClick={() => { setFilterType('industry'); setGroupBy('industry'); }}
-              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md ${
-                filterType === 'industry' 
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-gray-200'
-              }`}
-            >
-              <FunnelIcon className="h-3.5 w-3.5 mr-1" />
-              By Industry
-            </button>
-            {!sidebarOpen && (
+      <div className="flex min-h-[calc(100vh-120px)]">
+        {/* Sidebar */}
+        <div className={`${sidebarOpen ? 'w-72' : 'w-0 -ml-5'} transition-all duration-300 overflow-hidden border-r border-gray-200 bg-white`}>
+          <div className="h-full p-4 flex flex-col">
+            {/* Sidebar Header */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium text-gray-900">Watchlist Metrics</h3>
               <button
-                onClick={() => setSidebarOpen(true)}
-                className="ml-auto flex items-center px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                onClick={() => setSidebarOpen(false)}
+                className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
               >
-                <ChartBarIcon className="h-3.5 w-3.5 mr-1" />
-                Show Metrics
+                <ChevronLeftIcon className="h-5 w-5" />
               </button>
+            </div>
+            
+            {/* Metrics */}
+            {watchlistMetrics && (
+              <div className="space-y-4">
+                {/* Overall Performance */}
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Performance</h4>
+                  <div className="flex items-center space-x-2">
+                    <div className={`text-lg font-bold ${
+                      watchlistMetrics.avgPerformance >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {watchlistMetrics.avgPerformance >= 0 ? '+' : ''}
+                      {watchlistMetrics.avgPerformance.toFixed(2)}%
+                    </div>
+                    <span className="text-xs text-gray-500">average</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-gray-600">
+                    <div>
+                      <span className="text-green-600">{watchlistMetrics.gainers}</span> gainers
+                    </div>
+                    <div>
+                      <span className="text-red-600">{watchlistMetrics.losers}</span> losers
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Best & Worst */}
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Top Performers</h4>
+                  <div className="space-y-2">
+                    {watchlistMetrics.highestPerformer && (
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => handleSymbolClick(watchlistMetrics.highestPerformer!.symbol)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          {watchlistMetrics.highestPerformer.symbol}
+                        </button>
+                        <span className="text-green-600 font-medium">
+                          +{watchlistMetrics.highestPerformer.performance.toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
+                    {watchlistMetrics.lowestPerformer && (
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => handleSymbolClick(watchlistMetrics.lowestPerformer!.symbol)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          {watchlistMetrics.lowestPerformer.symbol}
+                        </button>
+                        <span className="text-red-600 font-medium">
+                          {watchlistMetrics.lowestPerformer.performance.toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Near Target */}
+                {watchlistMetrics.nearTarget.length > 0 && (
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Approaching Target</h4>
+                    <div className="space-y-2">
+                      {watchlistMetrics.nearTarget.map(item => (
+                        <div key={item.symbol} className="flex items-center justify-between">
+                          <button
+                            onClick={() => handleSymbolClick(item.symbol)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            {item.symbol}
+                          </button>
+                          <span className="text-green-600 font-medium">
+                            {item.percent.toFixed(2)}% to target
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Near Stop Loss */}
+                {watchlistMetrics.nearStop.length > 0 && (
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Near Stop Loss</h4>
+                    <div className="space-y-2">
+                      {watchlistMetrics.nearStop.map(item => (
+                        <div key={item.symbol} className="flex items-center justify-between">
+                          <button
+                            onClick={() => handleSymbolClick(item.symbol)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            {item.symbol}
+                          </button>
+                          <span className="text-red-600 font-medium">
+                            {item.percent.toFixed(2)}% to stop
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Filter Menu */}
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Filter Stocks</h4>
+                  <nav className="space-y-1">
+                    <button
+                      onClick={() => setFilterType('all')}
+                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                        filterType === 'all' 
+                          ? 'bg-blue-50 text-blue-700' 
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <ListBulletIcon className="h-5 w-5 mr-2" />
+                      All Stocks
+                    </button>
+                    <button
+                      onClick={() => setFilterType('gainers')}
+                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                        filterType === 'gainers' 
+                          ? 'bg-green-50 text-green-700' 
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <ArrowTrendingUpIcon className="h-5 w-5 mr-2" />
+                      Gainers
+                    </button>
+                    <button
+                      onClick={() => setFilterType('losers')}
+                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                        filterType === 'losers' 
+                          ? 'bg-red-50 text-red-700' 
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <ArrowTrendingDownIcon className="h-5 w-5 mr-2" />
+                      Losers
+                    </button>
+                    <button
+                      onClick={() => setFilterType('targets')}
+                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                        filterType === 'targets' 
+                          ? 'bg-purple-50 text-purple-700' 
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <TrophyIcon className="h-5 w-5 mr-2" />
+                      With Targets
+                    </button>
+                    <button
+                      onClick={() => { setFilterType('sectors'); setGroupBy('sector'); }}
+                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                        filterType === 'sectors' 
+                          ? 'bg-blue-50 text-blue-700' 
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <ChartPieIcon className="h-5 w-5 mr-2" />
+                      By Sector
+                    </button>
+                    <button
+                      onClick={() => { setFilterType('industry'); setGroupBy('industry'); }}
+                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                        filterType === 'industry' 
+                          ? 'bg-blue-50 text-blue-700' 
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <FunnelIcon className="h-5 w-5 mr-2" />
+                      By Industry
+                    </button>
+                  </nav>
+                </div>
+              </div>
             )}
+            
+            <div className="mt-auto pt-4 border-t border-gray-200">
+              <div className="text-xs text-gray-500">
+                Last updated: {new Date().toLocaleTimeString()}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {watchlist.items.length} symbols in this watchlist
+              </div>
+            </div>
           </div>
-                    
+        </div>
+        
+        {/* Main Content */}
+        <div className="flex-1 p-6">
+          {/* Toggle sidebar button when sidebar is closed */}
+          {!sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-white p-1.5 rounded-r-md border border-gray-200 border-l-0 text-gray-400 hover:text-gray-600"
+            >
+              <ChevronRightIcon className="h-5 w-5" />
+            </button>
+          )}
+          
           {/* Controls Bar */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex flex-col md:flex-row gap-4 justify-between">
@@ -825,7 +978,7 @@ export default function WatchlistDetail() {
             <>
               {/* Table View */}
               {viewMode === 'table' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {Object.entries(groupedItems).map(([groupName, items]) => (
                     <div key={groupName} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                       {groupBy !== 'none' && (
@@ -836,8 +989,7 @@ export default function WatchlistDetail() {
                         </div>
                       )}
                       <div className="overflow-x-auto">
-                        <div className="max-h-[calc(100vh-340px)] overflow-y-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">
                             <tr>
                               <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-6">
@@ -964,12 +1116,12 @@ export default function WatchlistDetail() {
                                       )}
                                       <div className="flex items-center mt-1 space-x-1">
                                         {item.sector && groupBy !== 'sector' && (
-                                          <div className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0 rounded">
+                                          <div className="text-xxs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
                                             {item.sector}
                                           </div>
                                         )}
                                         {item.industry && groupBy !== 'industry' && (
-                                          <div className="text-[9px] text-green-600 bg-green-50 px-1 py-0 rounded">
+                                          <div className="text-xxs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
                                             {item.industry}
                                           </div>
                                         )}
@@ -1136,126 +1288,9 @@ export default function WatchlistDetail() {
                             })}
                           </tbody>
                         </table>
-                        </div>
                       </div>
                     </div>
                   ))}
-                  
-                  {/* Metrics Section at Bottom */}
-                  {watchlistMetrics && viewMode === 'table' && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                      {/* Performance Summary */}
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                        <h3 className="text-sm font-medium text-gray-700 mb-2">Performance Summary</h3>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className={`text-lg font-bold ${
-                            watchlistMetrics.avgPerformance >= 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {watchlistMetrics.avgPerformance >= 0 ? '+' : ''}
-                            {watchlistMetrics.avgPerformance.toFixed(2)}%
-                          </div>
-                          <div className="flex space-x-4">
-                            <div>
-                              <span className="text-green-600 font-medium">{watchlistMetrics.gainers}</span>
-                              <span className="text-xs text-gray-500"> gainers</span>
-                            </div>
-                            <div>
-                              <span className="text-red-600 font-medium">{watchlistMetrics.losers}</span>
-                              <span className="text-xs text-gray-500"> losers</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-500 text-right">
-                          {watchlist.items.length} symbols in this watchlist
-                        </div>
-                      </div>
-                      
-                      {/* Top Performers */}
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                        <h3 className="text-sm font-medium text-gray-700 mb-2">Performance Leaders</h3>
-                        <div className="space-y-2">
-                          {watchlistMetrics.highestPerformer && (
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="text-xs text-gray-500">Best</div>
-                                <button
-                                  onClick={() => handleSymbolClick(watchlistMetrics.highestPerformer!.symbol)}
-                                  className="text-blue-600 hover:text-blue-700"
-                                >
-                                  {watchlistMetrics.highestPerformer.symbol}
-                                </button>
-                              </div>
-                              <span className="text-green-600 font-medium">
-                                +{watchlistMetrics.highestPerformer.performance.toFixed(2)}%
-                              </span>
-                            </div>
-                          )}
-                          {watchlistMetrics.lowestPerformer && (
-                            <div className="flex items-center justify-between mt-3">
-                              <div>
-                                <div className="text-xs text-gray-500">Worst</div>
-                                <button
-                                  onClick={() => handleSymbolClick(watchlistMetrics.lowestPerformer!.symbol)}
-                                  className="text-blue-600 hover:text-blue-700"
-                                >
-                                  {watchlistMetrics.lowestPerformer.symbol}
-                                </button>
-                              </div>
-                              <span className="text-red-600 font-medium">
-                                {watchlistMetrics.lowestPerformer.performance.toFixed(2)}%
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Near Target/Stop */}
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                        <h3 className="text-sm font-medium text-gray-700 mb-2">Action Required</h3>
-                        {watchlistMetrics.nearTarget.length > 0 ? (
-                          <div className="space-y-2">
-                            {watchlistMetrics.nearTarget.slice(0, 2).map(item => (
-                              <div key={item.symbol} className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-xs text-gray-500">Near Target</div>
-                                  <button
-                                    onClick={() => handleSymbolClick(item.symbol)}
-                                    className="text-blue-600 hover:text-blue-700"
-                                  >
-                                    {item.symbol}
-                                  </button>
-                                </div>
-                                <span className="text-green-600 font-medium">
-                                  {item.percent.toFixed(2)}% to target
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : watchlistMetrics.nearStop.length > 0 ? (
-                          <div className="space-y-2">
-                            {watchlistMetrics.nearStop.slice(0, 2).map(item => (
-                              <div key={item.symbol} className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-xs text-gray-500">Near Stop</div>
-                                  <button
-                                    onClick={() => handleSymbolClick(item.symbol)}
-                                    className="text-blue-600 hover:text-blue-700"
-                                  >
-                                    {item.symbol}
-                                  </button>
-                                </div>
-                                <span className="text-red-600 font-medium">
-                                  {item.percent.toFixed(2)}% to stop
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-gray-500 italic">No stocks near target or stop loss</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
               

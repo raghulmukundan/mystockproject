@@ -1,11 +1,12 @@
 import { Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
-import Watchlists from './pages/Watchlists'
-import WatchlistDetail from './pages/WatchlistDetail'
 import Upload from './pages/Upload'
 import Chart from './pages/Chart'
 import Alerts from './pages/Alerts'
+
+import Watchlists from './pages/Watchlists'
+import WatchlistDetail from './pages/WatchlistDetail'
 
 function App() {
   return (

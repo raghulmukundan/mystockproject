@@ -16,7 +16,10 @@
       "Bash(npm install)",
       "Bash(npx vite:*)",
       "WebSearch",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(copy:*)",
+      "Bash(move:*)",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": []
