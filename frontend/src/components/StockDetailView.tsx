@@ -21,6 +21,7 @@ import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
 import { stockApi, StockPrice } from '../services/stockApi'
 import FinancialWidget from './FinancialWidget'
 import TradingViewWidget from './TradingViewWidget'
+import StockNewsWidget from './StockNewsWidget'
 
 interface StockDetailViewProps {
   symbol: string
@@ -598,18 +599,11 @@ export default function StockDetailView({
               
               {activeTab === 'news' && (
                 <div className="p-6">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                      <h3 className="text-lg font-medium text-gray-900">Recent News</h3>
-                    </div>
-                    <div className="p-4">
-                      <div className="text-center text-gray-500 py-8">
-                        <InformationCircleIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                        <p>News feed not available in this demo version.</p>
-                        <p className="text-sm mt-2">Live news feeds require additional API subscriptions.</p>
-                      </div>
-                    </div>
-                  </div>
+                  <StockNewsWidget 
+                    symbol={symbol}
+                    height="500px"
+                    className="shadow-sm"
+                  />
                 </div>
               )}
               
