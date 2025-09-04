@@ -19,7 +19,8 @@
       "Bash(pip install:*)",
       "Bash(copy:*)",
       "Bash(move:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(dir)"
     ],
     "deny": [],
     "ask": []

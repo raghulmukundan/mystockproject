@@ -17,6 +17,7 @@ import {
 import { Watchlist } from '../types'
 import TradingViewWidget from '../components/TradingViewWidget'
 import FinancialWidget from '../components/FinancialWidget'
+import StockDetailView from '../components/StockDetailView'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice } from '../services/stockApi'
 
@@ -221,13 +222,14 @@ export default function Dashboard() {
         console.log(`Loading batch ${Math.floor(i/batchSize) + 1}: ${batch.join(', ')}`)
         
         try {
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout per batch
-          
           const params = new URLSearchParams()
           batch.forEach(symbol => params.append('symbols', symbol))
           
-          const response = await fetch(`http://localhost:8000/api/stocks/prices?${params}`, {
+          // Use a more compatible approach for timeouts
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+          
+          const response = await fetch(`/api/stocks/prices?${params}`, {
             signal: controller.signal
           })
           clearTimeout(timeoutId)
@@ -299,6 +301,12 @@ export default function Dashboard() {
     }, 0)
   }, 0)
 
+  // Define all state variables at the top level - never conditionally
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [searchResults, setSearchResults] = useState<string[]>([])
+  const [selectedStock, setSelectedStock] = useState<string | null>(null)
+  const [analysisModalOpen, setAnalysisModalOpen] = useState<boolean>(false)
+  
   if (loading) {
     return (
       <div className="px-4 py-6 sm:px-0">
@@ -310,65 +318,110 @@ export default function Dashboard() {
     )
   }
 
+  // Search for stocks by symbol
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query)
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
+
+    // Simple search from existing watchlist data first
+    const matches = allSymbols
+      .filter(symbol => symbol.toUpperCase().includes(query.toUpperCase()))
+      .slice(0, 8) // Limit to 8 results
+    
+    setSearchResults(matches)
+  }
+
+  // Handle stock selection
+  const handleStockSelect = (symbol: string) => {
+    setSelectedStock(symbol)
+    setAnalysisModalOpen(true)
+    setSearchQuery('')
+    setSearchResults([])
+  }
+
   return (
     <div className="px-4 py-6 sm:px-0">
-      <div className="mb-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="mt-2 text-gray-600">
-              Welcome to your stock watchlist dashboard
-            </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-600">
+            Welcome to your stock watchlist dashboard
+          </p>
+        </div>
+        
+        {/* Search Bar */}
+        <div className="w-full max-w-md relative">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Search stocks by symbol..."
+              className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="bg-white shadow-sm rounded-md px-3 py-2 border border-gray-200">
-              <div className="flex items-center space-x-3 text-sm">
-                {/* Market Status */}
-                <div className="flex items-center space-x-1">
-                  {isMarketOpen() ? (
-                    <CheckCircleIcon className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <XCircleIcon className="h-4 w-4 text-red-600" />
-                  )}
-                  <span className={isMarketOpen() ? 'text-green-600' : 'text-red-600'}>
-                    Market {isMarketOpen() ? 'Open' : 'Closed'}
-                  </span>
-                </div>
-                
-                <div className="h-4 w-px bg-gray-200"></div>
-                
-                {/* Next Refresh */}
-                <div className="flex items-center space-x-1 text-gray-500">
-                  <ArrowPathIcon className="h-4 w-4" />
-                  <span>Next: {timeUntilRefresh || '...'}</span>
-                </div>
-                
-                <div className="h-4 w-px bg-gray-200"></div>
-                
-                {/* Last Updated */}
-                <div className="flex items-center space-x-1 text-xs text-gray-400">
-                  <ClockIcon className="h-3 w-3" />
-                  <span>
-                    {lastRefresh.toLocaleTimeString('en-US', {
-                      hour: 'numeric',
-                      minute: '2-digit'
-                    })}
-                  </span>
-                </div>
-              </div>
+          {/* Search Results Dropdown */}
+          {searchResults.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+              <ul className="py-1">
+                {searchResults.map((symbol) => (
+                  <li 
+                    key={symbol}
+                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => handleStockSelect(symbol)}
+                  >
+                    {symbol}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Market Status Bar with Refresh Controls */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        <div className="bg-white shadow-sm rounded-md px-3 py-2 border border-gray-200 flex-grow sm:flex-grow-0">
+          <div className="flex items-center space-x-3 text-sm">
+            {/* Market Status */}
+            <div className="flex items-center space-x-1">
+              {isMarketOpen() ? (
+                <CheckCircleIcon className="h-4 w-4 text-green-600" />
+              ) : (
+                <XCircleIcon className="h-4 w-4 text-red-600" />
+              )}
+              <span className={isMarketOpen() ? 'text-green-600' : 'text-red-600'}>
+                Market {isMarketOpen() ? 'Open' : 'Closed'}
+              </span>
             </div>
             
-            <button
-              onClick={refreshAllData}
-              disabled={pricesLoading}
-              className="flex items-center justify-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:bg-blue-400"
-            >
-              <ArrowPathIcon className={`h-4 w-4 ${pricesLoading ? 'animate-spin' : ''}`} />
-              <span>{pricesLoading ? 'Refreshing...' : 'Refresh Now'}</span>
-            </button>
+            <div className="h-4 w-px bg-gray-200"></div>
+            
+            {/* Next Refresh */}
+            <div className="flex items-center space-x-1 text-gray-500">
+              <ArrowPathIcon className="h-4 w-4" />
+              <span>Next: {timeUntilRefresh || '...'}</span>
+            </div>
           </div>
         </div>
+        
+        <button
+          onClick={refreshAllData}
+          disabled={pricesLoading}
+          className="flex items-center justify-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:bg-blue-400"
+        >
+          <ArrowPathIcon className={`h-4 w-4 ${pricesLoading ? 'animate-spin' : ''}`} />
+          <span>{pricesLoading ? 'Refreshing...' : 'Refresh Now'}</span>
+        </button>
       </div>
 
       {error && (
@@ -377,85 +430,43 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Major Market Indexes - Professional Charts */}
-      <div className="mb-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Major Market Indexes</h2>
-      
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {majorIndexes.map((index) => (
-            <div key={index.symbol} className="bg-white shadow rounded-lg p-4">
-              <div className="mb-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-1">{index.symbol}</h3>
-                <p className="text-sm text-gray-600">{index.name}</p>
+      {/* Compact Market Widgets in One Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Market Indexes - Compact */}
+        {majorIndexes.map((index) => (
+          <div key={index.symbol} className="bg-white shadow-sm rounded-lg border border-gray-200 p-3">
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <h3 className="text-base font-medium text-gray-900">{index.symbol}</h3>
+                <p className="text-xs text-gray-600">{index.name}</p>
               </div>
-              
-                {/* TradingView Widget */}
-                <div className="h-60">
-                  <TradingViewWidget
-                    symbol={index.tradingViewSymbol}
-                    height="100%"
-                    width="100%"
-                    chartOnly={false}
-                    dateRange="6M"
-                    colorTheme="light"
-                    isTransparent={false}
-                  />
-                </div>
-              </div>
-            )
-          )}
-        </div>
-      </div>
-
-      {/* Financial Widgets Section */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 mt-8">
-        {/* Economic Calendar */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <ClockIcon className="h-5 w-5 text-blue-600 mr-2" />
-              Economic Calendar
-            </h3>
-            <div className="h-96">
-              <FinancialWidget
-                type="economic-calendar"
+              <ArrowTopRightOnSquareIcon className="h-4 w-4 text-gray-400" />
+            </div>
+            
+            {/* Compact TradingView Widget */}
+            <div className="h-36">
+              <TradingViewWidget
+                symbol={index.tradingViewSymbol}
                 height="100%"
                 width="100%"
+                chartOnly={true}
+                dateRange="1M"
                 colorTheme="light"
+                isTransparent={true}
               />
             </div>
           </div>
-        </div>
-
-        {/* Market Overview */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <ChartBarIcon className="h-5 w-5 text-green-600 mr-2" />
-              Market Overview
-            </h3>
-            <div className="h-96">
-              <FinancialWidget
-                type="market-overview"
-                height="100%"
-                width="100%"
-                colorTheme="light"
-              />
-            </div>
+        ))}
+        
+        {/* Economic Calendar - Compact */}
+        <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-3">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-base font-medium text-gray-900">Economic Calendar</h3>
+            <ClockIcon className="h-4 w-4 text-blue-600" />
           </div>
-        </div>
-      </div>
-
-      {/* Market Screener - Full Width */}
-      <div className="bg-white shadow rounded-lg mt-8">
-        <div className="p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-            <TrophyIcon className="h-5 w-5 text-purple-600 mr-2" />
-            Market Screener - Top Stocks
-          </h3>
-          <div className="h-96">
+          <div className="h-36">
             <FinancialWidget
-              type="top-gainers-losers"
+              type="economic-calendar"
               height="100%"
               width="100%"
               colorTheme="light"
@@ -463,6 +474,139 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Watchlist Quick Access and Performance Section */}
+      <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-4 mb-8">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Your Watchlists</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {watchlists.map(watchlist => {
+            const performance = calculateWatchlistPerformance(watchlist, priceData)
+            const trend = performance.trend
+            const performanceValue = performance.performance.toFixed(2)
+            
+            return (
+              <Link 
+                key={watchlist.id} 
+                to={`/watchlists/${watchlist.id}`}
+                className="block bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex justify-between items-start">
+                  <h3 className="text-base font-medium text-gray-900">{watchlist.name}</h3>
+                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    trend === 'up' ? 'bg-green-100 text-green-800' : 
+                    trend === 'down' ? 'bg-red-100 text-red-800' : 
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {trend === 'up' ? '+' : trend === 'down' ? '' : ''}
+                    {performanceValue}%
+                  </div>
+                </div>
+                
+                <div className="mt-2 text-sm text-gray-600">
+                  {watchlist.items.length} symbols
+                </div>
+                
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {watchlist.items.slice(0, 5).map(item => (
+                    <span 
+                      key={item.id} 
+                      className="inline-block px-2 py-1 bg-gray-200 rounded text-xs"
+                    >
+                      {item.symbol}
+                    </span>
+                  ))}
+                  {watchlist.items.length > 5 && (
+                    <span className="inline-block px-2 py-1 bg-gray-200 rounded text-xs">
+                      +{watchlist.items.length - 5} more
+                    </span>
+                  )}
+                </div>
+              </Link>
+            )
+          })}
+          
+          {/* Add Watchlist Link */}
+          <Link 
+            to="/watchlists"
+            className="flex items-center justify-center h-full bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors border-2 border-dashed border-gray-300"
+          >
+            <div className="text-center">
+              <svg className="h-8 w-8 text-gray-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <span className="mt-2 block text-sm font-medium text-gray-600">Create New Watchlist</span>
+            </div>
+          </Link>
+        </div>
+      </div>
+      
+      {/* Your Recent Activities */}
+      <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-4">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
+        
+        <div className="space-y-4">
+          {/* Activity item examples */}
+          <div className="flex items-start">
+            <div className="flex-shrink-0 bg-blue-100 rounded-full p-2">
+              <ArrowPathIcon className="h-5 w-5 text-blue-600" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-900">Data refreshed</p>
+              <p className="text-xs text-gray-500">
+                {lastRefresh.toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit'
+                })}
+              </p>
+            </div>
+          </div>
+          
+          {priceDataCount > 0 && (
+            <div className="flex items-start">
+              <div className="flex-shrink-0 bg-green-100 rounded-full p-2">
+                <ChartBarIcon className="h-5 w-5 text-green-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-900">Price data updated</p>
+                <p className="text-xs text-gray-500">
+                  Loaded {priceDataCount} symbols
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Stock Analysis Modal */}
+      {analysisModalOpen && selectedStock && (
+        <StockDetailView 
+          symbol={selectedStock}
+          isOpen={analysisModalOpen}
+          onClose={() => {
+            setAnalysisModalOpen(false)
+            setSelectedStock(null)
+          }}
+          priceData={priceData[selectedStock]}
+          entryPrice={
+            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.entry_price
+              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.entry_price.toString())
+              : undefined
+          }
+          targetPrice={
+            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.target_price
+              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.target_price.toString())
+              : undefined
+          }
+          stopLoss={
+            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.stop_loss
+              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.stop_loss.toString())
+              : undefined
+          }
+        />
+      )}
     </div>
   )
 }

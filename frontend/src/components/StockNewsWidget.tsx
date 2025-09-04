@@ -8,49 +8,11 @@ import {
 } from '@heroicons/react/24/outline'
 import axios from 'axios'
 
-// RSS feed sources for stock news
-// Note: These are the most reliable public RSS feeds available for stock-specific news
-// Many financial sites have deprecated their public RSS feeds or implemented strict CORS policies
-const NEWS_SOURCES = [
-  {
-    name: 'Yahoo Finance',
-    getFeedUrl: (symbol: string) => `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&region=US&lang=en-US`,
-    logo: 'yahoo'
-  },
-  {
-    name: 'Seeking Alpha',
-    getFeedUrl: (symbol: string) => `https://seekingalpha.com/api/sa/combined/${symbol}.xml`,
-    logo: 'seekingalpha'
-  },
-  // Alternate financial news sources that aren't stock-specific but provide market news
-  {
-    name: 'Benzinga',
-    getFeedUrl: (symbol: string) => `https://www.benzinga.com/feed/stock?symbols=${symbol}`,
-    logo: 'benzinga'
-  },
-  {
-    name: 'Finviz',
-    getFeedUrl: (symbol: string) => `https://finviz.com/quote.ashx?t=${symbol}&output=rss`,
-    logo: 'finviz'
-  },
-  {
-    name: 'Investing.com',
-    getFeedUrl: (symbol: string) => `https://www.investing.com/rss/news_${symbol}.rss`,
-    logo: 'investing'
-  },
-  {
-    name: 'Nasdaq',
-    getFeedUrl: (symbol: string) => `https://www.nasdaq.com/feed/rssoutbound?symbol=${symbol}`,
-    logo: 'nasdaq'
-  }
-]
-
 interface NewsItem {
   title: string
   link: string
   pubDate: string
   source: string
-  sourceLogo: string
 }
 
 const formatNewsDate = (dateString: string): string => {
@@ -76,37 +38,66 @@ const formatNewsDate = (dateString: string): string => {
   }
 }
 
-// Function to parse RSS XML content
-const parseRSSFeed = (xml: string, source: string, sourceLogo: string): NewsItem[] => {
+// Simple function to parse XML string from the RSS feeds
+const parseRSSFeed = (xml: string, source: string): NewsItem[] => {
   try {
     const parser = new DOMParser()
     const xmlDoc = parser.parseFromString(xml, 'text/xml')
-    const items = xmlDoc.querySelectorAll('item')
     
-    const newsItems: NewsItem[] = []
+    const items: NewsItem[] = []
+
+    // Check for standard RSS format (Yahoo Finance uses this)
+    const itemElements = xmlDoc.querySelectorAll('item')
     
-    items.forEach(item => {
-      const title = item.querySelector('title')?.textContent || ''
-      const link = item.querySelector('link')?.textContent || ''
-      const pubDate = item.querySelector('pubDate')?.textContent || ''
+    if (itemElements.length > 0) {
+      itemElements.forEach(item => {
+        const title = item.querySelector('title')?.textContent || ''
+        const link = item.querySelector('link')?.textContent || ''
+        const pubDate = item.querySelector('pubDate')?.textContent || ''
+        
+        if (title && link) {
+          items.push({
+            title,
+            link,
+            pubDate,
+            source
+          })
+        }
+      })
+    }
+    // Check for Atom format (some feeds use this)
+    else {
+      const entries = xmlDoc.querySelectorAll('entry')
       
-      if (title && link) {
-        newsItems.push({
-          title: title.replace(/<!\[CDATA\[|\]\]>/g, ''), // Remove CDATA wrappers if present
-          link,
-          pubDate,
-          source,
-          sourceLogo
-        })
-      }
-    })
+      entries.forEach(entry => {
+        const title = entry.querySelector('title')?.textContent || ''
+        
+        // In Atom, link is an attribute
+        const linkElement = entry.querySelector('link')
+        const link = linkElement?.getAttribute('href') || ''
+        
+        // Atom uses updated or published instead of pubDate
+        const pubDate = entry.querySelector('updated')?.textContent || 
+                        entry.querySelector('published')?.textContent || ''
+        
+        if (title && link) {
+          items.push({
+            title,
+            link,
+            pubDate,
+            source
+          })
+        }
+      })
+    }
     
-    return newsItems
-  } catch (error) {
-    console.error(`Error parsing RSS feed from ${source}:`, error)
+    return items
+  } catch (e) {
+    console.error(`Error parsing ${source} feed:`, e)
     return []
   }
 }
+
 
 interface StockNewsWidgetProps {
   symbol: string
@@ -122,105 +113,77 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [workingSources, setWorkingSources] = useState<string[]>([])
 
-  const fetchRSSFeeds = async () => {
+  const fetchNews = async () => {
     setLoading(true)
     setError('')
     
+    let allItems: NewsItem[] = []
+    
     try {
-      // We're using a proxy service because of CORS restrictions with RSS feeds
-      // In a production app, you'd use a backend service to fetch these feeds
-      const proxyUrl = 'https://api.allorigins.win/raw?url='
+      // Using a CORS proxy to fetch Yahoo Finance RSS feed
+      const yahooFinanceUrl = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&region=US&lang=en-US`
+      const corsProxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooFinanceUrl)}`
       
-      console.log(`Attempting to fetch news for ${symbol} from ${NEWS_SOURCES.length} sources`)
-      
-      const newsPromises = NEWS_SOURCES.map(async source => {
-        try {
-          const feedUrl = source.getFeedUrl(symbol)
-          const encodedFeedUrl = encodeURIComponent(feedUrl)
-          const proxyUrlWithFeed = `${proxyUrl}${encodedFeedUrl}`
+      try {
+        const response = await axios.get(corsProxyUrl)
+        
+        if (response.status === 200 && response.data && response.data.contents) {
+          const yahooItems = parseRSSFeed(response.data.contents, 'Yahoo Finance')
+          console.log(`Fetched ${yahooItems.length} items from Yahoo Finance`)
           
-          console.log(`Fetching from ${source.name}: ${feedUrl}`)
-          console.log(`Via proxy: ${proxyUrlWithFeed}`)
-          
-          const startTime = Date.now()
-          const response = await axios.get(proxyUrlWithFeed, {
-            timeout: 10000 // 10 second timeout
-          })
-          const duration = Date.now() - startTime
-          
-          const parsedItems = parseRSSFeed(response.data, source.name, source.logo)
-          
-          console.log(`✅ ${source.name} returned ${parsedItems.length} news items (${duration}ms)`)
-          return parsedItems
-        } catch (err) {
-          console.warn(`❌ Could not fetch news from ${source.name}:`, err)
-          console.warn(`Failed URL: ${source.getFeedUrl(symbol)}`)
-          return []
+          if (yahooItems.length > 0) {
+            allItems = [...yahooItems]
+          }
         }
-      })
+      } catch (error) {
+        console.warn('Failed to fetch Yahoo Finance feed:', error)
+        setError('Unable to fetch news from Yahoo Finance. Please try again later.')
+      }
       
-      const results = await Promise.allSettled(newsPromises)
+      if (allItems.length === 0) {
+        setError('No news found for this stock. Please try another symbol or try again later.')
+        setLoading(false)
+        return
+      }
       
-      // Log a summary of which sources succeeded and failed
-      const successSources: string[] = []
-      const failedSources: string[] = []
+      // Filter to last 48 hours
+      const twoDaysAgo = new Date()
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
       
-      results.forEach((result, index) => {
-        const sourceName = NEWS_SOURCES[index].name
-        if (result.status === 'fulfilled' && result.value.length > 0) {
-          successSources.push(sourceName)
-        } else {
-          failedSources.push(sourceName)
-        }
-      })
-      
-      console.log('📊 RSS Feed Summary:')
-      console.log(`✅ Successful sources (${successSources.length}): ${successSources.join(', ') || 'None'}`)
-      console.log(`❌ Failed sources (${failedSources.length}): ${failedSources.join(', ') || 'None'}`)
-      
-      const allNews = results
-        .filter((result): result is PromiseFulfilledResult<NewsItem[]> => result.status === 'fulfilled')
-        .flatMap(result => result.value)
-      
-      // Filter for news only from the last 2 days
-      const twoDaysAgo = new Date();
-      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-      console.log(`⏰ Only showing news from ${twoDaysAgo.toISOString()} onwards`);
-      
-      // Sort items by date (newest first)
-      const sortedByDate = allNews.sort((a, b) => 
-        new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()
-      );
-      
-      // Filter items by date
-      const filteredByDate = sortedByDate.filter(item => {
+      // Try to parse dates and filter
+      const filtered = allItems.filter(item => {
         try {
-          const pubDate = new Date(item.pubDate);
-          return pubDate >= twoDaysAgo;
+          if (!item.pubDate) return true // Keep items without dates
+          
+          const date = new Date(item.pubDate)
+          return !isNaN(date.getTime()) && date >= twoDaysAgo
         } catch (e) {
-          // If we can't parse the date, exclude the item
-          return false;
+          return true // Keep items with invalid dates
         }
-      });
-      console.log(`📅 Date filtering: ${allNews.length} total → ${filteredByDate.length} within last 2 days`);
+      })
       
-      // Remove duplicates
-      const filteredDuplicates = filteredByDate.filter((item, index, self) => 
-        index === self.findIndex(t => t.title === item.title)
-      );
-      console.log(`🔄 Duplicate removal: ${filteredByDate.length} → ${filteredDuplicates.length} unique items`);
+      if (filtered.length === 0) {
+        setError('No recent news found for this stock in the last 48 hours.')
+        setLoading(false)
+        return
+      }
       
-      // Apply item limit
-      const sortedNews = filteredDuplicates.slice(0, 50); // Limit to 50 news items
+      // Sort by date (newest first)
+      filtered.sort((a, b) => {
+        try {
+          const dateA = new Date(a.pubDate).getTime()
+          const dateB = new Date(b.pubDate).getTime()
+          return dateB - dateA
+        } catch (e) {
+          return 0
+        }
+      })
       
-      console.log(`📰 Total news items after filtering: ${sortedNews.length}`)
-      setNewsItems(sortedNews)
-      setWorkingSources(successSources)
-    } catch (err) {
+      setNewsItems(filtered)
+    } catch (err: any) {
       console.error('Error fetching news:', err)
-      setError('Unable to load news feed data for this stock. Financial news feeds may be temporarily unavailable.')
+      setError(`Unable to fetch news: ${err.message || 'Network error. Please check your connection.'}`)
     } finally {
       setLoading(false)
     }
@@ -228,78 +191,33 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
 
   useEffect(() => {
     if (symbol) {
-      fetchRSSFeeds()
+      fetchNews()
     }
   }, [symbol])
-
-  // No mock data - only use actual fetched news
-  const displayedNewsItems = newsItems
-
-  const getSourceLogo = (sourceLogo: string) => {
-    switch (sourceLogo) {
-      case 'yahoo':
-        return '🔶'
-      case 'seekingalpha':
-        return '🔍'
-      case 'benzinga':
-        return '📰'
-      case 'finviz':
-        return '📊'
-      case 'investing':
-        return '💹'
-      case 'nasdaq':
-        return '📈'
-      default:
-        return '📰'
-    }
-  }
+  
+  // Yahoo Finance is our only source now
+  const getSourceIcon = () => '🔶'
   
   return (
     <div className={`stock-news-widget bg-white rounded-lg border border-gray-200 overflow-hidden ${className}`} style={{ height }}>
-      <div className="flex flex-col px-4 py-3 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <NewspaperIcon className="h-5 w-5 text-blue-600 mr-2" />
-            <div>
-              <h3 className="text-base font-medium text-gray-900">Latest News for {symbol}</h3>
-              <p className="text-xs text-gray-500">Last 48 hours only</p>
-            </div>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center">
+          <NewspaperIcon className="h-5 w-5 text-blue-600 mr-2" />
+          <div>
+            <h3 className="text-base font-medium text-gray-900">Latest News for {symbol}</h3>
+            <p className="text-xs text-gray-500">Last 48 hours</p>
           </div>
-          <button 
-            onClick={fetchRSSFeeds}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            title="Refresh news"
-          >
-            <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
         </div>
-        
-        {/* Source Status Indicators */}
-        {!loading && newsItems.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2 text-xs">
-            <span className="text-gray-500 mr-1">Sources:</span>
-            {NEWS_SOURCES.map(source => (
-              <span 
-                key={source.name}
-                className={`px-1.5 py-0.5 rounded ${
-                  workingSources.includes(source.name) 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-500'
-                }`}
-                title={
-                  workingSources.includes(source.name) 
-                    ? `${source.name} returned news items` 
-                    : `${source.name} returned no data`
-                }
-              >
-                {getSourceLogo(source.logo)} {source.name}
-              </span>
-            ))}
-          </div>
-        )}
+        <button 
+          onClick={fetchNews}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+          title="Refresh news"
+        >
+          <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
       
-      <div className="overflow-y-auto" style={{ height: `calc(${height} - ${!loading && newsItems.length > 0 ? '95px' : '65px'})` }}>
+      <div className="overflow-y-auto" style={{ height: `calc(${height} - 65px)` }}>
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -310,20 +228,20 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
             <ExclamationTriangleIcon className="h-10 w-10 text-orange-500 mb-2" />
             <p className="text-gray-600 mb-2">{error}</p>
             <button
-              onClick={fetchRSSFeeds}
+              onClick={fetchNews}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
               Try Again
             </button>
           </div>
-        ) : displayedNewsItems.length === 0 ? (
+        ) : newsItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-4 text-center">
             <NewspaperIcon className="h-10 w-10 text-gray-400 mb-2" />
             <p className="text-gray-600">No news found for {symbol}</p>
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {displayedNewsItems.map((item, index) => (
+            {newsItems.map((item, index) => (
               <li key={index} className="hover:bg-gray-50 transition-colors">
                 <a 
                   href={item.link} 
@@ -336,7 +254,7 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
                       <h4 className="text-sm font-medium text-gray-900 mb-1 line-clamp-2">{item.title}</h4>
                       <div className="flex items-center text-xs text-gray-500">
                         <span className="flex items-center mr-3">
-                          <span className="mr-1">{getSourceLogo(item.sourceLogo)}</span>
+                          <span className="mr-1">{getSourceIcon(item.source)}</span>
                           {item.source}
                         </span>
                         <span className="flex items-center">

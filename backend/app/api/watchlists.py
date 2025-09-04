@@ -251,14 +251,27 @@ async def update_watchlist(
 
 @router.delete("/{watchlist_id}")
 def delete_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
+    from app.models import Alert
+    
     db_watchlist = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
     if not db_watchlist:
         raise HTTPException(status_code=404, detail="Watchlist not found")
     
+    # First, delete all alerts associated with this watchlist
+    associated_alerts = db.query(Alert).filter(Alert.watchlist_id == watchlist_id).all()
+    alerts_count = len(associated_alerts)
+    
+    for alert in associated_alerts:
+        db.delete(alert)
+    
+    # Then delete the watchlist
     db.delete(db_watchlist)
     db.commit()
     
-    return {"message": f"Watchlist '{db_watchlist.name}' deleted successfully"}
+    return {
+        "message": f"Watchlist '{db_watchlist.name}' deleted successfully", 
+        "deleted_alerts": alerts_count
+    }
 
 @router.post("/{watchlist_id}/items", response_model=WatchlistItemResponse)
 async def add_watchlist_item(
