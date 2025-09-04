@@ -113,34 +113,68 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeSources, setActiveSources] = useState<string[]>([])
 
   const fetchNews = async () => {
     setLoading(true)
     setError('')
     
     let allItems: NewsItem[] = []
+    let yahooSuccess = false
+    let seekingAlphaSuccess = false
+    const activeSourcesList: string[] = []
     
     try {
-      // Using a CORS proxy to fetch Yahoo Finance RSS feed
-      const yahooFinanceUrl = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&region=US&lang=en-US`
-      const corsProxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooFinanceUrl)}`
-      
+      // Fetch Yahoo Finance RSS feed
       try {
-        const response = await axios.get(corsProxyUrl)
+        const yahooFinanceUrl = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&region=US&lang=en-US`
+        const yahooProxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooFinanceUrl)}`
         
-        if (response.status === 200 && response.data && response.data.contents) {
-          const yahooItems = parseRSSFeed(response.data.contents, 'Yahoo Finance')
+        const yahooResponse = await axios.get(yahooProxyUrl)
+        
+        if (yahooResponse.status === 200 && yahooResponse.data && yahooResponse.data.contents) {
+          const yahooItems = parseRSSFeed(yahooResponse.data.contents, 'Yahoo Finance')
           console.log(`Fetched ${yahooItems.length} items from Yahoo Finance`)
           
           if (yahooItems.length > 0) {
             allItems = [...yahooItems]
+            yahooSuccess = true
+            activeSourcesList.push('Yahoo Finance')
           }
         }
       } catch (error) {
         console.warn('Failed to fetch Yahoo Finance feed:', error)
-        setError('Unable to fetch news from Yahoo Finance. Please try again later.')
       }
       
+      // Fetch Seeking Alpha RSS feed
+      try {
+        const seekingAlphaUrl = `https://seekingalpha.com/api/sa/combined/${symbol.toUpperCase()}.xml`
+        const saProxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(seekingAlphaUrl)}`
+        
+        const saResponse = await axios.get(saProxyUrl)
+        
+        if (saResponse.status === 200 && saResponse.data && saResponse.data.contents) {
+          const saItems = parseRSSFeed(saResponse.data.contents, 'Seeking Alpha')
+          console.log(`Fetched ${saItems.length} items from Seeking Alpha`)
+          
+          if (saItems.length > 0) {
+            allItems = [...allItems, ...saItems]
+            seekingAlphaSuccess = true
+            activeSourcesList.push('Seeking Alpha')
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch Seeking Alpha feed:', error)
+      }
+      
+      // Check if any feeds were successful
+      if (!yahooSuccess && !seekingAlphaSuccess) {
+        setError('Unable to fetch news from any sources. Please try again later.')
+        setLoading(false)
+        return
+      }
+      
+      // Check if any news items were found
       if (allItems.length === 0) {
         setError('No news found for this stock. Please try another symbol or try again later.')
         setLoading(false)
@@ -181,6 +215,7 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
       })
       
       setNewsItems(filtered)
+      setActiveSources(activeSourcesList)
     } catch (err: any) {
       console.error('Error fetching news:', err)
       setError(`Unable to fetch news: ${err.message || 'Network error. Please check your connection.'}`)
@@ -195,8 +230,17 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
     }
   }, [symbol])
   
-  // Yahoo Finance is our only source now
-  const getSourceIcon = () => '🔶'
+  // Get source icon for different news sources
+  const getSourceIcon = (source: string) => {
+    switch(source) {
+      case 'Yahoo Finance':
+        return '🔶'
+      case 'Seeking Alpha':
+        return '🔍'
+      default:
+        return '📰'
+    }
+  }
   
   return (
     <div className={`stock-news-widget bg-white rounded-lg border border-gray-200 overflow-hidden ${className}`} style={{ height }}>
@@ -205,7 +249,19 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
           <NewspaperIcon className="h-5 w-5 text-blue-600 mr-2" />
           <div>
             <h3 className="text-base font-medium text-gray-900">Latest News for {symbol}</h3>
-            <p className="text-xs text-gray-500">Last 48 hours</p>
+            <p className="text-xs text-gray-500">
+              Last 48 hours
+              {activeSources.length > 0 && (
+                <span className="ml-2">
+                  Sources: {activeSources.map((source, i) => (
+                    <span key={source} className="mx-1">
+                      <span className="mr-1">{getSourceIcon(source)}</span>
+                      {i < activeSources.length - 1 ? ', ' : ''}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </p>
           </div>
         </div>
         <button 
