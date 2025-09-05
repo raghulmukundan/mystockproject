@@ -20,6 +20,7 @@ import FinancialWidget from '../components/FinancialWidget'
 import StockDetailView from '../components/StockDetailView'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice } from '../services/stockApi'
+import { universeApi } from '../lib/universeApi'
 
 // Major market indexes to track
 const MAJOR_INDEXES = ['SPY', 'QQQ', 'DIA']
@@ -318,7 +319,7 @@ export default function Dashboard() {
     )
   }
 
-  // Search for stocks by symbol
+  // Search for stocks by symbol using universe API
   const handleSearch = async (query: string) => {
     setSearchQuery(query)
     if (!query.trim()) {
@@ -326,12 +327,27 @@ export default function Dashboard() {
       return
     }
 
-    // Simple search from existing watchlist data first
-    const matches = allSymbols
-      .filter(symbol => symbol.toUpperCase().includes(query.toUpperCase()))
-      .slice(0, 8) // Limit to 8 results
-    
-    setSearchResults(matches)
+    try {
+      // Search through universe symbols
+      const response = await universeApi.querySymbols({
+        q: query,
+        limit: 8,
+        offset: 0,
+        sort: 'symbol',
+        order: 'asc'
+      })
+      
+      // Extract symbols from the response
+      const matches = response.items.map(item => item.symbol)
+      setSearchResults(matches)
+    } catch (error) {
+      console.error('Failed to search symbols:', error)
+      // Fallback to watchlist symbols if universe API fails
+      const matches = allSymbols
+        .filter(symbol => symbol.toUpperCase().includes(query.toUpperCase()))
+        .slice(0, 8)
+      setSearchResults(matches)
+    }
   }
 
   // Handle stock selection

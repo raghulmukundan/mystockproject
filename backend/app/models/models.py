@@ -1,0 +1,70 @@
+from sqlalchemy import create_engine, Column, String, Integer, Text, Index
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+Base = declarative_base()
+
+class Symbol(Base):
+    __tablename__ = 'symbols'
+    
+    symbol = Column(String, primary_key=True)
+    security_name = Column(Text, nullable=False)
+    listing_exchange = Column(Text)
+    market_category = Column(Text)
+    test_issue = Column(Text)  # 'Y' or 'N'
+    financial_status = Column(Text)
+    round_lot_size = Column(Integer)
+    etf = Column(Text)  # 'Y' or 'N'
+    nextshares = Column(Text)  # 'Y' or 'N' (may be blank)
+    stooq_symbol = Column(Text, nullable=False)  # derived: aapl.us, brk-b.us
+    updated_at = Column(Text, nullable=False)  # ISO8601 UTC
+
+# Indexes
+Index('symbols_exchange_idx', Symbol.listing_exchange)
+Index('symbols_etf_idx', Symbol.etf)
+Index('symbols_name_idx', Symbol.security_name)
+
+# Database setup
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/market.db")
+DATA_DIR = os.getenv("DATA_DIR", "./data")
+
+# Create data directory if it doesn't exist
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# SQLite configuration with WAL mode and pragmas
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={
+        "check_same_thread": False,
+        "timeout": 30,
+    },
+    pool_pre_ping=True,
+    echo=False
+)
+
+def configure_sqlite_pragmas(connection, connection_record):
+    """Configure SQLite pragmas for better performance and concurrency"""
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA synchronous=NORMAL") 
+    connection.execute("PRAGMA foreign_keys=ON")
+
+from sqlalchemy import event
+event.listen(engine, "connect", configure_sqlite_pragmas)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_db():
+    """Database dependency for FastAPI"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def init_db():
+    """Initialize database tables and indexes"""
+    Base.metadata.create_all(bind=engine)

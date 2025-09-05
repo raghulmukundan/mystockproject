@@ -20,7 +20,9 @@
       "Bash(copy:*)",
       "Bash(move:*)",
       "Bash(powershell:*)",
-      "Bash(dir)"
+      "Bash(dir)",
+      "Bash(docker exec:*)",
+      "Bash(npm start)"
     ],
     "deny": [],
     "ask": []
