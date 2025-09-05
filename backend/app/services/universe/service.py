@@ -165,11 +165,11 @@ class UniverseService:
             # Apply search filter
             if q:
                 q = q.strip()
-                if len(q) <= 5 and q == q.upper():
-                    # Short uppercase query - prefix match on symbol
-                    query = query.filter(Symbol.symbol.like(f"{q}%"))
+                if len(q) <= 5:
+                    # Short query - case-insensitive prefix match on symbol
+                    query = query.filter(Symbol.symbol.ilike(f"{q}%"))
                 else:
-                    # Longer or mixed case query - substring match on security name
+                    # Longer query - case-insensitive substring match on security name
                     query = query.filter(Symbol.security_name.ilike(f"%{q}%"))
             
             # Apply exchange filter
