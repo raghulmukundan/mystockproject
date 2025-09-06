@@ -1,12 +1,13 @@
 from sqlalchemy import create_engine, Column, String, Integer, Text, Float, Index
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
-
-Base = declarative_base()
+# Use the same Base class as the app models
+try:
+    from app.core.database import Base
+except ImportError:
+    from sqlalchemy.ext.declarative import declarative_base
+    Base = declarative_base()
 
 class Symbol(Base):
     __tablename__ = 'symbols'
@@ -42,9 +43,15 @@ Index('symbols_etf_idx', Symbol.etf)
 Index('symbols_name_idx', Symbol.security_name)
 Index("prices_daily_symbol_date_idx", PriceDaily.symbol, PriceDaily.date)
 
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/market.db")
-DATA_DIR = os.getenv("DATA_DIR", "./data")
+# Import config from centralized location
+try:
+    from app.core.config import DATABASE_URL, DATA_DIR
+except ImportError:
+    # Fallback for when running outside of app context
+    from dotenv import load_dotenv
+    load_dotenv()
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/stock_watchlist.db")
+    DATA_DIR = os.getenv("DATA_DIR", "./data")
 
 # Create data directory if it doesn't exist
 os.makedirs(DATA_DIR, exist_ok=True)

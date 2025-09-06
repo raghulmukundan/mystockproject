@@ -1,10 +1,8 @@
 from sqlalchemy import create_engine, Column, String, Integer, Text, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+from .core.config import DATABASE_URL, DATA_DIR
 import os
-
-load_dotenv()
 
 Base = declarative_base()
 
@@ -27,10 +25,6 @@ class Symbol(Base):
 Index('symbols_exchange_idx', Symbol.listing_exchange)
 Index('symbols_etf_idx', Symbol.etf)
 Index('symbols_name_idx', Symbol.security_name)
-
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/market.db")
-DATA_DIR = os.getenv("DATA_DIR", "./data")
 
 # Create data directory if it doesn't exist
 os.makedirs(DATA_DIR, exist_ok=True)

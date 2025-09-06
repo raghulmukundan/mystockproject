@@ -6,14 +6,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:///./stock_watchlist.db
+      - DATABASE_URL=sqlite:///./data/stock_watchlist.db
       - TZ=America/Chicago
       - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
     volumes:
       - ./backend:/app
-      - backend_data:/app/data
-    depends_on:
-      - db
     networks:
       - app-network
 
@@ -31,17 +28,6 @@ services:
       - app-network
     depends_on:
       - backend
-
-  db:
-    image: alpine:latest
-    command: ["sh", "-c", "mkdir -p /data && tail -f /dev/null"]
-    volumes:
-      - backend_data:/data
-    networks:
-      - app-network
-
-volumes:
-  backend_data:
 
 networks:
   app-network:

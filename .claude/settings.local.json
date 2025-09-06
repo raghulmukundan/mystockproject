@@ -23,7 +23,11 @@
       "Bash(dir)",
       "Bash(docker exec:*)",
       "Bash(npm start)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd /c:*)",
+      "Bash(docker volume:*)",
+      "Bash(docker inspect:*)"
     ],
     "deny": [],
     "ask": []
