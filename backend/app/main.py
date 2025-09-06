@@ -7,6 +7,8 @@ from app.api.market import router as market_router
 from app.api.alerts import router as alerts_router
 from app.api.rss_feed import router as rss_router
 from app.api.universe import router as universe_router
+from app.api.oauth import router as oauth_router
+from app.api.price_history import router as price_history_router
 from app.core.database import init_db
 from app.core.scheduler import scheduler
 
@@ -53,6 +55,8 @@ app.include_router(market_router, prefix="/api")
 app.include_router(alerts_router, prefix="/api/alerts")
 app.include_router(rss_router, prefix="/api")
 app.include_router(universe_router, prefix="/api")
+app.include_router(oauth_router)
+app.include_router(price_history_router, prefix="/api")
 
 @app.get("/")
 async def root():

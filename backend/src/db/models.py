@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Integer, Text, Index
+from sqlalchemy import create_engine, Column, String, Integer, Text, Float, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
@@ -24,9 +24,23 @@ class Symbol(Base):
     updated_at = Column(Text, nullable=False)  # ISO8601 UTC
 
 # Indexes
+class PriceDaily(Base):
+    __tablename__ = "prices_daily"
+    
+    symbol = Column(String, primary_key=True)   # e.g., AAPL
+    date   = Column(String, primary_key=True)   # YYYY-MM-DD
+    open   = Column(Float,  nullable=False)
+    high   = Column(Float,  nullable=False)
+    low    = Column(Float,  nullable=False)
+    close  = Column(Float,  nullable=False)
+    volume = Column(Integer, nullable=False, default=0)
+    source = Column(String,  nullable=False, default="schwab")  # provenance
+
+# Indexes
 Index('symbols_exchange_idx', Symbol.listing_exchange)
 Index('symbols_etf_idx', Symbol.etf)
 Index('symbols_name_idx', Symbol.security_name)
+Index("prices_daily_symbol_date_idx", PriceDaily.symbol, PriceDaily.date)
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/market.db")

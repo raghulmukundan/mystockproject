@@ -1,0 +1,135 @@
+"""
+Schwab price history provider
+"""
+import os
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List
+import pytz
+from dotenv import load_dotenv
+
+from src.services.schwab.client import SchwabHTTPClient
+from src.services.schwab.symbols import to_schwab_symbol
+
+load_dotenv()
+
+@dataclass
+class Bar:
+    date: str    # YYYY-MM-DD
+    open: float
+    high: float
+    low:  float
+    close: float
+    volume: int
+
+class SchwabHistoryProvider:
+    """
+    Schwab price history provider for daily OHLCV data.
+    No mock data - uses real Schwab API.
+    """
+    
+    def __init__(self):
+        self.client = SchwabHTTPClient()
+        self.timezone = pytz.timezone(os.getenv("TIMEZONE", "America/Chicago"))
+        
+    def _timestamp_to_date(self, timestamp_ms: int) -> str:
+        """
+        Convert timestamp to YYYY-MM-DD date string in configured timezone.
+        
+        Args:
+            timestamp_ms: Timestamp in milliseconds
+            
+        Returns:
+            Date string in YYYY-MM-DD format
+        """
+        dt = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=pytz.UTC)
+        local_dt = dt.astimezone(self.timezone)
+        return local_dt.strftime("%Y-%m-%d")
+    
+    def get_daily_history(self, symbol: str, start: str, end: str) -> List[Bar]:
+        """
+        Fetch daily OHLCV for [start, end] inclusive (YYYY-MM-DD).
+        Uses Schwab price history endpoint. No mock data.
+        Must return bars sorted ascending by date.
+        
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL', 'BRK.B')
+            start: Start date YYYY-MM-DD
+            end: End date YYYY-MM-DD
+            
+        Returns:
+            List of Bar objects sorted by date ascending
+            
+        Raises:
+            Exception: On symbol not found, not entitled, or API errors
+        """
+        # Convert symbol to Schwab format
+        schwab_symbol = to_schwab_symbol(symbol)
+        
+        # Convert dates to timestamps (start of day in configured timezone)
+        start_dt = self.timezone.localize(datetime.strptime(start, "%Y-%m-%d"))
+        end_dt = self.timezone.localize(datetime.strptime(end, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
+        
+        start_timestamp_ms = int(start_dt.timestamp() * 1000)
+        end_timestamp_ms = int(end_dt.timestamp() * 1000)
+        
+        # Build request parameters for daily OHLC data
+        # Based on Schwab API schema: periodType=month allows frequencyType=daily
+        params = {
+            'symbol': schwab_symbol,
+            'periodType': 'month',
+            'frequencyType': 'daily', 
+            'frequency': 1,
+            'startDate': start_timestamp_ms,
+            'endDate': end_timestamp_ms,
+            'needExtendedHoursData': False,
+            'needPreviousClose': False
+        }
+        
+        try:
+            # Make request to Schwab API - correct endpoint format
+            endpoint = f"/marketdata/v1/pricehistory"
+            response = self.client.get(endpoint, params=params)
+            
+            if response.status_code == 404:
+                raise Exception(f"Symbol '{symbol}' not found or not entitled")
+            elif response.status_code != 200:
+                raise Exception(f"Schwab API error {response.status_code}: {response.text}")
+            
+            data = response.json()
+            
+            # Check if we have candles data
+            if 'candles' not in data or not data['candles']:
+                # Return empty list for no data (holidays/weekends)
+                return []
+            
+            bars = []
+            for candle in data['candles']:
+                try:
+                    # Convert timestamp to date
+                    date_str = self._timestamp_to_date(candle['datetime'])
+                    
+                    bar = Bar(
+                        date=date_str,
+                        open=float(candle['open']),
+                        high=float(candle['high']),
+                        low=float(candle['low']),
+                        close=float(candle['close']),
+                        volume=int(candle['volume'])
+                    )
+                    bars.append(bar)
+                    
+                except (KeyError, ValueError) as e:
+                    # Skip malformed candles
+                    continue
+            
+            # Sort by date ascending
+            bars.sort(key=lambda x: x.date)
+            
+            return bars
+            
+        except Exception as e:
+            if "not found" in str(e).lower() or "not entitled" in str(e).lower():
+                raise Exception(f"Symbol '{symbol}' not found or not entitled: {str(e)}")
+            else:
+                raise Exception(f"Failed to fetch price history for '{symbol}': {str(e)}")

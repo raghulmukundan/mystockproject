@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.universe import router as universe_router
 from src.api.universe_query import router as universe_query_router
+from src.api.price_history import router as price_history_router
 from src.services.scheduler import startup_scheduler, shutdown_scheduler
 from src.db.models import init_db
 
@@ -36,9 +37,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include universe API routers
+# Include API routers
 app.include_router(universe_router)
 app.include_router(universe_query_router)
+app.include_router(price_history_router, prefix="/api")
 
 @app.get("/")
 async def root():

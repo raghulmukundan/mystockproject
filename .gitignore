@@ -9,6 +9,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Python
+*.pyc
 __pycache__/
 *.py[cod]
 *$py.class
@@ -17,6 +18,7 @@ __pycache__/
 venv/
 env/
 ENV/
+.claude 
 
 # Docker
 .docker/
