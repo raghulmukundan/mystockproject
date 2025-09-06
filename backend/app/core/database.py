@@ -25,5 +25,5 @@ def get_db():
         db.close()
 
 def init_db():
-    from app.models import watchlist, watchlist_item, rule, symbol, price_daily
+    from app.models import watchlist, watchlist_item, rule, symbol, price_daily, current_price
     Base.metadata.create_all(bind=engine)

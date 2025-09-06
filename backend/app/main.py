@@ -34,9 +34,25 @@ async def lifespan(app: FastAPI):
         print(f"ERROR: Failed to auto-populate universe data with real NASDAQ data: {e}")
         print("Universe will remain empty until real data can be downloaded.")
     
+    # Start price cache background refresh
+    try:
+        from app.services.price_cache_service import price_cache_service
+        price_cache_service.start_background_refresh()
+        print("Started price cache background refresh service")
+    except Exception as e:
+        print(f"Failed to start price cache service: {e}")
+    
     scheduler.start()
     yield
+    
     # Shutdown
+    try:
+        from app.services.price_cache_service import price_cache_service
+        price_cache_service.stop_background_refresh()
+        print("Stopped price cache background refresh service")
+    except Exception as e:
+        print(f"Error stopping price cache service: {e}")
+        
     scheduler.shutdown()
 
 app = FastAPI(title="Stock Watchlist API", version="1.0.0", lifespan=lifespan)

@@ -27,7 +27,8 @@
       "Bash(taskkill:*)",
       "Bash(cmd /c:*)",
       "Bash(docker volume:*)",
-      "Bash(docker inspect:*)"
+      "Bash(docker inspect:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
