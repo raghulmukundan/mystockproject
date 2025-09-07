@@ -141,21 +141,14 @@ export default function Dashboard() {
   useEffect(() => {
     loadWatchlists()
     
-    // Update countdown timer every second
+    // Update countdown timer every second for display purposes only
     const timer = setInterval(updateCountdown, 1000)
     
-    // Refresh data every 30 minutes, but only during market hours
-    const refreshInterval = setInterval(() => {
-      if (isMarketOpen()) {
-        refreshAllData()
-      } else {
-        console.log('Market closed, skipping data refresh')
-      }
-    }, 30 * 60 * 1000) // 30 minutes
+    // Removed auto-refresh timer - let backend handle caching
+    // Manual refresh button is the only way to force price updates
     
     return () => {
       clearInterval(timer)
-      clearInterval(refreshInterval)
     }
   }, [])
 
@@ -174,11 +167,11 @@ export default function Dashboard() {
   }
 
   const refreshAllData = async () => {
-    console.log('Refreshing all data...')
+    console.log('Manual refresh triggered...')
     setLastRefresh(new Date())
     setNextRefresh(getNextRefreshTime())
     
-    // Reload watchlist prices
+    // Manually reload watchlist prices (bypasses cache)
     if (watchlists.length > 0) {
       loadPricesInBackground(watchlists)
     }
@@ -192,8 +185,8 @@ export default function Dashboard() {
       setWatchlists(data)
       setLoading(false) // Show dashboard immediately
       
-      // Load prices in the background
-      loadPricesInBackground(data)
+      // Prices will be loaded from backend cache when needed
+      // No automatic price loading on page load
     } catch (err: any) {
       setError('Failed to load watchlists')
       console.error(err)
@@ -358,6 +351,14 @@ export default function Dashboard() {
     setSearchResults([])
   }
 
+  // Handle Enter key press in search
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchResults.length > 0) {
+      // Select the first result
+      handleStockSelect(searchResults[0])
+    }
+  }
+
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -375,6 +376,7 @@ export default function Dashboard() {
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
+              onKeyPress={handleSearchKeyPress}
               placeholder="Search stocks by symbol..."
               className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
