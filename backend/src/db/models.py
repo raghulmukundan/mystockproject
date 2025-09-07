@@ -1,47 +1,111 @@
-from sqlalchemy import create_engine, Column, String, Integer, Text, Float, Index
+from sqlalchemy import create_engine, Column, String, Integer, Text, Float, Index, DateTime
 from sqlalchemy.orm import sessionmaker
 import os
+from datetime import datetime
 
 # Use the same Base class as the app models
 try:
     from app.core.database import Base
+    # Import existing Symbol model to avoid conflicts
+    from app.models.symbol import Symbol
 except ImportError:
     from sqlalchemy.ext.declarative import declarative_base
     Base = declarative_base()
-
-class Symbol(Base):
-    __tablename__ = 'symbols'
     
-    symbol = Column(String, primary_key=True)
-    security_name = Column(Text, nullable=False)
-    listing_exchange = Column(Text)
-    market_category = Column(Text)
-    test_issue = Column(Text)  # 'Y' or 'N'
-    financial_status = Column(Text)
-    round_lot_size = Column(Integer)
-    etf = Column(Text)  # 'Y' or 'N'
-    nextshares = Column(Text)  # 'Y' or 'N' (may be blank)
-    stooq_symbol = Column(Text, nullable=False)  # derived: aapl.us, brk-b.us
-    updated_at = Column(Text, nullable=False)  # ISO8601 UTC
+    # Fallback Symbol model if app models not available
+    class Symbol(Base):
+        __tablename__ = 'symbols'
+        
+        symbol = Column(String, primary_key=True)
+        security_name = Column(Text, nullable=False)
+        listing_exchange = Column(Text)
+        market_category = Column(Text)
+        test_issue = Column(Text)  # 'Y' or 'N'
+        financial_status = Column(Text)
+        round_lot_size = Column(Integer)
+        etf = Column(Text)  # 'Y' or 'N'
+        nextshares = Column(Text)  # 'Y' or 'N' (may be blank)
+        stooq_symbol = Column(Text, nullable=False)  # derived: aapl.us, brk-b.us
+        updated_at = Column(Text, nullable=False)  # ISO8601 UTC
 
-# Indexes
-class PriceDaily(Base):
-    __tablename__ = "prices_daily"
+# Historical OHLCV price data (replaces prices_daily)
+class HistoricalPrice(Base):
+    __tablename__ = "historical_prices"
     
-    symbol = Column(String, primary_key=True)   # e.g., AAPL
+    symbol = Column(String, primary_key=True)   # e.g., AAPL (no .US)
     date   = Column(String, primary_key=True)   # YYYY-MM-DD
-    open   = Column(Float,  nullable=False)
-    high   = Column(Float,  nullable=False)
-    low    = Column(Float,  nullable=False)
-    close  = Column(Float,  nullable=False)
+    open   = Column(Float, nullable=False)
+    high   = Column(Float, nullable=False)
+    low    = Column(Float, nullable=False)
+    close  = Column(Float, nullable=False)
     volume = Column(Integer, nullable=False, default=0)
-    source = Column(String,  nullable=False, default="schwab")  # provenance
+    source = Column(String,  nullable=False)    # 'stooq' | 'schwab' | ...
 
-# Indexes
-Index('symbols_exchange_idx', Symbol.listing_exchange)
-Index('symbols_etf_idx', Symbol.etf)
-Index('symbols_name_idx', Symbol.security_name)
-Index("prices_daily_symbol_date_idx", PriceDaily.symbol, PriceDaily.date)
+# Tracking tables for import operations
+class ImportJob(Base):
+    __tablename__ = "import_jobs"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+    status = Column(String, nullable=False, default='running')  # 'running' | 'completed' | 'failed'
+    folder_path = Column(String, nullable=False)
+    total_files = Column(Integer, default=0)
+    processed_files = Column(Integer, default=0)
+    total_rows = Column(Integer, default=0)
+    inserted_rows = Column(Integer, default=0)
+    error_count = Column(Integer, default=0)
+
+class ImportError(Base):
+    __tablename__ = "import_errors"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    import_job_id = Column(Integer, nullable=False)
+    occurred_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    file_path = Column(String, nullable=False)
+    line_number = Column(Integer)
+    error_type = Column(String, nullable=False)
+    error_message = Column(Text, nullable=False)
+
+class EodScan(Base):
+    __tablename__ = "eod_scans"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+    status = Column(String, nullable=False, default='running')  # 'running' | 'completed' | 'failed'
+    scan_date = Column(String, nullable=False)  # YYYY-MM-DD
+    symbols_requested = Column(Integer, default=0)
+    symbols_fetched = Column(Integer, default=0)
+    error_count = Column(Integer, default=0)
+
+class EodScanError(Base):
+    __tablename__ = "eod_scan_errors"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    eod_scan_id = Column(Integer, nullable=False)
+    occurred_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    symbol = Column(String, nullable=False)
+    error_type = Column(String, nullable=False)
+    error_message = Column(Text, nullable=False)
+    http_status = Column(Integer)
+
+# Indexes (avoid conflicts with existing app models)
+try:
+    # Only create indexes if we're using the fallback Symbol model
+    from app.models.symbol import Symbol as AppSymbol
+    # App models already have the Symbol indexes
+except ImportError:
+    # Create indexes only in fallback case
+    Index('symbols_exchange_idx', Symbol.listing_exchange)
+    Index('symbols_etf_idx', Symbol.etf)
+    Index('symbols_name_idx', Symbol.security_name)
+
+Index("historical_prices_symbol_date_idx", HistoricalPrice.symbol, HistoricalPrice.date)
+Index("import_jobs_status_idx", ImportJob.status)
+Index("import_errors_job_idx", ImportError.import_job_id)
+Index("eod_scans_status_idx", EodScan.status)
+Index("eod_scan_errors_scan_idx", EodScanError.eod_scan_id)
 
 # Import config from centralized location
 try:

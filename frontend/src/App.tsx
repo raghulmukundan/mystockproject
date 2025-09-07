@@ -5,6 +5,8 @@ import Upload from './pages/Upload'
 import Chart from './pages/Chart'
 import Alerts from './pages/Alerts'
 import Universe from './pages/universe'
+import HistoryImport from './pages/HistoryImport'
+import PricesBrowser from './pages/PricesBrowser'
 
 import Watchlists from './pages/Watchlists'
 import WatchlistDetail from './pages/WatchlistDetail'
@@ -20,6 +22,8 @@ function App() {
         <Route path="/chart/:symbol" element={<Chart />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/universe" element={<Universe />} />
+        <Route path="/history-import" element={<HistoryImport />} />
+        <Route path="/prices-browser" element={<PricesBrowser />} />
       </Routes>
     </Layout>
   )

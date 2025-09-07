@@ -40,11 +40,10 @@ const calculateWatchlistPerformance = (watchlist: Watchlist, priceData: Record<s
   let totalPerformance = 0
   let validItems = 0
   
-  for (const item of watchlist.items) {
-    const price = priceData[item.symbol]
-    if (price && item.entry_price) {
-      const gainLossPercent = ((price.current_price - parseFloat(item.entry_price.toString())) / parseFloat(item.entry_price.toString())) * 100
-      totalPerformance += gainLossPercent
+  for (const symbol of watchlist.items) {
+    const price = priceData[symbol]
+    if (price) {
+      totalPerformance += price.change_percent
       validItems++
     }
   }
@@ -210,7 +209,7 @@ export default function Watchlists() {
       // Get all unique symbols from all watchlists
       const allSymbols = Array.from(new Set(
         watchlists.flatMap(watchlist => 
-          watchlist.items.map(item => item.symbol)
+          watchlist.items
         )
       ))
       
@@ -351,13 +350,13 @@ export default function Watchlists() {
 
   // Calculate statistics
   const totalWatchlists = watchlists.length
-  const allSymbols = watchlists.flatMap(w => w.items.map(item => item.symbol))
+  const allSymbols = watchlists.flatMap(w => w.items)
   const uniqueSymbols = new Set(allSymbols).size
   const priceDataCount = Object.keys(priceData).length
 
   const totalMarketValue = watchlists.reduce((total, watchlist) => {
-    return total + watchlist.items.reduce((sum, item) => {
-      const price = priceData[item.symbol]
+    return total + watchlist.items.reduce((sum, symbol) => {
+      const price = priceData[symbol]
       const currentPrice = price?.current_price || 0
       const shares = 100 // Assume 100 shares per position for market value calculation
       return sum + (currentPrice * shares)
@@ -374,7 +373,7 @@ export default function Watchlists() {
       result = result.filter(watchlist => 
         watchlist.name.toLowerCase().includes(term) || 
         watchlist.description?.toLowerCase().includes(term) ||
-        watchlist.items.some(item => item.symbol.toLowerCase().includes(term))
+        watchlist.items.some(symbol => symbol.toLowerCase().includes(term))
       )
     }
     
@@ -957,34 +956,29 @@ export default function Watchlists() {
                         </div>
                         
                         <div className="space-y-2">
-                          {watchlist.items.slice(0, 3).map((item) => (
-                            <div key={item.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-100 shadow-sm hover:border-blue-200 transition-colors">
+                          {watchlist.items.slice(0, 3).map((symbol) => (
+                            <div key={symbol} className="flex items-center justify-between p-2 bg-white rounded border border-gray-100 shadow-sm hover:border-blue-200 transition-colors">
                               <div className="flex items-center space-x-2">
                                 <button
-                                  onClick={() => handleSymbolClick(item.symbol)}
+                                  onClick={() => handleSymbolClick(symbol)}
                                   className="font-medium text-blue-600 hover:text-blue-700"
-                                  title={item.company_name || item.symbol}
+                                  title={symbol}
                                 >
-                                  {item.symbol}
+                                  {symbol}
                                 </button>
-                                {item.sector && (
-                                  <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
-                                    {item.sector.substring(0, 3)}
-                                  </span>
-                                )}
                               </div>
                               
                               <div className="text-right">
-                                {priceData[item.symbol] ? (
+                                {priceData[symbol] ? (
                                   <div>
-                                    <span className={`font-medium ${priceData[item.symbol].change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                      ${priceData[item.symbol].current_price.toFixed(2)}
+                                    <span className={`font-medium ${priceData[symbol].change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                      ${priceData[symbol].current_price.toFixed(2)}
                                     </span>
                                     <div className={`text-xs ${
-                                      priceData[item.symbol].change_percent >= 0 ? 'text-green-600' : 'text-red-600'
+                                      priceData[symbol].change_percent >= 0 ? 'text-green-600' : 'text-red-600'
                                     }`}>
-                                      {priceData[item.symbol].change_percent >= 0 ? '+' : ''}
-                                      {priceData[item.symbol].change_percent.toFixed(2)}%
+                                      {priceData[symbol].change_percent >= 0 ? '+' : ''}
+                                      {priceData[symbol].change_percent.toFixed(2)}%
                                     </div>
                                   </div>
                                 ) : (
@@ -1117,21 +1111,21 @@ export default function Watchlists() {
                         </td>
                         <td className="px-3 py-4">
                           <div className="flex flex-wrap gap-1 max-w-xs">
-                            {watchlist.items.slice(0, 5).map((item) => (
+                            {watchlist.items.slice(0, 5).map((symbol) => (
                               <button
-                                key={item.id}
+                                key={symbol}
                                 className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  handleSymbolClick(item.symbol)
+                                  handleSymbolClick(symbol)
                                 }}
                               >
-                                {item.symbol}
-                                {priceData[item.symbol] && (
+                                {symbol}
+                                {priceData[symbol] && (
                                   <span className={`ml-1 ${
-                                    priceData[item.symbol].change_percent >= 0 ? 'text-green-600' : 'text-red-600'
+                                    priceData[symbol].change_percent >= 0 ? 'text-green-600' : 'text-red-600'
                                   }`}>
-                                    {priceData[item.symbol].change_percent >= 0 ? '↑' : '↓'}
+                                    {priceData[symbol].change_percent >= 0 ? '↑' : '↓'}
                                   </span>
                                 )}
                               </button>
@@ -1205,21 +1199,9 @@ export default function Watchlists() {
             setSelectedAnalysisSymbol(null)
           }}
           priceData={priceData[selectedAnalysisSymbol]}
-          entryPrice={
-            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.entry_price
-              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.entry_price.toString())
-              : undefined
-          }
-          targetPrice={
-            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.target_price
-              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.target_price.toString())
-              : undefined
-          }
-          stopLoss={
-            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.stop_loss
-              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedAnalysisSymbol)?.stop_loss.toString())
-              : undefined
-          }
+          entryPrice={undefined}
+          targetPrice={undefined}
+          stopLoss={undefined}
         />
       )}
 

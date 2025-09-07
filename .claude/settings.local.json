@@ -28,7 +28,9 @@
       "Bash(cmd /c:*)",
       "Bash(docker volume:*)",
       "Bash(docker inspect:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(del stock_watchlist.db-wal stock_watchlist.db-shm)",
+      "Bash(sqlite3:*)"
     ],
     "deny": [],
     "ask": []

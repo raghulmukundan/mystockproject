@@ -4,7 +4,9 @@ import {
   DocumentArrowUpIcon, 
   ViewColumnsIcon,
   HomeIcon,
-  BellIcon
+  BellIcon,
+  CloudArrowDownIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import AlertBadge from './AlertBadge'
@@ -18,6 +20,8 @@ const navigation = [
   { name: 'Watchlists', href: '/watchlists', icon: ViewColumnsIcon },
   { name: 'Alerts', href: '/alerts', icon: BellIcon },
   { name: 'Upload', href: '/upload', icon: DocumentArrowUpIcon },
+  { name: 'History Import', href: '/history-import', icon: CloudArrowDownIcon },
+  { name: 'Prices Browser', href: '/prices-browser', icon: MagnifyingGlassIcon },
 ]
 
 export default function Layout({ children }: LayoutProps) {
@@ -57,7 +61,8 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <div className="flex items-center">
-              <AlertBadge />
+              {/* Temporarily disabled AlertBadge due to fresh database */}
+              {/* <AlertBadge /> */}
             </div>
           </div>
         </div>

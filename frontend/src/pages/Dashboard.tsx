@@ -31,13 +31,10 @@ const calculateWatchlistPerformance = (watchlist: Watchlist, priceData: Record<s
   let totalValue = 0
   let validItems = 0
 
-  for (const item of watchlist.items) {
-    const price = priceData[item.symbol]
-    if (price && item.entry_price) {
-      const gainLoss = price.current_price - parseFloat(item.entry_price.toString())
-      const gainLossPercent = (gainLoss / parseFloat(item.entry_price.toString())) * 100
-      
-      totalGainLoss += gainLossPercent
+  for (const symbol of watchlist.items) {
+    const price = priceData[symbol]
+    if (price) {
+      totalGainLoss += price.change_percent
       totalValue += price.current_price
       validItems++
     }
@@ -196,7 +193,7 @@ export default function Dashboard() {
 
 
   const loadPricesInBackground = async (watchlistData: Watchlist[]) => {
-    const allSymbols = Array.from(new Set(watchlistData.flatMap(w => w.items.map(item => item.symbol))))
+    const allSymbols = Array.from(new Set(watchlistData.flatMap(w => w.items)))
     if (allSymbols.length === 0) return
     
     // Note: Market hours check is now handled by the backend
@@ -259,7 +256,7 @@ export default function Dashboard() {
 
   // Calculate statistics
   const totalWatchlists = watchlists.length
-  const allSymbols = watchlists.flatMap(w => w.items.map(item => item.symbol))
+  const allSymbols = watchlists.flatMap(w => w.items)
   const uniqueSymbols = new Set(allSymbols).size
   
   // Calculate performance metrics
@@ -287,8 +284,8 @@ export default function Dashboard() {
   const totalUniqueSymbols = uniqueSymbols
 
   const totalMarketValue = watchlists.reduce((total, watchlist) => {
-    return total + watchlist.items.reduce((sum, item) => {
-      const price = priceData[item.symbol]
+    return total + watchlist.items.reduce((sum, symbol) => {
+      const price = priceData[symbol]
       const currentPrice = price?.current_price || 0
       const shares = 100 // Assume 100 shares per position for market value calculation
       return sum + (currentPrice * shares)
@@ -526,12 +523,12 @@ export default function Dashboard() {
                 </div>
                 
                 <div className="mt-3 flex flex-wrap gap-1">
-                  {watchlist.items.slice(0, 5).map(item => (
+                  {watchlist.items.slice(0, 5).map(symbol => (
                     <span 
-                      key={item.id} 
+                      key={symbol} 
                       className="inline-block px-2 py-1 bg-gray-200 rounded text-xs"
                     >
-                      {item.symbol}
+                      {symbol}
                     </span>
                   ))}
                   {watchlist.items.length > 5 && (
@@ -608,21 +605,9 @@ export default function Dashboard() {
             setSelectedStock(null)
           }}
           priceData={priceData[selectedStock]}
-          entryPrice={
-            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.entry_price
-              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.entry_price.toString())
-              : undefined
-          }
-          targetPrice={
-            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.target_price
-              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.target_price.toString())
-              : undefined
-          }
-          stopLoss={
-            watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.stop_loss
-              ? parseFloat(watchlists.flatMap(w => w.items).find(item => item.symbol === selectedStock)?.stop_loss.toString())
-              : undefined
-          }
+          entryPrice={undefined}
+          targetPrice={undefined}
+          stopLoss={undefined}
         />
       )}
     </div>
