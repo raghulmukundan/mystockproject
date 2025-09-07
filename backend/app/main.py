@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.watchlists import router as watchlists_router
 from app.api.stocks import router as stocks_router
-from app.api.market import router as market_router
+# Removed Finnhub market router - using Schwab price history instead
 from app.api.alerts import router as alerts_router
 from app.api.rss_feed import router as rss_router
 from app.api.universe import router as universe_router
@@ -67,7 +67,7 @@ app.add_middleware(
 
 app.include_router(watchlists_router, prefix="/api")
 app.include_router(stocks_router, prefix="/api")
-app.include_router(market_router, prefix="/api")
+# Removed market_router - using Schwab /api/prices/history endpoints instead
 app.include_router(alerts_router, prefix="/api/alerts")
 app.include_router(rss_router, prefix="/api")
 app.include_router(universe_router, prefix="/api")
