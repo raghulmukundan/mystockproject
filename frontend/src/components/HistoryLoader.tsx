@@ -73,6 +73,22 @@ export const HistoryLoader: React.FC = () => {
     }
   };
 
+  const convertWindowsToDockerPath = (windowsPath: string): string => {
+    // Convert Windows path to Docker mount path
+    // C:\Users\raghu\Downloads\d_us_txt\data\daily\us -> /downloads/d_us_txt/data/daily/us
+    if (windowsPath.includes('\\Downloads\\')) {
+      return windowsPath
+        .replace(/^.*\\Downloads\\/, '/downloads/')
+        .replace(/\\/g, '/');
+    }
+    // If already in Unix format, return as-is
+    if (windowsPath.startsWith('/downloads/')) {
+      return windowsPath;
+    }
+    // Default: assume it's already a Docker path
+    return windowsPath;
+  };
+
   const startImport = async () => {
     if (!folderPath.trim()) {
       setMessage('Please enter a folder path');
@@ -84,10 +100,13 @@ export const HistoryLoader: React.FC = () => {
     setErrors([]);
 
     try {
+      // Convert Windows path to Docker mount path
+      const dockerPath = convertWindowsToDockerPath(folderPath.trim());
+      
       const response = await fetch('/api/import/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder_path: folderPath.trim() })
+        body: JSON.stringify({ folder_path: dockerPath })
       });
 
       if (response.ok) {
@@ -149,16 +168,19 @@ export const HistoryLoader: React.FC = () => {
             <div className="flex gap-2">
               <Input
                 type="text"
-                placeholder="Selected folder path will appear here..."
+                placeholder="Enter folder path using 'Enter Folder Path' button..."
                 value={folderPath}
                 disabled={true}
                 className="flex-1 bg-gray-50"
               />
               <Button 
                 onClick={() => {
-                  // For now, revert to text input since browser folder picker has path limitations
-                  // We'll need the user to manually enter the full absolute path
-                  const userPath = prompt('Please enter the full absolute path to your Stooq data folder:\n\nExample: C:\\data\\stooq\\daily\n        /home/user/data/stooq/daily');
+                  const userPath = prompt(
+                    "Enter the full absolute path to your Stooq data folder:\n\n" +
+                    "Windows Example: C:\\Users\\raghu\\Downloads\\d_us_txt\\data\\daily\\us\n" +
+                    "Docker/Linux Example: /downloads/d_us_txt/data/daily/us\n\n" +
+                    "(Windows paths will be automatically converted to Docker paths)"
+                  );
                   if (userPath && userPath.trim()) {
                     setFolderPath(userPath.trim());
                   }
@@ -177,8 +199,16 @@ export const HistoryLoader: React.FC = () => {
             </div>
             
             {folderPath && (
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">Selected folder:</span> {folderPath}
+              <div className="text-sm text-gray-600 space-y-1">
+                <div>
+                  <span className="font-medium">Windows Path:</span> {folderPath}
+                </div>
+                <div>
+                  <span className="font-medium">Docker Path:</span> 
+                  <span className="font-mono bg-gray-100 px-1 rounded ml-1">
+                    {convertWindowsToDockerPath(folderPath)}
+                  </span>
+                </div>
               </div>
             )}
           </div>

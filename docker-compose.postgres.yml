@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (separate container)
+  postgres:
+    image: postgres:15
+    container_name: mystockproject-postgres
+    environment:
+      POSTGRES_DB: stockwatchlist
+      POSTGRES_USER: stockuser
+      POSTGRES_PASSWORD: stockpass123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/sql:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockuser -d stockwatchlist"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: mystockproject-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://stockuser:stockpass123@postgres:5432/stockwatchlist
+      - ENVIRONMENT=production
+    volumes:
+      - C:\Users\raghu\Downloads:/downloads
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    container_name: mystockproject-frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

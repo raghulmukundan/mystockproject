@@ -31,8 +31,8 @@ const calculateWatchlistPerformance = (watchlist: Watchlist, priceData: Record<s
   let totalValue = 0
   let validItems = 0
 
-  for (const symbol of watchlist.items) {
-    const price = priceData[symbol]
+  for (const item of watchlist.items) {
+    const price = priceData[item.symbol]
     if (price) {
       totalGainLoss += price.change_percent
       totalValue += price.current_price
@@ -193,7 +193,7 @@ export default function Dashboard() {
 
 
   const loadPricesInBackground = async (watchlistData: Watchlist[]) => {
-    const allSymbols = Array.from(new Set(watchlistData.flatMap(w => w.items)))
+    const allSymbols = Array.from(new Set(watchlistData.flatMap(w => w.items.map(item => item.symbol))))
     if (allSymbols.length === 0) return
     
     // Note: Market hours check is now handled by the backend
@@ -256,7 +256,7 @@ export default function Dashboard() {
 
   // Calculate statistics
   const totalWatchlists = watchlists.length
-  const allSymbols = watchlists.flatMap(w => w.items)
+  const allSymbols = watchlists.flatMap(w => w.items.map(item => item.symbol))
   const uniqueSymbols = new Set(allSymbols).size
   
   // Calculate performance metrics
@@ -284,8 +284,8 @@ export default function Dashboard() {
   const totalUniqueSymbols = uniqueSymbols
 
   const totalMarketValue = watchlists.reduce((total, watchlist) => {
-    return total + watchlist.items.reduce((sum, symbol) => {
-      const price = priceData[symbol]
+    return total + watchlist.items.reduce((sum, item) => {
+      const price = priceData[item.symbol]
       const currentPrice = price?.current_price || 0
       const shares = 100 // Assume 100 shares per position for market value calculation
       return sum + (currentPrice * shares)
@@ -523,12 +523,12 @@ export default function Dashboard() {
                 </div>
                 
                 <div className="mt-3 flex flex-wrap gap-1">
-                  {watchlist.items.slice(0, 5).map(symbol => (
+                  {watchlist.items.slice(0, 5).map(item => (
                     <span 
-                      key={symbol} 
+                      key={item.symbol} 
                       className="inline-block px-2 py-1 bg-gray-200 rounded text-xs"
                     >
-                      {symbol}
+                      {item.symbol}
                     </span>
                   ))}
                   {watchlist.items.length > 5 && (

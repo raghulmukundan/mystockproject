@@ -8,13 +8,25 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+class WatchlistItemResponse(BaseModel):
+    id: int
+    symbol: str
+    company_name: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    market_cap: float | None = None
+    entry_price: float | None = None
+    target_price: float | None = None
+    stop_loss: float | None = None
+    created_at: str
+
 class WatchlistResponse(BaseModel):
     id: int
     name: str
     description: str | None
     created_at: str
     updated_at: str | None
-    items: List[str] = []
+    items: List[WatchlistItemResponse] = []
 
 class WatchlistCreateRequest(BaseModel):
     name: str
@@ -27,7 +39,7 @@ def get_watchlists(db: Session = Depends(get_db)):
     result = []
     
     for watchlist in watchlists:
-        items = db.query(WatchlistItem.symbol).filter(
+        items = db.query(WatchlistItem).filter(
             WatchlistItem.watchlist_id == watchlist.id
         ).all()
         
@@ -46,13 +58,36 @@ def get_watchlists(db: Session = Depends(get_db)):
                 else:
                     updated_at_str = str(watchlist.updated_at)
             
+            # Convert items to response format
+            item_responses = []
+            for item in items:
+                item_created_at = ""
+                if item.created_at:
+                    if hasattr(item.created_at, 'isoformat'):
+                        item_created_at = item.created_at.isoformat()
+                    else:
+                        item_created_at = str(item.created_at)
+                
+                item_responses.append(WatchlistItemResponse(
+                    id=item.id,
+                    symbol=item.symbol,
+                    company_name=item.company_name,
+                    sector=item.sector,
+                    industry=item.industry,
+                    market_cap=float(item.market_cap) if item.market_cap else None,
+                    entry_price=float(item.entry_price) if item.entry_price else None,
+                    target_price=float(item.target_price) if item.target_price else None,
+                    stop_loss=float(item.stop_loss) if item.stop_loss else None,
+                    created_at=item_created_at
+                ))
+            
             result.append(WatchlistResponse(
                 id=watchlist.id,
                 name=watchlist.name,
                 description=watchlist.description,
                 created_at=created_at_str,
                 updated_at=updated_at_str,
-                items=[item.symbol for item in items]
+                items=item_responses
             ))
         except Exception as e:
             print(f"Error processing watchlist {watchlist.id}: {e}")
@@ -67,9 +102,32 @@ def get_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
     if not watchlist:
         raise HTTPException(status_code=404, detail="Watchlist not found")
     
-    items = db.query(WatchlistItem.symbol).filter(
+    items = db.query(WatchlistItem).filter(
         WatchlistItem.watchlist_id == watchlist_id
     ).all()
+    
+    # Convert items to response format
+    item_responses = []
+    for item in items:
+        item_created_at = ""
+        if item.created_at:
+            if hasattr(item.created_at, 'isoformat'):
+                item_created_at = item.created_at.isoformat()
+            else:
+                item_created_at = str(item.created_at)
+        
+        item_responses.append(WatchlistItemResponse(
+            id=item.id,
+            symbol=item.symbol,
+            company_name=item.company_name,
+            sector=item.sector,
+            industry=item.industry,
+            market_cap=float(item.market_cap) if item.market_cap else None,
+            entry_price=float(item.entry_price) if item.entry_price else None,
+            target_price=float(item.target_price) if item.target_price else None,
+            stop_loss=float(item.stop_loss) if item.stop_loss else None,
+            created_at=item_created_at
+        ))
     
     return WatchlistResponse(
         id=watchlist.id,
@@ -77,7 +135,7 @@ def get_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
         description=watchlist.description,
         created_at=watchlist.created_at.isoformat() if watchlist.created_at else "",
         updated_at=watchlist.updated_at.isoformat() if watchlist.updated_at else None,
-        items=[item.symbol for item in items]
+        items=item_responses
     )
 
 @router.post("/watchlists", response_model=WatchlistResponse)
@@ -99,6 +157,35 @@ def create_watchlist(request: WatchlistCreateRequest, db: Session = Depends(get_
         created_at=watchlist.created_at.isoformat() if watchlist.created_at else "",
         updated_at=watchlist.updated_at.isoformat() if watchlist.updated_at else None,
         items=[]
+    )
+
+@router.put("/watchlists/{watchlist_id}", response_model=WatchlistResponse)
+def update_watchlist(watchlist_id: int, request: WatchlistCreateRequest, db: Session = Depends(get_db)):
+    """Update a watchlist"""
+    watchlist = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
+    if not watchlist:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+    
+    # Update fields
+    watchlist.name = request.name
+    if request.description is not None:
+        watchlist.description = request.description
+    
+    db.commit()
+    db.refresh(watchlist)
+    
+    # Get items
+    items = db.query(WatchlistItem.symbol).filter(
+        WatchlistItem.watchlist_id == watchlist_id
+    ).all()
+    
+    return WatchlistResponse(
+        id=watchlist.id,
+        name=watchlist.name,
+        description=watchlist.description,
+        created_at=watchlist.created_at.isoformat() if watchlist.created_at else "",
+        updated_at=watchlist.updated_at.isoformat() if watchlist.updated_at else None,
+        items=[item.symbol for item in items]
     )
 
 @router.delete("/watchlists/{watchlist_id}")

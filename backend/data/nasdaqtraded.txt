@@ -2803,6 +2803,9 @@ MBX|MBX Biosciences, Inc. - Common Stock|Q|Q|N|N|100|N|N
 MCBS|MetroCity Bankshares, Inc. - Common Stock|Q|Q|N|N|100|N|N
 MCDS|JPMorgan Fundamental Data Science Mid Core ETF|Q|G|N|N|100|N|Y
 MCFT|MasterCraft Boat Holdings, Inc. - Common Stock|Q|G|N|N|100|N|N
+MCGA|Yorkville Acquisition Corp. - Class A Ordinary Share|Q|G|N|N|100|N|N
+MCGAU|Yorkville Acquisition Corp. - Unit|Q|G|N|N|100|N|N
+MCGAW|Yorkville Acquisition Corp. - Warrant|Q|G|N|N|100|N|N
 MCHB|Mechanics Bancorp - Class A Common Stock|Q|Q|N|N|100|N|N
 MCHI|iShares MSCI China ETF|Q|G|N|N|100|N|Y
 MCHP|Microchip Technology Incorporated - Common Stock|Q|Q|N|N|100|N|N
@@ -4219,6 +4222,8 @@ SPC|CrossingBridge Pre-Merger SPAC ETF|Q|G|N|N|100|N|Y
 SPCB|SuperCom, Ltd. - Ordinary Shares|Q|S|N|N|100|N|N
 SPCX|SPAC and New Issue ETF|Q|G|N|N|100|N|Y
 SPCY|STKd 100% SMCI & 100% NVDA ETF|Q|G|N|N|100|N|Y
+SPEG|Silver Pegasus Acquisition Corp - Class A Ordinary Shares|Q|G|N|N|100|N|N
+SPEGR|Silver Pegasus Acquisition Corp - Rights|Q|G|N|N|100|N|N
 SPEGU|Silver Pegasus Acquisition Corp - Unit|Q|G|N|N|100|N|N
 SPFI|South Plains Financial, Inc. - Common Stock|Q|Q|N|N|100|N|N
 SPHL|Springview Holdings Ltd - Ordinary shares|Q|S|N|D|100|N|N
@@ -5002,9 +5007,6 @@ YMAT|J-Star Holding Co., Ltd. - Ordinary Shares|Q|S|N|N|100|N|N
 YMT|Yimutian Inc. - American Depositary Shares; each representing 25 Class A ordinary shares|Q|G|N|N|100|N|N
 YNOT|Horizon Digital Frontier ETF|Q|G|N|N|100|N|Y
 YOKE|YOKE Core ETF|Q|G|N|N|100|N|Y
-YORK|Yorkville Acquisition Corp. - Class A Ordinary Share|Q|G|N|N|100|N|N
-YORKU|Yorkville Acquisition Corp. - Unit|Q|G|N|N|100|N|N
-YORKW|Yorkville Acquisition Corp. - Warrant|Q|G|N|N|100|N|N
 YORW|The York Water Company - Common Stock|Q|Q|N|N|100|N|N
 YOUL|Youlife Group Inc. - American Depositary Shares|Q|S|N|N|100|N|N
 YQ|17 Education & Technology Group Inc. - American Depositary Shares|Q|Q|N|N|100|N|N
@@ -7238,7 +7240,6 @@ FIXT|TCW ETF Trust TCW Core Plus Bond ETF|N| |N| |100|Y|N
 FJAN|FT Vest U.S. Equity Buffer ETF - January|Z| |N| |100|Y|N
 FJUL|FT Vest U.S. Equity Buffer ETF - July|Z| |N| |100|Y|N
 FJUN|FT Vest U.S. Equity Buffer ETF - June|Z| |N| |100|Y|N
-FL|Foot Locker, Inc.|N| |N| |100|N|N
 FLAG|Global X Funds Global X S&P 500 U.S. Market Leaders Top 50 ETF|P| |N| |100|Y|N
 FLAO|AIM ETF Products Trust AllianzIM U.S. Equity 6 Month Floor5 Apr/Oct ETF|P| |N| |100|Y|N
 FLAU|Franklin FTSE Australia ETF|P| |N| |100|Y|N
@@ -9518,7 +9519,9 @@ PACS|PACS Group, Inc. Common Stock|N| |N| |100|N|N
 PAG|Penske Automotive Group, Inc. Common Stock|N| |N| |100|N|N
 PAGS|PagSeguro Digital Ltd. Class A Common Shares|N| |N| |100|N|N
 PAI|Western Asset Investment Grade Income Fund Inc.|N| |N| |100|N|N
+PAII|Pyrophyte Acquisition Corp. II Class A Ordinary Shares|N| |N| |100|N|N
 PAII.U|Pyrophyte Acquisition Corp. II Units, each consisting of one Class A ordinary share and one-half of one redeemable warrant|N| |N| |100|N|N
+PAII.W|Pyrophyte Acquisition Corp. II Warrants, each whole warrant exercisable for one Class A Ordinary Share at an exercise price of $11.50 per share|N| |N| |100|N|N
 PALC|Pacer Lunt Large Cap Multi-Factor Alternator ETF|P| |N| |100|Y|N
 PALL|abrdn Physical Palladium Shares ETF|P| |N| |100|Y|N
 PAM|Pampa Energia S.A.|N| |N| |100|N|N
@@ -10356,6 +10359,7 @@ SEMG|EA Series Trust Suncoast Select Growth ETF|P| |N| |100|Y|N
 SEMI|Columbia Select Technology ETF|P| |N| |100|Y|N
 SEMR|SEMrush Holdings, Inc. Class A Common Stock|N| |N| |100|N|N
 SENS|Senseonics Holdings, Inc. Common Stock|A| |N| |100|N|N
+SEPI|SCM Trust Shelton Equity Premium Income ETF|P| |N| |100|Y|N
 SEPM|First Trust Exchange-Traded Fund VIII FT Vest U.S. Equity Max Buffer ETF - September|Z| |N| |100|Y|N
 SEPP|PGIM S&P 500 Buffer 12 ETF - September|Z| |N| |100|Y|N
 SEPT|AIM ETF Products Trust AllianzIM U.S. Large Cap Buffer10 Sep ETF|P| |N| |100|Y|N
@@ -10550,7 +10554,7 @@ SOLV|Solventum Corporation Common Stock|N| |N| |100|N|N
 SON|Sonoco Products Company Common Stock|N| |N| |100|N|N
 SONY|Sony Group Corporation American Depositary Shares|N| |N| |100|N|N
 SOR|Source Capital, Inc. Cmn Shs of BI|N| |N| |100|N|N
-SOS|SOS Limited American Depositary Shares, one hundred and fifty (150) Class A Ordinary Shares|N| |N| |100|N|N
+SOS|SOS Limited Class A Ordinary Shares|N| |N| |100|N|N
 SOUL|Soulpower Acquisition Corporation Class A Ordinary Shares|N| |N| |100|N|N
 SOUL.R|Soulpower Acquisition Corporation Rights, each right entitling the holder to receive one-tenth (1/10) of one Class A Ordinary Share|N| |N| |100|N|N
 SOUL.U|Soulpower Acquisition Corporation Units, each consisting of one Class A ordinary share and one right|N| |N| |100|N|N
@@ -11730,4 +11734,4 @@ ZVOL|Volatility Premium Plus ETF|Z| |N| |100|Y|N
 ZVV|NYSE ARCA test stock|P| |Y| |100|N|N
 ZWS|Zurn Elkay Water Solutions Corporation Common Stock|N| |N| |100|N|N
 ZXIET|IEX Test Company Test Symbol Three for IEX|V| |Y| |100|N|N
-File Creation Time: 0907202513:51|||||||
+File Creation Time: 0908202509:48|||||||

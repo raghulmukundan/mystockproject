@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:///./data/stock_watchlist_clean.db
+      - DATABASE_URL=postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist
       - TZ=America/Chicago
       - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
     volumes:
@@ -14,6 +14,8 @@ services:
       - C:\Users\raghu\Downloads:/downloads
     networks:
       - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     build: ./frontend

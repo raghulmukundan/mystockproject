@@ -30,7 +30,11 @@
       "Bash(docker inspect:*)",
       "Bash(find:*)",
       "Bash(del stock_watchlist.db-wal stock_watchlist.db-shm)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Read(//c/Users/raghu/Downloads/d_us_txt/data/daily/us/**)",
+      "Bash(del /f data\\stock_watchlist_clean.db-wal data\\stock_watchlist_clean.db-shm)",
+      "Bash(pkill:*)",
+      "Bash(lsof:*)"
     ],
     "deny": [],
     "ask": []

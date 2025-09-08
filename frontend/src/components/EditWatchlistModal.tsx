@@ -81,12 +81,12 @@ export default function EditWatchlistModal({
     if (!name.trim()) return
 
     const processedItems = items
-      .filter(item => item.symbol.trim())
+      .filter(item => item?.symbol?.trim())
       .map(item => ({
-        symbol: item.symbol.trim().toUpperCase(),
-        company_name: item.company_name.trim() || undefined,
-        sector: item.sector.trim() || undefined,
-        industry: item.industry.trim() || undefined,
+        symbol: item.symbol?.trim()?.toUpperCase() || '',
+        company_name: item.company_name?.trim() || undefined,
+        sector: item.sector?.trim() || undefined,
+        industry: item.industry?.trim() || undefined,
         market_cap: item.market_cap ? parseFloat(item.market_cap) : undefined,
         entry_price: item.entry_price ? parseFloat(item.entry_price) : undefined,
         target_price: item.target_price ? parseFloat(item.target_price) : undefined,

@@ -25,70 +25,60 @@ def upsert_daily(symbol: str, bars: List[Bar], source: str = "schwab") -> Dict[s
     if not bars:
         return {"inserted": 0, "updated": 0, "skipped": 0}
     
-    # Use direct SQLite connection to bypass potential SQLAlchemy issues
-    from dotenv import load_dotenv
-    import os
-    import sqlite3
-    
-    load_dotenv()
-    DATABASE_URL = os.getenv('DATABASE_URL')
-    db_path = DATABASE_URL[10:]  # Remove 'sqlite:///'
-    
     inserted_count = 0
     updated_count = 0
     skipped_count = 0
     
-    
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
+    db = SessionLocal()
     try:
         for bar in bars:
             # Check if record exists
-            cursor.execute('''
-                SELECT COUNT(*) FROM prices_daily 
-                WHERE symbol = ? AND date = ?
-            ''', (symbol, bar.date))
+            existing_record = db.query(PriceDaily).filter(
+                and_(
+                    PriceDaily.symbol == symbol,
+                    PriceDaily.date == bar.date
+                )
+            ).first()
             
-            exists = cursor.fetchone()[0] > 0
-            
-            if exists:
+            if existing_record:
                 # Check if any value differs
-                cursor.execute('''
-                    SELECT open, high, low, close, volume, source 
-                    FROM prices_daily WHERE symbol = ? AND date = ?
-                ''', (symbol, bar.date))
-                
-                existing = cursor.fetchone()
                 values_changed = (
-                    existing[0] != bar.open or
-                    existing[1] != bar.high or
-                    existing[2] != bar.low or
-                    existing[3] != bar.close or
-                    existing[4] != bar.volume or
-                    existing[5] != source
+                    existing_record.open != bar.open or
+                    existing_record.high != bar.high or
+                    existing_record.low != bar.low or
+                    existing_record.close != bar.close or
+                    existing_record.volume != bar.volume or
+                    existing_record.source != source
                 )
                 
                 if values_changed:
                     # Update existing record
-                    cursor.execute('''
-                        UPDATE prices_daily 
-                        SET open = ?, high = ?, low = ?, close = ?, volume = ?, source = ?
-                        WHERE symbol = ? AND date = ?
-                    ''', (bar.open, bar.high, bar.low, bar.close, bar.volume, source, symbol, bar.date))
+                    existing_record.open = bar.open
+                    existing_record.high = bar.high
+                    existing_record.low = bar.low
+                    existing_record.close = bar.close
+                    existing_record.volume = bar.volume
+                    existing_record.source = source
                     updated_count += 1
                 else:
                     # No changes needed
                     skipped_count += 1
             else:
                 # Insert new record
-                cursor.execute('''
-                    INSERT INTO prices_daily (symbol, date, open, high, low, close, volume, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (symbol, bar.date, bar.open, bar.high, bar.low, bar.close, bar.volume, source))
+                new_record = PriceDaily(
+                    symbol=symbol,
+                    date=bar.date,
+                    open=bar.open,
+                    high=bar.high,
+                    low=bar.low,
+                    close=bar.close,
+                    volume=bar.volume,
+                    source=source
+                )
+                db.add(new_record)
                 inserted_count += 1
         
-        conn.commit()
+        db.commit()
         
         return {
             "inserted": inserted_count,
@@ -97,10 +87,10 @@ def upsert_daily(symbol: str, bars: List[Bar], source: str = "schwab") -> Dict[s
         }
         
     except Exception as e:
-        conn.rollback()
+        db.rollback()
         raise Exception(f"Failed to upsert price data for {symbol}: {str(e)}")
     finally:
-        conn.close()
+        db.close()
 
 def get_price_data_stats(symbol: str, start: str, end: str) -> Dict[str, any]:
     """

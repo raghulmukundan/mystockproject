@@ -29,25 +29,19 @@ Index('symbols_name_idx', Symbol.security_name)
 # Create data directory if it doesn't exist
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# SQLite configuration with WAL mode and pragmas
+# PostgreSQL configuration
 engine = create_engine(
     DATABASE_URL,
+    pool_size=20,                    # Connection pool size
+    max_overflow=30,                 # Max overflow connections
+    pool_pre_ping=True,              # Verify connections before use
+    pool_recycle=3600,               # Recycle connections every hour
+    echo=False,                      # Set to True for SQL debugging
     connect_args={
-        "check_same_thread": False,
-        "timeout": 30,
-    },
-    pool_pre_ping=True,
-    echo=False
+        "application_name": "stock_watchlist_api",
+        "options": "-c timezone=UTC"
+    }
 )
-
-def configure_sqlite_pragmas(connection, connection_record):
-    """Configure SQLite pragmas for better performance and concurrency"""
-    connection.execute("PRAGMA journal_mode=WAL")
-    connection.execute("PRAGMA synchronous=NORMAL") 
-    connection.execute("PRAGMA foreign_keys=ON")
-
-from sqlalchemy import event
-event.listen(engine, "connect", configure_sqlite_pragmas)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/stock_watchlist_clean.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist")
 NASDAQ_API_KEY = os.getenv("NASDAQ_API_KEY", "")
 DEFAULT_TIMEZONE = timezone(timedelta(hours=-6))  # America/Chicago
 TIMEZONE = os.getenv("TIMEZONE", "America/Chicago")

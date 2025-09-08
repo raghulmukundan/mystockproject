@@ -199,14 +199,18 @@ export default function WatchlistDetail() {
 
   useEffect(() => {
     if (watchlist && watchlist.items.length > 0) {
-      const symbols = watchlist.items.map(item => item.symbol)
+      const symbols = watchlist.items
+        .map(item => item.symbol)
+        .filter(symbol => symbol && typeof symbol === 'string' && symbol.trim().length > 0)
       console.log('Watchlist loaded, fetching prices for symbols:', symbols)
-      loadStockPrices(symbols).then(prices => {
-        console.log('Setting price data:', prices)
-        setPriceData(prices)
-      }).catch(error => {
-        console.error('Failed to load stock prices:', error)
-      })
+      if (symbols.length > 0) {
+        loadStockPrices(symbols).then(prices => {
+          console.log('Setting price data:', prices)
+          setPriceData(prices)
+        }).catch(error => {
+          console.error('Failed to load stock prices:', error)
+        })
+      }
     }
   }, [watchlist])
 
@@ -343,6 +347,7 @@ export default function WatchlistDetail() {
   }
 
   const calculatePerformance = (item: WatchlistItem) => {
+    if (!item.symbol) return null
     const price = priceData[item.symbol]
     if (!price || !item.entry_price) return null
 
@@ -495,13 +500,16 @@ export default function WatchlistDetail() {
   const filteredAndSortedItems = useMemo(() => {
     if (!watchlist) return []
     
-    let result = [...watchlist.items]
+    // Filter out items with undefined or null symbols first
+    let result = watchlist.items.filter(item => 
+      item.symbol && typeof item.symbol === 'string' && item.symbol.trim().length > 0
+    )
     
     // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
       result = result.filter(item => 
-        item.symbol.toLowerCase().includes(term) || 
+        (item.symbol && item.symbol.toLowerCase().includes(term)) || 
         (item.company_name && item.company_name.toLowerCase().includes(term)) ||
         (item.sector && item.sector.toLowerCase().includes(term)) ||
         (item.industry && item.industry.toLowerCase().includes(term))
@@ -543,16 +551,16 @@ export default function WatchlistDetail() {
       
       switch (sortField) {
         case 'symbol':
-          comparison = a.symbol.localeCompare(b.symbol)
+          comparison = (a.symbol || '').localeCompare(b.symbol || '')
           break
         case 'price':
-          const priceA = priceData[a.symbol]?.current_price || 0
-          const priceB = priceData[b.symbol]?.current_price || 0
+          const priceA = priceData[a.symbol || '']?.current_price || 0
+          const priceB = priceData[b.symbol || '']?.current_price || 0
           comparison = priceA - priceB
           break
         case 'change':
-          const changeA = priceData[a.symbol]?.change_percent || 0
-          const changeB = priceData[b.symbol]?.change_percent || 0
+          const changeA = priceData[a.symbol || '']?.change_percent || 0
+          const changeB = priceData[b.symbol || '']?.change_percent || 0
           comparison = changeA - changeB
           break
         case 'entry':
