@@ -19,12 +19,17 @@ router = APIRouter()
 class PriceRecord(BaseModel):
     symbol: str
     date: str
+    country: str
+    asset_type: str
     open: float
     high: float
     low: float
     close: float
     volume: int
+    open_interest: Optional[int] = 0
     source: str
+    original_filename: Optional[str] = None
+    folder_path: Optional[str] = None
 
 class PricesBrowserResponse(BaseModel):
     prices: List[PriceRecord]
@@ -41,6 +46,8 @@ async def browse_prices(
     page_size: int = Query(50, ge=1, le=1000, description="Items per page"),
     symbol: Optional[str] = Query(None, description="Filter by symbol (exact match)"),
     symbol_contains: Optional[str] = Query(None, description="Filter by symbol containing text"),
+    country: Optional[str] = Query(None, description="Filter by country (us, uk, de, etc.)"),
+    asset_type: Optional[str] = Query(None, description="Filter by asset type (stock, etf, etc.)"),
     date_from: Optional[str] = Query(None, description="Filter from date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Filter to date (YYYY-MM-DD)"),
     source: Optional[str] = Query(None, description="Filter by source"),
@@ -83,6 +90,12 @@ async def browse_prices(
                 query = query.filter(HistoricalPrice.symbol == symbol.upper())
             elif symbol_contains:
                 query = query.filter(HistoricalPrice.symbol.contains(symbol_contains.upper()))
+            
+            if country:
+                query = query.filter(HistoricalPrice.country == country.lower())
+            
+            if asset_type:
+                query = query.filter(HistoricalPrice.asset_type == asset_type.lower())
             
             if date_from:
                 query = query.filter(HistoricalPrice.date >= date_from)
@@ -141,24 +154,34 @@ async def browse_prices(
                 prices.append(PriceRecord(
                     symbol=price.symbol,
                     date=price.date,
+                    country=price.country,
+                    asset_type=price.asset_type,
                     open=price.open,
                     high=price.high,
                     low=price.low,
                     close=price.close,
                     volume=price.volume,
-                    source=price.source
+                    open_interest=price.open_interest,
+                    source=price.source,
+                    original_filename=price.original_filename,
+                    folder_path=price.folder_path
                 ))
             else:  # current_cache
                 # Map current price cache to OHLCV format (limited data)
                 prices.append(PriceRecord(
                     symbol=price.symbol,
                     date="current",  # No date in current cache
+                    country="us",  # Default for current cache
+                    asset_type="stock",  # Default for current cache
                     open=price.current_price,  # Use current price for all OHLC
                     high=price.current_price,
                     low=price.current_price,
                     close=price.current_price,
                     volume=price.volume or 0,
-                    source=f"cache-{price.source}"
+                    open_interest=0,
+                    source=f"cache-{price.source}",
+                    original_filename=None,
+                    folder_path=None
                 ))
         
         return PricesBrowserResponse(

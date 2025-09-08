@@ -51,3 +51,4 @@ htmlcov/
 # Build outputs
 dist/
 build/
+data/

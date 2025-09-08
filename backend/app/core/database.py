@@ -4,11 +4,13 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import DATABASE_URL
 
 def configure_sqlite_pragmas(connection, connection_record):
-    """Configure SQLite pragmas for better performance and concurrency"""
+    """Configure SQLite pragmas - avoid WAL mode to prevent Docker issues"""
     try:
-        # Only set the most basic pragmas to avoid I/O issues
         connection.execute("PRAGMA foreign_keys=ON")
-        print("Successfully set basic SQLite pragmas")
+        connection.execute("PRAGMA journal_mode=DELETE")  # Use DELETE mode instead of WAL
+        connection.execute("PRAGMA synchronous=NORMAL")
+        connection.execute("PRAGMA cache_size=10000")
+        print("Successfully set SQLite pragmas (DELETE mode)")
     except Exception as e:
         print(f"Warning: Could not set SQLite pragmas: {e}")
         # Continue without pragmas if needed
@@ -38,12 +40,11 @@ def get_db():
         db.close()
 
 def init_db():
-    # Temporarily skip table creation due to SQLite I/O error
-    print("Skipping database initialization due to SQLite I/O issues")
+    print("Initializing clean database...")
     try:
         from app.models import watchlist, watchlist_item, rule, symbol, price_daily, current_price
         Base.metadata.create_all(bind=engine)
         print("Database initialized successfully")
     except Exception as e:
-        print(f"Warning: Could not initialize database: {e}")
-        print("Continuing without database initialization...")
+        print(f"Error initializing database: {e}")
+        raise

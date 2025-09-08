@@ -17,6 +17,8 @@ interface ImportJob {
   total_rows: number;
   inserted_rows: number;
   error_count: number;
+  current_file?: string;
+  current_folder?: string;
 }
 
 interface ImportError {
@@ -133,25 +135,52 @@ export const HistoryLoader: React.FC = () => {
         <CardHeader>
           <CardTitle>History Data Loader</CardTitle>
           <p className="text-sm text-gray-600">
-            Import OHLCV price data from Stooq CSV files
+            Import OHLCV price data from Stooq folder structure supporting stocks, ETFs, and multiple countries.
+            Expected format: TICKER,PER,DATE,TIME,OPEN,HIGH,LOW,CLOSE,VOL,OPENINT
           </p>
+          <div className="text-xs text-gray-500 mt-2">
+            <strong>Supported structure:</strong> /country/exchange/asset_type/subfolders/symbol.country
+            <br />
+            <strong>Example:</strong> /us/nasdaq/stocks/1/aapl.us or /uk/lse/etfs/2/vusa.uk
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              type="text"
-              placeholder="Enter folder path (e.g., C:\\data\\stooq\\daily\\us\\nasdaq)"
-              value={folderPath}
-              onChange={(e) => setFolderPath(e.target.value)}
-              disabled={loading || (currentJob?.status === 'running')}
-              className="flex-1"
-            />
-            <Button 
-              onClick={startImport}
-              disabled={loading || (currentJob?.status === 'running')}
-            >
-              {loading ? 'Starting...' : 'Import'}
-            </Button>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Selected folder path will appear here..."
+                value={folderPath}
+                disabled={true}
+                className="flex-1 bg-gray-50"
+              />
+              <Button 
+                onClick={() => {
+                  // For now, revert to text input since browser folder picker has path limitations
+                  // We'll need the user to manually enter the full absolute path
+                  const userPath = prompt('Please enter the full absolute path to your Stooq data folder:\n\nExample: C:\\data\\stooq\\daily\n        /home/user/data/stooq/daily');
+                  if (userPath && userPath.trim()) {
+                    setFolderPath(userPath.trim());
+                  }
+                }}
+                disabled={loading || (currentJob?.status === 'running')}
+                variant="outline"
+              >
+                Enter Folder Path
+              </Button>
+              <Button 
+                onClick={startImport}
+                disabled={loading || (currentJob?.status === 'running') || !folderPath.trim()}
+              >
+                {loading ? 'Starting...' : 'Import'}
+              </Button>
+            </div>
+            
+            {folderPath && (
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">Selected folder:</span> {folderPath}
+              </div>
+            )}
           </div>
 
           {message && (
@@ -191,12 +220,26 @@ export const HistoryLoader: React.FC = () => {
             </div>
 
             {currentJob.status === 'running' && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span>Processing files...</span>
                   <span>{currentJob.processed_files} / {currentJob.total_files}</span>
                 </div>
                 <Progress value={getProgressPercentage()} />
+                
+                {currentJob.current_folder && (
+                  <div className="text-xs text-gray-600">
+                    <div className="font-medium">Current Folder:</div>
+                    <div className="font-mono bg-gray-50 p-1 rounded">{currentJob.current_folder}</div>
+                  </div>
+                )}
+                
+                {currentJob.current_file && (
+                  <div className="text-xs text-gray-600">
+                    <div className="font-medium">Current File:</div>
+                    <div className="font-mono bg-gray-50 p-1 rounded">{currentJob.current_file}</div>
+                  </div>
+                )}
               </div>
             )}
 

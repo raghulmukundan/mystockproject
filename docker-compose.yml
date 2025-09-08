@@ -6,11 +6,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:///./data/stock_watchlist_v2.db
+      - DATABASE_URL=sqlite:///./data/stock_watchlist_clean.db
       - TZ=America/Chicago
       - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
     volumes:
       - ./backend:/app
+      - C:\Users\raghu\Downloads:/downloads
     networks:
       - app-network
 

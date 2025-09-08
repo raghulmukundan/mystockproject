@@ -19,22 +19,8 @@ async def lifespan(app: FastAPI):
     # Startup
     init_db()
     
-    # Auto-populate universe data on startup (ONLY real data)
-    try:
-        from app.services.universe.service import UniverseService
-        universe_service = UniverseService()
-        
-        # Check if data already exists
-        stats = universe_service.get_stats()
-        if stats['count'] == 0:
-            print("Universe data not found. Downloading real NASDAQ data...")
-            result = universe_service.refresh_symbols(download=True)  # Only real data
-            print(f"Universe auto-populated with real data: {result}")
-        else:
-            print(f"Universe data already exists: {stats['count']} symbols")
-    except Exception as e:
-        print(f"ERROR: Failed to auto-populate universe data with real NASDAQ data: {e}")
-        print("Universe will remain empty until real data can be downloaded.")
+    # Temporarily disable universe auto-population to allow clean startup
+    print("Universe auto-population disabled - database startup successful")
     
     # Start price cache background refresh
     try:

@@ -28,18 +28,39 @@ except ImportError:
         stooq_symbol = Column(Text, nullable=False)  # derived: aapl.us, brk-b.us
         updated_at = Column(Text, nullable=False)  # ISO8601 UTC
 
-# Historical OHLCV price data (replaces prices_daily)
+# Historical OHLCV price data (enhanced for ETFs, countries, asset types)
 class HistoricalPrice(Base):
     __tablename__ = "historical_prices"
     
-    symbol = Column(String, primary_key=True)   # e.g., AAPL (no .US)
-    date   = Column(String, primary_key=True)   # YYYY-MM-DD
+    symbol = Column(String, primary_key=True)    # e.g., AAPL (base symbol without country suffix)
+    date   = Column(String, primary_key=True)    # YYYY-MM-DD
+    country = Column(String, primary_key=True)   # e.g., 'us', 'uk', 'de'
+    asset_type = Column(String, primary_key=True) # 'stock', 'etf', 'index', 'bond', 'commodity', 'forex'
     open   = Column(Float, nullable=False)
     high   = Column(Float, nullable=False)
     low    = Column(Float, nullable=False)
     close  = Column(Float, nullable=False)
     volume = Column(Integer, nullable=False, default=0)
-    source = Column(String,  nullable=False)    # 'stooq' | 'schwab' | ...
+    open_interest = Column(Integer, nullable=True, default=0)  # for futures/options
+    source = Column(String, nullable=False)      # 'stooq' | 'schwab' | ...
+    original_filename = Column(String, nullable=True)  # e.g., 'aapl.us.txt'
+    folder_path = Column(String, nullable=True)  # e.g., 'daily/us/nasdaq/stocks'
+
+# Asset metadata table for normalization
+class AssetMetadata(Base):
+    __tablename__ = "asset_metadata"
+    
+    symbol = Column(String, primary_key=True)       # e.g., AAPL
+    country = Column(String, primary_key=True)      # e.g., 'us', 'uk', 'de'
+    asset_type = Column(String, nullable=False)     # 'stock', 'etf', 'index', etc.
+    exchange = Column(String, nullable=True)        # e.g., 'nasdaq', 'nyse', 'lse'
+    name = Column(String, nullable=True)            # Full company/asset name
+    sector = Column(String, nullable=True)          # Business sector
+    industry = Column(String, nullable=True)        # Industry classification
+    market_cap = Column(String, nullable=True)      # Market cap category
+    currency = Column(String, nullable=True)        # Trading currency
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 # Tracking tables for import operations
 class ImportJob(Base):
@@ -114,7 +135,7 @@ except ImportError:
     # Fallback for when running outside of app context
     from dotenv import load_dotenv
     load_dotenv()
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/stock_watchlist.db")
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/stock_watchlist_clean.db")
     DATA_DIR = os.getenv("DATA_DIR", "./data")
 
 # Create data directory if it doesn't exist
