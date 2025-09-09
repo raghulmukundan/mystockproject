@@ -1,10 +1,11 @@
 import os
 import csv
 import glob
+import hashlib
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
-from src.db.models import HistoricalPrice, ImportJob, ImportError, get_db
+from src.db.models import HistoricalPrice, ImportJob, ImportError, ProcessedFile, get_db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,7 @@ class StooqImporter:
         return import_job.id
     
     def _process_folder(self, import_job: ImportJob) -> None:
-        """Process all files in the nested folder structure"""
+        """Process all files in the nested folder structure with smart resume capability"""
         folder_path = import_job.folder_path
         
         # Find all supported files recursively (both .csv and .us extensions)
@@ -103,27 +104,43 @@ class StooqImporter:
         
         logger.info(f"Found {len(csv_files)} files to process in folder structure")
         
+        # Get already processed files for this job (for resume functionality)
+        processed_files_records = self.db.query(ProcessedFile).filter(
+            ProcessedFile.import_job_id == import_job.id,
+            ProcessedFile.status == 'completed'
+        ).all()
+        
+        processed_files_set = {record.file_path for record in processed_files_records}
+        logger.info(f"Found {len(processed_files_set)} already processed files to skip")
+        
         for csv_file in csv_files:
             try:
+                # Check if file was already processed successfully
+                if csv_file in processed_files_set:
+                    # Validate the processed file still matches (size, modification time)
+                    if self._validate_processed_file(import_job.id, csv_file):
+                        logger.info(f"Skipping already processed file: {os.path.basename(csv_file)}")
+                        import_job.processed_files += 1
+                        self.db.commit()
+                        continue
+                    else:
+                        logger.info(f"File changed since processing, re-processing: {os.path.basename(csv_file)}")
+                
                 # Update current progress
                 import_job.current_file = os.path.basename(csv_file)
                 import_job.current_folder = os.path.dirname(csv_file).replace(folder_path, '').strip('/')
                 self.db.commit()
                 
-                self._process_csv_file(import_job, csv_file)
+                # Process the file with tracking
+                self._process_csv_file_with_tracking(import_job, csv_file)
                 import_job.processed_files += 1
                 self.db.commit()
                 
             except Exception as e:
                 logger.error(f"Error processing file {csv_file}: {str(e)}")
                 
-                error = ImportError(
-                    import_job_id=import_job.id,
-                    file_path=csv_file,
-                    error_type='FILE_PROCESSING_ERROR',
-                    error_message=str(e)
-                )
-                self.db.add(error)
+                # Record the error
+                self._record_error(import_job.id, csv_file, 'FileProcessingError', str(e))
                 import_job.error_count += 1
                 self.db.commit()
     
@@ -248,8 +265,148 @@ class StooqImporter:
             'folder_path': os.path.dirname(csv_file).replace(os.sep, '/')
         }
     
-    def _process_csv_row(self, import_job: ImportJob, file_info: dict, row: List[str], row_number: int, csv_file: str) -> None:
-        """Process a single CSV row with new format: TICKER,PER,DATE,TIME,OPEN,HIGH,LOW,CLOSE,VOL,OPENINT"""
+    def _validate_processed_file(self, import_job_id: int, file_path: str) -> bool:
+        """Validate that a processed file hasn't changed since it was processed"""
+        try:
+            # Get file stats
+            file_stat = os.stat(file_path)
+            file_size = file_stat.st_size
+            file_modified = datetime.fromtimestamp(file_stat.st_mtime)
+            
+            # Get processed file record
+            processed_file = self.db.query(ProcessedFile).filter(
+                ProcessedFile.import_job_id == import_job_id,
+                ProcessedFile.file_path == file_path,
+                ProcessedFile.status == 'completed'
+            ).first()
+            
+            if not processed_file:
+                return False
+            
+            # Check if file size and modification time match
+            size_matches = processed_file.file_size == file_size
+            time_matches = abs((processed_file.file_modified_time - file_modified).total_seconds()) < 2  # 2 second tolerance
+            
+            return size_matches and time_matches
+            
+        except Exception as e:
+            logger.error(f"Error validating processed file {file_path}: {e}")
+            return False
+    
+    def _process_csv_file_with_tracking(self, import_job: ImportJob, csv_file: str) -> None:
+        """Process a CSV file with detailed tracking for resume functionality"""
+        try:
+            # Get file stats
+            file_stat = os.stat(csv_file)
+            file_size = file_stat.st_size
+            file_modified = datetime.fromtimestamp(file_stat.st_mtime)
+            
+            # Create or get processed file record
+            processed_file = self.db.query(ProcessedFile).filter(
+                ProcessedFile.import_job_id == import_job.id,
+                ProcessedFile.file_path == csv_file
+            ).first()
+            
+            if not processed_file:
+                processed_file = ProcessedFile(
+                    import_job_id=import_job.id,
+                    file_path=csv_file,
+                    file_size=file_size,
+                    file_modified_time=file_modified,
+                    status='processing'
+                )
+                self.db.add(processed_file)
+                self.db.commit()
+            else:
+                # Update for reprocessing
+                processed_file.status = 'processing'
+                processed_file.processing_start = datetime.utcnow()
+                processed_file.processing_end = None
+                self.db.commit()
+            
+            # Process the file using existing logic
+            rows_inserted = 0
+            rows_updated = 0
+            rows_processed = 0
+            
+            # Process the file and track detailed results
+            file_info = self._extract_file_metadata(csv_file)
+            
+            with open(csv_file, 'r', encoding='utf-8', errors='ignore') as f:
+                reader = csv.reader(f)
+                
+                for row_number, row in enumerate(reader, 1):
+                    # Skip empty rows
+                    if not row or all(not cell.strip() for cell in row):
+                        continue
+                        
+                    try:
+                        # Process the row and get tracking info
+                        row_result = self._process_csv_row(import_job, file_info, row, row_number, csv_file)
+                        
+                        rows_processed += 1
+                        if row_result['inserted']:
+                            rows_inserted += 1
+                            import_job.inserted_rows += 1
+                        if row_result['updated']:
+                            rows_updated += 1
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing row {row_number} in {csv_file}: {str(e)}")
+                        self._record_error(import_job.id, csv_file, 'RowProcessingError', f"Row {row_number}: {str(e)}", row_number)
+                        import_job.error_count += 1
+            
+            # Commit all changes for this file
+            self.db.commit()
+            
+            # Update processed file record
+            processed_file.rows_processed = rows_processed
+            processed_file.rows_inserted = rows_inserted
+            processed_file.rows_updated = rows_updated
+            processed_file.processing_end = datetime.utcnow()
+            processed_file.status = 'completed'
+            
+            self.db.commit()
+            logger.info(f"Successfully processed file: {os.path.basename(csv_file)} ({rows_processed} rows)")
+            
+        except Exception as e:
+            # Mark file as failed
+            if 'processed_file' in locals():
+                processed_file.status = 'failed'
+                processed_file.processing_end = datetime.utcnow()
+                self.db.commit()
+            raise e
+    
+    def _count_csv_rows(self, csv_file: str) -> int:
+        """Count rows in CSV file for validation"""
+        try:
+            with open(csv_file, 'r', encoding='utf-8', errors='ignore') as f:
+                reader = csv.reader(f)
+                # Skip header if present
+                next(reader, None)
+                return sum(1 for row in reader)
+        except Exception as e:
+            logger.warning(f"Could not count rows in {csv_file}: {e}")
+            return 0
+    
+    def _record_error(self, import_job_id: int, file_path: str, error_type: str, error_message: str, line_number: int = None) -> None:
+        """Record an import error"""
+        try:
+            error = ImportError(
+                import_job_id=import_job_id,
+                file_path=file_path,
+                error_type=error_type,
+                error_message=error_message,
+                line_number=line_number
+            )
+            self.db.add(error)
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to record error: {e}")
+    
+    def _process_csv_row(self, import_job: ImportJob, file_info: dict, row: List[str], row_number: int, csv_file: str) -> dict:
+        """Process a single CSV row with new format: TICKER,PER,DATE,TIME,OPEN,HIGH,LOW,CLOSE,VOL,OPENINT
+        Returns dict with 'inserted': bool, 'updated': bool for tracking"""
         if len(row) < 9:
             raise ValueError(f"Insufficient columns in row (expected 10, got {len(row)}): {row}")
         
@@ -300,6 +457,7 @@ class StooqImporter:
             existing.source = 'stooq'
             existing.original_filename = file_info['filename']
             existing.folder_path = file_info['folder_path']
+            result = {'inserted': False, 'updated': True}
         else:
             # Insert new record with enhanced schema
             price_record = HistoricalPrice(
@@ -318,9 +476,12 @@ class StooqImporter:
                 folder_path=file_info['folder_path']
             )
             self.db.add(price_record)
+            result = {'inserted': True, 'updated': False}
             
         # Also update/create asset metadata
         self._update_asset_metadata(file_info)
+        
+        return result
     
     def _update_asset_metadata(self, file_info: dict) -> None:
         """Update or create asset metadata"""

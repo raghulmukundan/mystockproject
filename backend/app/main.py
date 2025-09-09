@@ -9,6 +9,7 @@ from app.api.rss_feed import router as rss_router
 from app.api.universe import router as universe_router
 from app.api.oauth import router as oauth_router
 from app.api.price_history import router as price_history_router
+from app.api.jobs import router as jobs_router
 from src.api.import_api import router as import_router
 from src.api.prices_browser import router as prices_browser_router
 from app.core.database import init_db
@@ -47,7 +48,7 @@ app = FastAPI(title="Stock Watchlist API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,6 +62,7 @@ app.include_router(rss_router, prefix="/api")
 app.include_router(universe_router, prefix="/api")
 app.include_router(oauth_router)
 app.include_router(price_history_router, prefix="/api")
+app.include_router(jobs_router, prefix="/api")
 app.include_router(import_router)
 app.include_router(prices_browser_router)
 

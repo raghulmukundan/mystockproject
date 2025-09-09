@@ -34,7 +34,11 @@
       "Read(//c/Users/raghu/Downloads/d_us_txt/data/daily/us/**)",
       "Bash(del /f data\\stock_watchlist_clean.db-wal data\\stock_watchlist_clean.db-shm)",
       "Bash(pkill:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(alembic revision:*)",
+      "Bash(psql:*)",
+      "Bash(make:*)",
+      "Bash(uvicorn:*)"
     ],
     "deny": [],
     "ask": []

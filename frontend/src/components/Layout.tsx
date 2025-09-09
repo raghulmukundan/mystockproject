@@ -6,7 +6,8 @@ import {
   HomeIcon,
   BellIcon,
   CloudArrowDownIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  CogIcon
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import AlertBadge from './AlertBadge'
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Upload', href: '/upload', icon: DocumentArrowUpIcon },
   { name: 'History Import', href: '/history-import', icon: CloudArrowDownIcon },
   { name: 'Prices Browser', href: '/prices-browser', icon: MagnifyingGlassIcon },
+  { name: 'Job Settings', href: '/job-settings', icon: CogIcon },
 ]
 
 export default function Layout({ children }: LayoutProps) {

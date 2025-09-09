@@ -27,6 +27,8 @@ class ImportStatusResponse(BaseModel):
     total_rows: int
     inserted_rows: int
     error_count: int
+    current_file: Optional[str] = None
+    current_folder: Optional[str] = None
 
 class ImportErrorResponse(BaseModel):
     id: int

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Integer, Text, Float, Index, DateTime
+from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Text, Float, Index, DateTime, Boolean
 from sqlalchemy.orm import sessionmaker
 import os
 from datetime import datetime
@@ -40,8 +40,8 @@ class HistoricalPrice(Base):
     high   = Column(Float, nullable=False)
     low    = Column(Float, nullable=False)
     close  = Column(Float, nullable=False)
-    volume = Column(Integer, nullable=False, default=0)
-    open_interest = Column(Integer, nullable=True, default=0)  # for futures/options
+    volume = Column(BigInteger, nullable=False, default=0)
+    open_interest = Column(BigInteger, nullable=True, default=0)  # for futures/options
     source = Column(String, nullable=False)      # 'stooq' | 'schwab' | ...
     original_filename = Column(String, nullable=True)  # e.g., 'aapl.us.txt'
     folder_path = Column(String, nullable=True)  # e.g., 'daily/us/nasdaq/stocks'
@@ -71,11 +71,13 @@ class ImportJob(Base):
     completed_at = Column(DateTime)
     status = Column(String, nullable=False, default='running')  # 'running' | 'completed' | 'failed'
     folder_path = Column(String, nullable=False)
-    total_files = Column(Integer, default=0)
-    processed_files = Column(Integer, default=0)
-    total_rows = Column(Integer, default=0)
-    inserted_rows = Column(Integer, default=0)
-    error_count = Column(Integer, default=0)
+    total_files = Column(BigInteger, default=0)
+    processed_files = Column(BigInteger, default=0)
+    total_rows = Column(BigInteger, default=0)
+    inserted_rows = Column(BigInteger, default=0)
+    error_count = Column(BigInteger, default=0)
+    current_file = Column(String, nullable=True)  # Currently processing file
+    current_folder = Column(String, nullable=True)  # Currently processing folder
 
 class ImportError(Base):
     __tablename__ = "import_errors"
@@ -87,6 +89,22 @@ class ImportError(Base):
     line_number = Column(Integer)
     error_type = Column(String, nullable=False)
     error_message = Column(Text, nullable=False)
+
+class ProcessedFile(Base):
+    __tablename__ = "processed_files"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    import_job_id = Column(Integer, nullable=False)
+    file_path = Column(String, nullable=False)
+    file_size = Column(BigInteger, nullable=False)
+    file_modified_time = Column(DateTime, nullable=False)
+    rows_processed = Column(Integer, nullable=False, default=0)
+    rows_inserted = Column(Integer, nullable=False, default=0)
+    rows_updated = Column(Integer, nullable=False, default=0)
+    processing_start = Column(DateTime, nullable=False, default=datetime.utcnow)
+    processing_end = Column(DateTime, nullable=True)
+    checksum = Column(String, nullable=True)  # Optional file hash for integrity
+    status = Column(String, nullable=False, default='processing')  # processing, completed, failed
 
 class EodScan(Base):
     __tablename__ = "eod_scans"
@@ -110,6 +128,45 @@ class EodScanError(Base):
     error_type = Column(String, nullable=False)
     error_message = Column(Text, nullable=False)
     http_status = Column(Integer)
+
+class JobConfiguration(Base):
+    __tablename__ = "job_configurations"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_name = Column(String, nullable=False, unique=True)  # 'market_data_refresh', 'nasdaq_universe_refresh', 'eod_price_scan'
+    description = Column(String, nullable=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    schedule_type = Column(String, nullable=False)  # 'interval', 'cron'
+    
+    # Interval scheduling (for every X minutes/hours)
+    interval_value = Column(Integer, nullable=True)  # e.g., 30
+    interval_unit = Column(String, nullable=True)   # 'minutes', 'hours'
+    
+    # Cron scheduling (for specific times)
+    cron_day_of_week = Column(String, nullable=True)  # 'sun', 'mon', etc.
+    cron_hour = Column(Integer, nullable=True)        # 0-23
+    cron_minute = Column(Integer, nullable=True)      # 0-59
+    
+    # Market hours constraints
+    only_market_hours = Column(Boolean, nullable=False, default=False)
+    market_start_hour = Column(Integer, nullable=True, default=9)    # 9 AM
+    market_end_hour = Column(Integer, nullable=True, default=16)     # 4 PM
+    
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class JobExecutionStatus(Base):
+    __tablename__ = "job_execution_status"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_name = Column(String, nullable=False)
+    status = Column(String, nullable=False)  # 'running', 'completed', 'failed', 'skipped'
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+    records_processed = Column(BigInteger, nullable=True, default=0)
+    error_message = Column(Text, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
 
 # Indexes (avoid conflicts with existing app models)
 try:

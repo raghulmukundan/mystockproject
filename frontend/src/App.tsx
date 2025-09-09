@@ -10,6 +10,7 @@ import PricesBrowser from './pages/PricesBrowser'
 
 import Watchlists from './pages/Watchlists'
 import WatchlistDetail from './pages/WatchlistDetail'
+import { JobSettings } from './pages/JobSettings'
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <Route path="/universe" element={<Universe />} />
         <Route path="/history-import" element={<HistoryImport />} />
         <Route path="/prices-browser" element={<PricesBrowser />} />
+        <Route path="/job-settings" element={<JobSettings />} />
       </Routes>
     </Layout>
   )
