@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -36,6 +37,7 @@ interface PricesStats {
 }
 
 export const PricesBrowser: React.FC = () => {
+  const { pathname } = useLocation();
   const [data, setData] = useState<PricesBrowserData | null>(null);
   const [stats, setStats] = useState<PricesStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,9 +98,11 @@ export const PricesBrowser: React.FC = () => {
   };
 
   useEffect(() => {
+    if (pathname !== '/prices-browser') return;
     fetchStats();
     fetchPrices(1);
-  }, [pageSize, sortBy, sortOrder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageSize, sortBy, sortOrder, pathname]);
 
   const handleSearch = () => {
     fetchPrices(1);

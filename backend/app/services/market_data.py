@@ -42,9 +42,26 @@ def get_multiple_stocks_data(symbols: List[str]) -> Dict[str, Dict]:
             data[symbol] = stock_data
     return data
 
+def _is_market_open(now: datetime | None = None) -> bool:
+    """Return True if within market hours (8:30–15:00 America/Chicago, Mon–Fri)."""
+    now = now or datetime.now(DEFAULT_TIMEZONE)
+    # Convert to America/Chicago offset (DEFAULT_TIMEZONE)
+    local = now.astimezone(DEFAULT_TIMEZONE)
+    # 0=Mon ... 6=Sun; market open Mon–Fri
+    if local.weekday() >= 5:
+        return False
+    minutes = local.hour * 60 + local.minute
+    return (8 * 60 + 30) <= minutes < (15 * 60)
+
+
 def update_market_data():
-    """Update market data - placeholder for scheduled updates"""
-    print(f"Updating market data at {datetime.now()}")
+    """Update market data; skip when market is closed."""
+    now = datetime.now(DEFAULT_TIMEZONE)
+    if not _is_market_open(now):
+        print(f"Market closed — skipping update at {now.isoformat()}")
+        return
+    print(f"Updating market data at {now.isoformat()}")
+    # TODO: Fetch and cache prices for active watchlist symbols
 
 def get_historical_data(symbol: str, days: int = 30) -> pd.DataFrame:
     """Get historical data - returns empty DataFrame as Finnhub free tier doesn't include historical data"""

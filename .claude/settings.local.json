@@ -38,7 +38,8 @@
       "Bash(alembic revision:*)",
       "Bash(psql:*)",
       "Bash(make:*)",
-      "Bash(uvicorn:*)"
+      "Bash(uvicorn:*)",
+      "Bash(docker cp:*)"
     ],
     "deny": [],
     "ask": []

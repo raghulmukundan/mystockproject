@@ -5,6 +5,9 @@ from datetime import datetime
 from pydantic import BaseModel
 from app.core.database import get_db
 from src.db.models import JobConfiguration, JobExecutionStatus
+from app.core.scheduler import scheduler
+from app.services.market_data import _is_market_open
+from datetime import timedelta
 
 router = APIRouter()
 
@@ -54,6 +57,9 @@ class JobSummaryResponse(BaseModel):
     enabled: bool
     schedule_display: str
     last_run: Optional[JobStatusResponse] = None
+
+class NextMarketRefreshResponse(BaseModel):
+    next_run_at: Optional[str]
 
 @router.get("/jobs", response_model=List[JobConfigurationResponse])
 def get_all_jobs(db: Session = Depends(get_db)):
@@ -129,6 +135,27 @@ def get_jobs_summary(db: Session = Depends(get_db)):
         ))
     
     return result
+
+@router.get("/jobs/next-market-refresh", response_model=NextMarketRefreshResponse)
+def get_next_market_refresh():
+    """Return the next effective market data refresh time considering market hours."""
+    try:
+        job = scheduler.get_job("update_market_data")
+        if not job or not job.next_run_time:
+            return NextMarketRefreshResponse(next_run_at=None)
+        # Next scheduled run time from APScheduler (tz-aware)
+        dt_local = job.next_run_time
+
+        # If market is closed at the next tick, advance in 30-minute steps until open
+        attempts = 0
+        step = timedelta(minutes=30)
+        while attempts < 48 and not _is_market_open(dt_local):
+            dt_local = dt_local + step
+            attempts += 1
+
+        return NextMarketRefreshResponse(next_run_at=dt_local.isoformat())
+    except Exception:
+        return NextMarketRefreshResponse(next_run_at=None)
 
 @router.put("/jobs/{job_name}", response_model=JobConfigurationResponse)
 def update_job_configuration(job_name: str, update: JobConfigurationUpdate, db: Session = Depends(get_db)):

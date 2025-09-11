@@ -106,6 +106,19 @@ class ProcessedFile(Base):
     checksum = Column(String, nullable=True)  # Optional file hash for integrity
     status = Column(String, nullable=False, default='processing')  # processing, completed, failed
 
+class FailedFile(Base):
+    __tablename__ = "failed_files"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    import_job_id = Column(Integer, nullable=False)
+    file_path = Column(String, nullable=False)
+    error_type = Column(String, nullable=False)  # 'session_concurrency', 'parse_error', etc.
+    error_message = Column(Text, nullable=False)
+    failed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    retry_count = Column(Integer, nullable=False, default=0)
+    last_retry_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False, default='pending')  # 'pending', 'retrying', 'completed', 'permanent_failure'
+
 class EodScan(Base):
     __tablename__ = "eod_scans"
     
@@ -173,7 +186,7 @@ try:
     # Only create indexes if we're using the fallback Symbol model
     from app.models.symbol import Symbol as AppSymbol
     # App models already have the Symbol indexes
-except ImportError:
+except Exception:
     # Create indexes only in fallback case
     Index('symbols_exchange_idx', Symbol.listing_exchange)
     Index('symbols_etf_idx', Symbol.etf)
@@ -182,13 +195,15 @@ except ImportError:
 Index("historical_prices_symbol_date_idx", HistoricalPrice.symbol, HistoricalPrice.date)
 Index("import_jobs_status_idx", ImportJob.status)
 Index("import_errors_job_idx", ImportError.import_job_id)
+Index("failed_files_job_idx", FailedFile.import_job_id)
+Index("failed_files_status_idx", FailedFile.status)
 Index("eod_scans_status_idx", EodScan.status)
 Index("eod_scan_errors_scan_idx", EodScanError.eod_scan_id)
 
 # Import config from centralized location
 try:
     from app.core.config import DATABASE_URL, DATA_DIR
-except ImportError:
+except Exception:
     # Fallback for when running outside of app context
     from dotenv import load_dotenv
     load_dotenv()

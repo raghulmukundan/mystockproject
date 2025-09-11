@@ -92,35 +92,34 @@ const isMarketOpen = (): boolean => {
   return totalMinutes >= marketOpen && totalMinutes < marketClose
 }
 
-const getNextRefreshTime = (intervalMinutes: number = 30): Date => {
+const computeLocalNext = (): Date => {
   const now = new Date()
-  
-  // If market is open, next refresh is in 30 minutes
   if (isMarketOpen()) {
-    const nextRefresh = new Date(now)
-    nextRefresh.setMinutes(Math.ceil(now.getMinutes() / intervalMinutes) * intervalMinutes, 0, 0)
-    return nextRefresh
+    const next = new Date(now)
+    next.setMinutes(Math.ceil(now.getMinutes() / 30) * 30, 0, 0)
+    return next
   }
-  
-  // If market is closed, next refresh is at next market open (8:30 AM CST next trading day)
-  const cstTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Chicago"}))
+  const cstTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
   const nextOpen = new Date(cstTime)
-  
-  // Set to 8:30 AM CST
   nextOpen.setHours(8, 30, 0, 0)
-  
-  // If we're past 8:30 AM today or it's weekend, move to next day
-  if (cstTime.getHours() >= 8 && cstTime.getMinutes() >= 30 || cstTime.getDay() === 0 || cstTime.getDay() === 6) {
+  if ((cstTime.getHours() > 8) || (cstTime.getHours() === 8 && cstTime.getMinutes() >= 30) || cstTime.getDay() === 0 || cstTime.getDay() === 6) {
     nextOpen.setDate(nextOpen.getDate() + 1)
   }
-  
-  // Skip weekends
   while (nextOpen.getDay() === 0 || nextOpen.getDay() === 6) {
     nextOpen.setDate(nextOpen.getDate() + 1)
   }
-  
-  // Convert back to local time
-  return new Date(nextOpen.toLocaleString("en-US", {timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone}))
+  return nextOpen
+}
+
+const getServerNextRefresh = async (): Promise<Date | null> => {
+  try {
+    const res = await fetch('/api/jobs/next-market-refresh')
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.next_run_at ? new Date(data.next_run_at) : computeLocalNext()
+  } catch {
+    return computeLocalNext()
+  }
 }
 
 export default function WatchlistDetail() {
@@ -155,7 +154,7 @@ export default function WatchlistDetail() {
   const [selectedItems, setSelectedItems] = useState<number[]>([])
   const [isFavorite, setIsFavorite] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
-  const [nextRefresh, setNextRefresh] = useState<Date>(getNextRefreshTime())
+  const [nextRefresh, setNextRefresh] = useState<Date | null>(null)
   const [timeUntilRefresh, setTimeUntilRefresh] = useState<string>('')
 
   useEffect(() => {
@@ -175,23 +174,28 @@ export default function WatchlistDetail() {
       }
     }
     
-    // Update countdown timer every second
-    const timer = setInterval(updateCountdown, 1000)
-    
-    return () => {
-      clearInterval(timer)
-    }
+    // Fetch initial next run from backend
+    ;(async () => {
+      const next = await getServerNextRefresh()
+      if (next) setNextRefresh(next)
+    })()
   }, [id])
+
+  // Keep countdown aligned with current nextRefresh (avoid stale closure)
+  useEffect(() => {
+    const timer = setInterval(() => { updateCountdown() }, 1000)
+    return () => clearInterval(timer)
+  }, [nextRefresh])
   
-  const updateCountdown = () => {
+  const updateCountdown = async () => {
+    if (!nextRefresh) return
     const now = new Date()
     const diff = nextRefresh.getTime() - now.getTime()
-    
     if (diff <= 0) {
-      setNextRefresh(getNextRefreshTime())
+      const next = await getServerNextRefresh()
+      if (next) setNextRefresh(next)
       return
     }
-    
     const minutes = Math.floor(diff / 60000)
     const seconds = Math.floor((diff % 60000) / 1000)
     setTimeUntilRefresh(`${minutes}:${seconds.toString().padStart(2, '0')}`)

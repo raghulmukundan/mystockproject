@@ -71,35 +71,36 @@ const isMarketOpen = (): boolean => {
   return totalMinutes >= marketOpen && totalMinutes < marketClose
 }
 
-const getNextRefreshTime = (intervalMinutes: number = 30): Date => {
+const computeLocalNext = (): Date => {
+  // Fallback: compute next top-of-30-min slot in local time, or next market open
+  const isOpen = isMarketOpen()
   const now = new Date()
-  
-  // If market is open, next refresh is in 30 minutes
-  if (isMarketOpen()) {
-    const nextRefresh = new Date(now)
-    nextRefresh.setMinutes(Math.ceil(now.getMinutes() / intervalMinutes) * intervalMinutes, 0, 0)
-    return nextRefresh
+  if (isOpen) {
+    const next = new Date(now)
+    next.setMinutes(Math.ceil(now.getMinutes() / 30) * 30, 0, 0)
+    return next
   }
-  
-  // If market is closed, next refresh is at next market open (8:30 AM CST next trading day)
-  const cstTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Chicago"}))
+  const cstTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
   const nextOpen = new Date(cstTime)
-  
-  // Set to 8:30 AM CST
   nextOpen.setHours(8, 30, 0, 0)
-  
-  // If we're past 8:30 AM today or it's weekend, move to next day
-  if (cstTime.getHours() >= 8 && cstTime.getMinutes() >= 30 || cstTime.getDay() === 0 || cstTime.getDay() === 6) {
+  if ((cstTime.getHours() > 8) || (cstTime.getHours() === 8 && cstTime.getMinutes() >= 30) || cstTime.getDay() === 0 || cstTime.getDay() === 6) {
     nextOpen.setDate(nextOpen.getDate() + 1)
   }
-  
-  // Skip weekends
   while (nextOpen.getDay() === 0 || nextOpen.getDay() === 6) {
     nextOpen.setDate(nextOpen.getDate() + 1)
   }
-  
-  // Convert back to local time
-  return new Date(nextOpen.toLocaleString("en-US", {timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone}))
+  return nextOpen
+}
+
+const getServerNextRefresh = async (): Promise<Date | null> => {
+  try {
+    const res = await fetch('/api/jobs/next-market-refresh')
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.next_run_at ? new Date(data.next_run_at) : computeLocalNext()
+  } catch {
+    return computeLocalNext()
+  }
 }
 
 export default function Dashboard() {
@@ -132,29 +133,33 @@ export default function Dashboard() {
   
   // Index prices removed - now shown in TradingView widgets
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
-  const [nextRefresh, setNextRefresh] = useState<Date>(getNextRefreshTime())
+  const [nextRefresh, setNextRefresh] = useState<Date | null>(null)
   const [timeUntilRefresh, setTimeUntilRefresh] = useState<string>('')
 
   useEffect(() => {
     loadWatchlists()
-    
-    // Update countdown timer every second for display purposes only
-    const timer = setInterval(updateCountdown, 1000)
-    
+    // Fetch initial next refresh from backend
+    ;(async () => {
+      const next = await getServerNextRefresh()
+      if (next) setNextRefresh(next)
+    })()
     // Removed auto-refresh timer - let backend handle caching
-    // Manual refresh button is the only way to force price updates
-    
-    return () => {
-      clearInterval(timer)
-    }
   }, [])
 
-  const updateCountdown = () => {
+  // Keep countdown aligned with current nextRefresh (avoid stale closure)
+  useEffect(() => {
+    const timer = setInterval(() => { updateCountdown() }, 1000)
+    return () => clearInterval(timer)
+  }, [nextRefresh])
+
+  const updateCountdown = async () => {
+    if (!nextRefresh) return
     const now = new Date()
     const diff = nextRefresh.getTime() - now.getTime()
     
     if (diff <= 0) {
-      setNextRefresh(getNextRefreshTime())
+      const next = await getServerNextRefresh()
+      if (next) setNextRefresh(next)
       return
     }
     

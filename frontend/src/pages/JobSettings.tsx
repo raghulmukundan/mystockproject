@@ -55,7 +55,7 @@ export const JobSettings: React.FC = () => {
 
   const loadJobs = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/jobs');
+      const response = await fetch('/api/jobs');
       if (response.ok) {
         const data: JobConfiguration[] = await response.json();
         setJobs(data);
@@ -67,7 +67,7 @@ export const JobSettings: React.FC = () => {
 
   const loadJobsSummary = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/jobs/summary');
+      const response = await fetch('/api/jobs/summary');
       if (response.ok) {
         const data: JobSummary[] = await response.json();
         setJobsSummary(data);
@@ -82,7 +82,7 @@ export const JobSettings: React.FC = () => {
     setMessage('');
 
     try {
-      const response = await fetch(`http://localhost:8000/api/jobs/${jobName}`, {
+      const response = await fetch(`/api/jobs/${jobName}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)

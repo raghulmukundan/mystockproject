@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -31,14 +32,25 @@ interface ImportError {
 }
 
 export const HistoryLoader: React.FC = () => {
+  const { pathname } = useLocation();
   const [folderPath, setFolderPath] = useState('');
   const [currentJob, setCurrentJob] = useState<ImportJob | null>(null);
+  const [allJobs, setAllJobs] = useState<ImportJob[]>([]);
   const [errors, setErrors] = useState<ImportError[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Poll job status while running
+  // Automatically fetch all jobs when on the history-import route and poll for updates
   useEffect(() => {
+    if (pathname !== '/history-import') return;
+    fetchAllJobs();
+    const interval = setInterval(fetchAllJobs, 3000); // Poll every 3 seconds
+    return () => clearInterval(interval);
+  }, [pathname]);
+
+  // Poll current job status while running (only on history-import route)
+  useEffect(() => {
+    if (pathname !== '/history-import') return;
     if (!currentJob || currentJob.status !== 'running') return;
 
     const pollInterval = setInterval(async () => {
@@ -47,6 +59,9 @@ export const HistoryLoader: React.FC = () => {
         if (response.ok) {
           const updatedJob: ImportJob = await response.json();
           setCurrentJob(updatedJob);
+          
+          // Update the job in allJobs array too
+          setAllJobs(prev => prev.map(job => job.id === updatedJob.id ? updatedJob : job));
           
           // If job completed, fetch errors if any
           if (updatedJob.status !== 'running' && updatedJob.error_count > 0) {
@@ -59,7 +74,28 @@ export const HistoryLoader: React.FC = () => {
     }, 2000); // Poll every 2 seconds
 
     return () => clearInterval(pollInterval);
-  }, [currentJob]);
+  }, [currentJob, pathname]);
+
+  const fetchAllJobs = async () => {
+    try {
+      // Fetch all jobs from the backend
+      const response = await fetch('/api/import/status');
+      if (response.ok) {
+        const jobs: ImportJob[] = await response.json();
+        setAllJobs(jobs);
+        
+        // If we have a current job that's no longer running, update it
+        if (currentJob) {
+          const updatedCurrentJob = jobs.find(job => job.id === currentJob.id);
+          if (updatedCurrentJob) {
+            setCurrentJob(updatedCurrentJob);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching all jobs:', error);
+    }
+  };
 
   const fetchErrors = async (jobId: number) => {
     try {
@@ -89,7 +125,9 @@ export const HistoryLoader: React.FC = () => {
     return windowsPath;
   };
 
-  const startImport = async () => {
+  // Legacy normal import removed. Use startBulkImport only.
+
+  const startBulkImport = async () => {
     if (!folderPath.trim()) {
       setMessage('Please enter a folder path');
       return;
@@ -103,7 +141,7 @@ export const HistoryLoader: React.FC = () => {
       // Convert Windows path to Docker mount path
       const dockerPath = convertWindowsToDockerPath(folderPath.trim());
       
-      const response = await fetch('/api/import/start', {
+      const response = await fetch('/api/import/bulk-start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_path: dockerPath })
@@ -111,13 +149,19 @@ export const HistoryLoader: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
-        setMessage(result.message);
+        setMessage(`🚀 ${result.message} - This will import all files in minutes!`);
         
         // Start polling the job
         const statusResponse = await fetch(`/api/import/status/${result.import_job_id}`);
         if (statusResponse.ok) {
           const job: ImportJob = await statusResponse.json();
           setCurrentJob(job);
+          
+          // Add job to allJobs list
+          setAllJobs(prev => {
+            const exists = prev.some(j => j.id === job.id);
+            return exists ? prev.map(j => j.id === job.id ? job : j) : [...prev, job];
+          });
         }
       } else {
         const error = await response.json();
@@ -129,6 +173,45 @@ export const HistoryLoader: React.FC = () => {
 
     setLoading(false);
   };
+
+  const cleanupAll = async () => {
+    if (!confirm('This will delete all historical prices, import jobs, errors, and processed files. Are you sure?')) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+    setErrors([]);
+
+    try {
+      const response = await fetch('/api/import/cleanup', {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setMessage(`✅ Cleanup completed successfully! 
+        - ${result.deleted_jobs} import jobs deleted
+        - ${result.deleted_files} processed files deleted  
+        - ${result.deleted_errors} errors deleted
+        - ${result.deleted_failed_files} failed files deleted
+        - ${result.deleted_prices} historical prices deleted`);
+        
+        // Clear local state
+        setAllJobs([]);
+        setCurrentJob(null);
+        setErrors([]);
+      } else {
+        const error = await response.json();
+        setMessage(`Error during cleanup: ${error.detail}`);
+      }
+    } catch (error) {
+      setMessage(`Error during cleanup: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    setLoading(false);
+  };
+
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -148,8 +231,26 @@ export const HistoryLoader: React.FC = () => {
     return Math.round((currentJob.processed_files / currentJob.total_files) * 100);
   };
 
+  const getPhase = (job: ImportJob | null): string => {
+    if (!job) return '';
+    if (job.status === 'completed') return 'Completed';
+    if (job.status === 'failed') return 'Failed';
+    // Running phases
+    if (job.current_folder && job.current_folder.startsWith('COPY')) {
+      return 'Copying to database (final step)';
+    }
+    if (job.total_files > 0 && job.processed_files < job.total_files) {
+      return 'Preprocessing files';
+    }
+    if (job.total_files > 0 && job.processed_files === job.total_files) {
+      return 'Staging complete. Starting DB load';
+    }
+    return 'Running';
+  };
+
   return (
     <div className="space-y-6 p-6">
+      {/* Banner removed */}
       <Card>
         <CardHeader>
           <CardTitle>History Data Loader</CardTitle>
@@ -190,11 +291,22 @@ export const HistoryLoader: React.FC = () => {
               >
                 Enter Folder Path
               </Button>
+              {/* Legacy normal import button removed */}
               <Button 
-                onClick={startImport}
+                onClick={startBulkImport}
                 disabled={loading || (currentJob?.status === 'running') || !folderPath.trim()}
+                variant="secondary"
+                className="bg-green-600 text-white hover:bg-green-700"
               >
-                {loading ? 'Starting...' : 'Import'}
+                🚀 Bulk Import (Ultra Fast)
+              </Button>
+              <Button 
+                onClick={cleanupAll}
+                disabled={loading || (currentJob?.status === 'running')}
+                variant="destructive"
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                🗑️ Cleanup All
               </Button>
             </div>
             
@@ -221,6 +333,70 @@ export const HistoryLoader: React.FC = () => {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Import Jobs</CardTitle>
+          <p className="text-sm text-gray-600">
+            All import jobs are automatically fetched and updated. Click on a job to view detailed progress.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {allJobs.length > 0 ? (
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm text-gray-700">All Jobs (Most Recent First):</h4>
+              {allJobs.map((job) => (
+                <div 
+                  key={job.id}
+                  className={`p-3 border rounded cursor-pointer transition-colors ${
+                    currentJob?.id === job.id 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                  onClick={() => {
+                    setCurrentJob(job);
+                    if (job.error_count > 0) {
+                      fetchErrors(job.id);
+                    }
+                  }}
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="font-medium">Job #{job.id}</div>
+                      <Badge variant={getStatusBadgeVariant(job.status)}>
+                        {job.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {job.status === 'running' && job.total_files > 0 && (
+                        <span>{job.processed_files} / {job.total_files} files</span>
+                      )}
+                      {job.status === 'completed' && (
+                        <span>{job.inserted_rows} rows imported</span>
+                      )}
+                      {job.status === 'failed' && (
+                        <span className="text-red-600">{job.error_count} errors</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 truncate">
+                    {job.folder_path}
+                  </div>
+                  {job.status === 'running' && job.total_files > 0 && (
+                    <div className="mt-2">
+                      <Progress value={Math.round((job.processed_files / job.total_files) * 100)} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-gray-500 py-4">
+              No import jobs found. Start an import to see jobs here.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {currentJob && (
         <Card>
           <CardHeader>
@@ -232,6 +408,13 @@ export const HistoryLoader: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="text-sm">
+              <span className="font-medium">Phase:</span>{' '}
+              <span className="text-gray-700">{getPhase(currentJob)}</span>
+              {currentJob.status === 'running' && getPhase(currentJob).startsWith('Copying') && (
+                <span className="ml-2 text-xs text-gray-500">(Bulk import writes to DB at the end)</span>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="font-medium">Folder:</span>
@@ -252,7 +435,7 @@ export const HistoryLoader: React.FC = () => {
             {currentJob.status === 'running' && (
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span>Processing files...</span>
+                  <span>{getPhase(currentJob)}</span>
                   <span>{currentJob.processed_files} / {currentJob.total_files}</span>
                 </div>
                 <Progress value={getProgressPercentage()} />
@@ -283,12 +466,12 @@ export const HistoryLoader: React.FC = () => {
                 <div className="text-gray-500">Processed</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">{currentJob.inserted_rows}</div>
-                <div className="text-gray-500">Rows Inserted</div>
+                <div className="text-2xl font-bold text-purple-600">{currentJob.total_rows}</div>
+                <div className="text-gray-500">Rows Staged</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">{currentJob.error_count}</div>
-                <div className="text-gray-500">Errors</div>
+                <div className="text-2xl font-bold text-purple-600">{currentJob.inserted_rows}</div>
+                <div className="text-gray-500">Rows Inserted</div>
               </div>
             </div>
           </CardContent>
