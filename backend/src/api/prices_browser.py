@@ -44,6 +44,7 @@ class PricesBrowserResponse(BaseModel):
 async def browse_prices(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(50, ge=1, le=1000, description="Items per page"),
+    include_total: bool = Query(False, description="If true, also compute total_count/total_pages (expensive)"),
     symbol: Optional[str] = Query(None, description="Filter by symbol (exact match)"),
     symbol_contains: Optional[str] = Query(None, description="Filter by symbol containing text"),
     country: Optional[str] = Query(None, description="Filter by country (us, uk, de, etc.)"),
@@ -60,10 +61,10 @@ async def browse_prices(
     try:
         db = next(get_db())
         
-        # Check if historical_prices has data, fallback to current_prices if empty
-        historical_count = db.query(HistoricalPrice).count()
+        # Check if historical_prices has any data (cheap exists), fallback to current_prices if empty
+        hist_exists = db.query(HistoricalPrice.symbol).limit(1).first() is not None
         
-        if historical_count > 0:
+        if hist_exists:
             # Use historical prices table (OHLCV data)
             query = db.query(HistoricalPrice)
             data_source = "historical"
@@ -135,16 +136,20 @@ async def browse_prices(
             else:
                 query = query.order_by(asc(AppCurrentPrice.symbol))
         
-        # Get total count
-        total_count = query.count()
-        
-        # Apply pagination
+        # Get counts/pagination
         offset = (page - 1) * page_size
-        prices_data = query.offset(offset).limit(page_size).all()
-        
-        # Calculate pagination info
-        total_pages = (total_count + page_size - 1) // page_size
-        has_next = page < total_pages
+        if include_total:
+            total_count = query.count()
+            prices_data = query.offset(offset).limit(page_size).all()
+            total_pages = (total_count + page_size - 1) // page_size
+            has_next = page < total_pages
+        else:
+            # Efficient paging without COUNT(*): fetch one extra row to detect next page
+            rows = query.offset(offset).limit(page_size + 1).all()
+            has_next = len(rows) > page_size
+            prices_data = rows[:page_size]
+            total_count = -1
+            total_pages = 0
         has_prev = page > 1
         
         # Convert to response format based on data source

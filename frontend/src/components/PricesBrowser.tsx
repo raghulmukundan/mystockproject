@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -37,10 +36,9 @@ interface PricesStats {
 }
 
 export const PricesBrowser: React.FC = () => {
-  const { pathname } = useLocation();
   const [data, setData] = useState<PricesBrowserData | null>(null);
   const [stats, setStats] = useState<PricesStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
   // Filters
   const [symbolFilter, setSymbolFilter] = useState('');
@@ -61,6 +59,7 @@ export const PricesBrowser: React.FC = () => {
       const params = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString(),
+        include_total: 'false',
         sort_by: sortBy,
         sort_order: sortOrder,
       });
@@ -85,26 +84,12 @@ export const PricesBrowser: React.FC = () => {
     setLoading(false);
   };
 
-  const fetchStats = async () => {
-    try {
-      const response = await fetch('/api/prices/stats');
-      if (response.ok) {
-        const result: PricesStats = await response.json();
-        setStats(result);
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
+  // Stats are disabled by default for efficiency; enable via button if needed
 
-  useEffect(() => {
-    if (pathname !== '/prices-browser') return;
-    fetchStats();
-    fetchPrices(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageSize, sortBy, sortOrder, pathname]);
+  // No automatic fetching; only fetch when user clicks Search
 
   const handleSearch = () => {
+    setCurrentPage(1);
     fetchPrices(1);
   };
 
@@ -115,7 +100,7 @@ export const PricesBrowser: React.FC = () => {
     setDateToFilter('');
     setSourceFilter('');
     setCurrentPage(1);
-    fetchPrices(1);
+    // Do not auto-fetch; user must click Search
   };
 
   const handleSort = (field: string) => {
@@ -151,41 +136,7 @@ export const PricesBrowser: React.FC = () => {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Stats Card */}
-      {stats && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Price Data Statistics</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-4 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-blue-600">{formatNumber(stats.total_records)}</div>
-                <div className="text-gray-500">Total Records</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-green-600">{formatNumber(stats.unique_symbols)}</div>
-                <div className="text-gray-500">Unique Symbols</div>
-              </div>
-              <div>
-                <div className="text-sm font-medium">{stats.date_range.from || 'N/A'}</div>
-                <div className="text-sm font-medium">{stats.date_range.to || 'N/A'}</div>
-                <div className="text-gray-500">Date Range</div>
-              </div>
-              <div>
-                <div className="flex flex-wrap justify-center gap-1">
-                  {Object.entries(stats.sources).map(([source, count]) => (
-                    <Badge key={source} variant={getSourceBadgeVariant(source)}>
-                      {source}: {formatNumber(count)}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="text-gray-500">Sources</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Stats Card removed by default for efficiency */}
 
       {/* Filters Card */}
       <Card>
@@ -259,14 +210,7 @@ export const PricesBrowser: React.FC = () => {
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>
-              Price Data 
-              {data && (
-                <span className="text-base font-normal text-gray-600 ml-2">
-                  ({formatNumber(data.total_count)} records)
-                </span>
-              )}
-            </CardTitle>
+            <CardTitle>Price Data</CardTitle>
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Page Size:</label>
               <select 
@@ -285,7 +229,7 @@ export const PricesBrowser: React.FC = () => {
         <CardContent>
           {loading && <div className="text-center py-4">Loading...</div>}
           
-          {data && !loading && (
+          {data && !loading && data.prices && data.prices.length > 0 && (
             <>
               <div className="overflow-x-auto">
                 <table className="min-w-full border-collapse border border-gray-300">
@@ -334,9 +278,7 @@ export const PricesBrowser: React.FC = () => {
               
               {/* Pagination */}
               <div className="flex justify-between items-center mt-4">
-                <div className="text-sm text-gray-600">
-                  Showing page {data.page} of {data.total_pages} ({formatNumber(data.total_count)} total records)
-                </div>
+                <div className="text-sm text-gray-600">Page {data.page}</div>
                 <div className="flex gap-2">
                   <Button 
                     variant="outline" 
@@ -355,6 +297,9 @@ export const PricesBrowser: React.FC = () => {
                 </div>
               </div>
             </>
+          )}
+          {!loading && (!data || !data.prices || data.prices.length === 0) && (
+            <div className="text-center py-8 text-gray-500">No results. Set filters and click Search.</div>
           )}
         </CardContent>
       </Card>
