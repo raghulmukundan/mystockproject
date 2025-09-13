@@ -47,6 +47,8 @@ export const JobSettings: React.FC = () => {
   const [editingJob, setEditingJob] = useState<JobConfiguration | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
+  const [histories, setHistories] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     loadJobs();
@@ -62,6 +64,59 @@ export const JobSettings: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading jobs:', error);
+    }
+  };
+
+  const runUniverseRefreshNow = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/universe/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ download: true }) });
+      if (res.ok) {
+        const data = await res.json();
+        setMessage(`Universe refreshed: inserted ${data.inserted}, updated ${data.updated}`);
+        await loadJobsSummary();
+      } else {
+        const err = await res.json();
+        setMessage(`Error: ${err.detail || 'Failed to refresh'}`);
+      }
+    } catch (e) {
+      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+    setLoading(false);
+  };
+
+  const truncateSymbolsTable = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/universe/clear', { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        setMessage(data.message || 'Symbols table truncated');
+      } else {
+        const err = await res.json();
+        setMessage(`Error: ${err.detail || 'Failed to truncate symbols'}`);
+      }
+    } catch (e) {
+      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+    setLoading(false);
+  };
+
+  const toggleJobHistory = async (jobName: string) => {
+    const open = !historyOpen[jobName];
+    setHistoryOpen({ ...historyOpen, [jobName]: open });
+    if (open) {
+      try {
+        const res = await fetch(`/api/jobs/${jobName}/status?limit=5`);
+        if (res.ok) {
+          const data = await res.json();
+          setHistories({ ...histories, [jobName]: data });
+        }
+      } catch (e) {
+        // ignore
+      }
     }
   };
 
@@ -115,6 +170,15 @@ export const JobSettings: React.FC = () => {
 
   const formatDateTime = (isoString: string) => {
     return new Date(isoString).toLocaleString();
+  };
+  const formatDuration = (seconds: number) => {
+    const s = Math.max(0, Math.round(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m ${sec}s`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
   };
 
   const renderEditForm = (job: JobConfiguration) => {
@@ -351,6 +415,15 @@ export const JobSettings: React.FC = () => {
                         {jobConfig.enabled ? 'Disable' : 'Enable'}
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" onClick={() => toggleJobHistory(job.job_name)}>
+                      {historyOpen[job.job_name] ? 'Hide History' : 'Show History'}
+                    </Button>
+                    {job.job_name === 'nasdaq_universe_refresh' && (
+                      <>
+                        <Button size="sm" onClick={runUniverseRefreshNow} disabled={loading}>Run Now</Button>
+                        <Button size="sm" variant="destructive" onClick={truncateSymbolsTable} disabled={loading}>Truncate Symbols</Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -373,9 +446,14 @@ export const JobSettings: React.FC = () => {
                           <span className="font-medium">Completed:</span> {formatDateTime(job.last_run.completed_at)}
                         </div>
                       )}
-                      {job.last_run.duration_seconds && (
+                      {job.last_run.duration_seconds && job.last_run.completed_at && (
                         <div>
                           <span className="font-medium">Duration:</span> {job.last_run.duration_seconds}s
+                        </div>
+                      )}
+                      {!job.last_run.completed_at && (
+                        <div>
+                          <span className="font-medium">Elapsed:</span> {formatDuration((Date.now() - new Date(job.last_run.started_at).getTime()) / 1000)}
                         </div>
                       )}
                       {job.last_run.records_processed && (
@@ -399,6 +477,28 @@ export const JobSettings: React.FC = () => {
               )}
 
               {isEditing && jobConfig && renderEditForm(jobConfig)}
+
+              {historyOpen[job.job_name] && histories[job.job_name] && (
+                <CardContent className="border-t">
+                  <div className="space-y-2 text-sm">
+                    <div className="font-medium">Recent Runs</div>
+                    {histories[job.job_name].length === 0 && (
+                      <div className="text-gray-500">No history</div>
+                    )}
+                    {histories[job.job_name].map((h: any) => (
+                      <div key={h.id} className="flex justify-between border-b py-1">
+                        <div>
+                          <Badge variant={getStatusBadgeVariant(h.status)}>{h.status.toUpperCase()}</Badge>
+                          <span className="ml-2">{formatDateTime(h.started_at)}</span>
+                        </div>
+                        <div className="text-gray-600">
+                          {h.records_processed ? (<span>{h.records_processed} records</span>) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
             </Card>
           );
         })}

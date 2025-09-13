@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.watchlists import router as watchlists_router
@@ -12,6 +14,7 @@ from app.api.price_history import router as price_history_router
 from app.api.jobs import router as jobs_router
 from src.api.import_api import router as import_router
 from src.api.prices_browser import router as prices_browser_router
+from app.api.eod_scan import router as eod_scan_router
 from app.core.database import init_db
 from app.core.scheduler import scheduler
 
@@ -46,6 +49,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Stock Watchlist API", version="1.0.0", lifespan=lifespan)
 
+# Optionally reduce access log noise
+if os.getenv("UVICORN_ACCESS_LOG", "false").lower() in ("0", "false", "no"): 
+    logging.getLogger("uvicorn.access").disabled = True
+if os.getenv("UVICORN_LOG_LEVEL", "info").lower() in ("warning", "error", "critical"):
+    logging.getLogger("uvicorn").setLevel(os.getenv("UVICORN_LOG_LEVEL", "info").upper())
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
@@ -65,6 +74,7 @@ app.include_router(price_history_router, prefix="/api")
 app.include_router(jobs_router, prefix="/api")
 app.include_router(import_router)
 app.include_router(prices_browser_router)
+app.include_router(eod_scan_router)
 
 @app.get("/")
 async def root():

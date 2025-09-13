@@ -4,7 +4,7 @@ Schwab price history provider
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 import pytz
 from dotenv import load_dotenv
 
@@ -22,6 +22,12 @@ class Bar:
     close: float
     volume: int
 
+class ProviderError(Exception):
+    def __init__(self, status_code: Optional[int], message: str):
+        super().__init__(message)
+        self.status_code = status_code
+        self.message = message
+
 class SchwabHistoryProvider:
     """
     Schwab price history provider for daily OHLCV data.
@@ -30,7 +36,10 @@ class SchwabHistoryProvider:
     
     def __init__(self):
         self.client = SchwabHTTPClient()
-        self.timezone = pytz.timezone(os.getenv("TIMEZONE", "America/Chicago"))
+        # Use market timezone for US equities to avoid date rollbacks
+        # Many providers anchor daily bars to the trading day in US/Eastern
+        market_tz = os.getenv("SCHWAB_MARKET_TZ", "America/New_York")
+        self.timezone = pytz.timezone(market_tz)
         
     def _timestamp_to_date(self, timestamp_ms: int) -> str:
         """
@@ -44,6 +53,7 @@ class SchwabHistoryProvider:
         """
         dt = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=pytz.UTC)
         local_dt = dt.astimezone(self.timezone)
+        # Return trading date in market timezone (e.g., America/New_York)
         return local_dt.strftime("%Y-%m-%d")
     
     def get_daily_history(self, symbol: str, start: str, end: str) -> List[Bar]:
@@ -66,7 +76,7 @@ class SchwabHistoryProvider:
         # Convert symbol to Schwab format
         schwab_symbol = to_schwab_symbol(symbol)
         
-        # Convert dates to timestamps (start of day in configured timezone)
+        # Convert dates to timestamps in market timezone
         start_dt = self.timezone.localize(datetime.strptime(start, "%Y-%m-%d"))
         end_dt = self.timezone.localize(datetime.strptime(end, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
         
@@ -92,9 +102,13 @@ class SchwabHistoryProvider:
             response = self.client.get(endpoint, params=params)
             
             if response.status_code == 404:
-                raise Exception(f"Symbol '{symbol}' not found or not entitled")
+                raise ProviderError(404, f"Symbol '{symbol}' not found or not entitled")
             elif response.status_code != 200:
-                raise Exception(f"Schwab API error {response.status_code}: {response.text}")
+                # Include truncated body for diagnostics
+                body = response.text
+                if body and len(body) > 500:
+                    body = body[:500] + "..."
+                raise ProviderError(response.status_code, f"Schwab API error {response.status_code}: {body}")
             
             data = response.json()
             
@@ -128,8 +142,7 @@ class SchwabHistoryProvider:
             
             return bars
             
+        except ProviderError:
+            raise
         except Exception as e:
-            if "not found" in str(e).lower() or "not entitled" in str(e).lower():
-                raise Exception(f"Symbol '{symbol}' not found or not entitled: {str(e)}")
-            else:
-                raise Exception(f"Failed to fetch price history for '{symbol}': {str(e)}")
+            raise ProviderError(None, f"Failed to fetch price history for '{symbol}': {str(e)}")

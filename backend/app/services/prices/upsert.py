@@ -9,7 +9,7 @@ from app.models.price_daily import PriceDaily
 from app.core.database import SessionLocal
 from src.services.prices.providers.schwab_history import Bar
 
-def upsert_daily(symbol: str, bars: List[Bar], source: str = "schwab") -> Dict[str, int]:
+def upsert_daily(symbol: str, bars: List[Bar], source: str = "schwab", update_if_changed: bool = False) -> Dict[str, int]:
     """
     Upsert bars into prices_daily (PK symbol+date).
     Returns counts: {"inserted": n1, "updated": n2, "skipped": n3}
@@ -41,27 +41,28 @@ def upsert_daily(symbol: str, bars: List[Bar], source: str = "schwab") -> Dict[s
             ).first()
             
             if existing_record:
-                # Check if any value differs
-                values_changed = (
-                    existing_record.open != bar.open or
-                    existing_record.high != bar.high or
-                    existing_record.low != bar.low or
-                    existing_record.close != bar.close or
-                    existing_record.volume != bar.volume or
-                    existing_record.source != source
-                )
-                
-                if values_changed:
-                    # Update existing record
-                    existing_record.open = bar.open
-                    existing_record.high = bar.high
-                    existing_record.low = bar.low
-                    existing_record.close = bar.close
-                    existing_record.volume = bar.volume
-                    existing_record.source = source
-                    updated_count += 1
+                if update_if_changed:
+                    # Check if any value differs
+                    values_changed = (
+                        existing_record.open != bar.open or
+                        existing_record.high != bar.high or
+                        existing_record.low != bar.low or
+                        existing_record.close != bar.close or
+                        existing_record.volume != bar.volume or
+                        existing_record.source != source
+                    )
+                    if values_changed:
+                        existing_record.open = bar.open
+                        existing_record.high = bar.high
+                        existing_record.low = bar.low
+                        existing_record.close = bar.close
+                        existing_record.volume = bar.volume
+                        existing_record.source = source
+                        updated_count += 1
+                    else:
+                        skipped_count += 1
                 else:
-                    # No changes needed
+                    # Insert-only mode: do not update existing rows
                     skipped_count += 1
             else:
                 # Insert new record

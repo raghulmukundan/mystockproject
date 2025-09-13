@@ -5,6 +5,8 @@ from sqlalchemy import func
 from app.models.symbol import Symbol
 from app.core.database import SessionLocal
 from .nasdaqtrader import NasdaqTraderDownloader
+from sqlalchemy import text
+from app.services.symbol_filter import is_excluded_symbol
 
 
 class UniverseService:
@@ -37,6 +39,9 @@ class UniverseService:
             updated_count = 0
             
             for symbol_data in symbols_data:
+                # Apply global filter rules before upsert
+                if is_excluded_symbol(symbol_data.get('symbol'), symbol_data.get('test_issue')):
+                    continue
                 existing_symbol = db.query(Symbol).filter(
                     Symbol.symbol == symbol_data['symbol']
                 ).first()
@@ -229,12 +234,12 @@ class UniverseService:
         """
         db = SessionLocal()
         try:
+            # Count first for reporting
             count = db.query(Symbol).count()
-            db.query(Symbol).delete()
+            # Prefer TRUNCATE for speed and to reclaim space
+            db.execute(text("TRUNCATE TABLE symbols"))
             db.commit()
-            
             return {'deleted': count}
-            
         except Exception as e:
             db.rollback()
             raise Exception(f"Failed to clear symbols: {str(e)}")

@@ -60,6 +60,7 @@ class SchwabHTTPClient:
         kwargs['headers'] = headers
         
         last_exception = None
+        did_refresh_on_401 = False
         
         for attempt in range(self.max_retries + 1):
             try:
@@ -72,10 +73,23 @@ class SchwabHTTPClient:
                 # If successful, return immediately
                 if response.status_code < 400:
                     return response
-                
+
                 # Log error details for debugging
                 print(f"Schwab API Error {response.status_code}: {response.text}")
-                
+
+                # If unauthorized, force token refresh once and retry immediately
+                if response.status_code == 401 and not did_refresh_on_401:
+                    try:
+                        self.token_manager.refresh_access_token()
+                        did_refresh_on_401 = True
+                        # Retry immediately without counting against backoff attempts
+                        response = self.session.request(method, url, timeout=30, **kwargs)
+                        if response.status_code < 400:
+                            return response
+                    except Exception as e:
+                        last_exception = e
+                        # fall through to normal retry logic
+
                 # Check if we should retry
                 if not self._should_retry(response.status_code):
                     response.raise_for_status()

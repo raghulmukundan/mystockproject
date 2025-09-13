@@ -7,6 +7,8 @@ import Alerts from './pages/Alerts'
 import Universe from './pages/universe'
 import HistoryImport from './pages/HistoryImport'
 import PricesBrowser from './pages/PricesBrowser'
+import JobStatus from './pages/JobStatus'
+import Operations from './pages/Operations'
 
 import Watchlists from './pages/Watchlists'
 import WatchlistDetail from './pages/WatchlistDetail'
@@ -26,6 +28,8 @@ function App() {
         <Route path="/history-import" element={<HistoryImport />} />
         <Route path="/prices-browser" element={<PricesBrowser />} />
         <Route path="/job-settings" element={<JobSettings />} />
+        <Route path="/job-status" element={<JobStatus />} />
+        <Route path="/operations" element={<Operations />} />
       </Routes>
     </Layout>
   )

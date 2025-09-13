@@ -21,9 +21,7 @@ const navigation = [
   { name: 'Watchlists', href: '/watchlists', icon: ViewColumnsIcon },
   { name: 'Alerts', href: '/alerts', icon: BellIcon },
   { name: 'Upload', href: '/upload', icon: DocumentArrowUpIcon },
-  { name: 'History Import', href: '/history-import', icon: CloudArrowDownIcon },
-  { name: 'Prices Browser', href: '/prices-browser', icon: MagnifyingGlassIcon },
-  { name: 'Job Settings', href: '/job-settings', icon: CogIcon },
+  { name: 'Operations', href: '/operations', icon: CogIcon },
 ]
 
 export default function Layout({ children }: LayoutProps) {
