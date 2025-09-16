@@ -99,6 +99,15 @@ def create_job_tables():
                 'eod_price_scan', 'End-of-day price scan using Schwab API', 'cron', 'mon,tue,wed,thu,fri', 17, 30, false
             ) ON CONFLICT (job_name) DO NOTHING;
         """)
+
+        # Technical indicators compute (weekdays at 17:40 America/Chicago by default)
+        cursor.execute("""
+            INSERT INTO job_configurations (
+                job_name, description, schedule_type, cron_day_of_week, cron_hour, cron_minute, only_market_hours
+            ) VALUES (
+                'technical_compute', 'Compute technical indicators from merged prices', 'cron', 'mon,tue,wed,thu,fri', 17, 40, false
+            ) ON CONFLICT (job_name) DO NOTHING;
+        """)
         
         # Commit the changes
         conn.commit()

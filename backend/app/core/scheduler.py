@@ -6,6 +6,7 @@ from app.services.eod_scan import run_eod_scan_all_symbols
 from app.services.job_ttl_cleanup import cleanup_old_job_records
 from app.core.config import TIMEZONE
 from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+from src.services.tech.run import run_technical_compute
 try:
     from zoneinfo import ZoneInfo
 except Exception:
@@ -21,9 +22,22 @@ scheduler = BackgroundScheduler(
     timezone=ZoneInfo(TIMEZONE) if ZoneInfo is not None else TIMEZONE,
 )
 
+def update_market_data_job():
+    job_name = "market_data_refresh"
+    job_id = None
+    try:
+        job_id = begin_job(job_name)
+        update_market_data()
+        complete_job(job_id, records_processed=0)
+        prune_history(job_name, keep=5)
+    except Exception as e:
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
+
 # Market data updates every 30 minutes (actual market-hours check happens inside the job)
 scheduler.add_job(
-    func=update_market_data,
+    func=update_market_data_job,
     trigger=IntervalTrigger(minutes=30),
     id="update_market_data",
     name="Update market data every 30 minutes",
@@ -67,6 +81,18 @@ def eod_price_scan_job():
         processed = int(result.get('inserted', 0)) + int(result.get('updated', 0)) + int(result.get('skipped', 0))
         complete_job(job_id, records_processed=processed)
         prune_history(job_name, keep=5)
+
+        # Kick off technical compute immediately after successful EOD price scan
+        tech_job_name = 'technical_compute'
+        tech_job_id = begin_job(tech_job_name)
+        try:
+            tech_result = run_technical_compute(None)
+            tech_processed = int(tech_result.get('daily_rows_upserted', 0)) + int(tech_result.get('latest_rows_upserted', 0))
+            complete_job(tech_job_id, records_processed=tech_processed)
+        except Exception as te:
+            fail_job(tech_job_id, str(te))
+        finally:
+            prune_history(tech_job_name, keep=5)
     except Exception as e:
         if job_id is not None:
             fail_job(job_id, str(e))

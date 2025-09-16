@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -49,6 +49,9 @@ export const JobSettings: React.FC = () => {
   const [message, setMessage] = useState('');
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [histories, setHistories] = useState<Record<string, any[]>>({});
+  const [techLatest, setTechLatest] = useState<any | null>(null);
+  const techPollRef = useRef<number | null>(null);
+  const [oauthStatus, setOauthStatus] = useState<{authenticated: boolean; client_id: string} | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -67,58 +70,7 @@ export const JobSettings: React.FC = () => {
     }
   };
 
-  const runUniverseRefreshNow = async () => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await fetch('/api/universe/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ download: true }) });
-      if (res.ok) {
-        const data = await res.json();
-        setMessage(`Universe refreshed: inserted ${data.inserted}, updated ${data.updated}`);
-        await loadJobsSummary();
-      } else {
-        const err = await res.json();
-        setMessage(`Error: ${err.detail || 'Failed to refresh'}`);
-      }
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
-
-  const truncateSymbolsTable = async () => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await fetch('/api/universe/clear', { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
-        setMessage(data.message || 'Symbols table truncated');
-      } else {
-        const err = await res.json();
-        setMessage(`Error: ${err.detail || 'Failed to truncate symbols'}`);
-      }
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
-
-  const toggleJobHistory = async (jobName: string) => {
-    const open = !historyOpen[jobName];
-    setHistoryOpen({ ...historyOpen, [jobName]: open });
-    if (open) {
-      try {
-        const res = await fetch(`/api/jobs/${jobName}/status?limit=5`);
-        if (res.ok) {
-          const data = await res.json();
-          setHistories({ ...histories, [jobName]: data });
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-  };
+  // Note: JobSettings now only manages configuration; history and run actions moved to Job Status page.
 
   const loadJobsSummary = async () => {
     try {
@@ -131,6 +83,44 @@ export const JobSettings: React.FC = () => {
       console.error('Error loading jobs summary:', error);
     }
   };
+
+  const loadTechLatest = async () => {
+    try {
+      const res = await fetch('/api/tech/status/latest');
+      if (res.ok) {
+        const data = await res.json();
+        setTechLatest(data);
+        if (data.status === 'running' && !techPollRef.current) {
+          techPollRef.current = window.setInterval(loadTechLatest, 5000);
+        } else if (data.status !== 'running' && techPollRef.current) {
+          clearInterval(techPollRef.current);
+          techPollRef.current = null;
+        }
+      } else if (res.status === 204 || res.status === 404) {
+        // No content yet; don't log errors or update state
+        return;
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadTechLatest();
+    return () => { if (techPollRef.current) clearInterval(techPollRef.current); };
+  }, []);
+
+  const loadOauthStatus = async () => {
+    try {
+      const res = await fetch('/api/auth/status');
+      if (res.ok) {
+        const data = await res.json();
+        setOauthStatus({ authenticated: !!data.authenticated, client_id: data.client_id });
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadOauthStatus();
+  }, []);
 
   const updateJob = async (jobName: string, updates: Partial<JobConfiguration>) => {
     setLoading(true);
@@ -156,6 +146,89 @@ export const JobSettings: React.FC = () => {
       setMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
+    setLoading(false);
+  };
+
+  // Actions and history (moved here from Job Status to avoid overlap)
+  const toggleJobHistory = async (jobName: string) => {
+    const open = !historyOpen[jobName];
+    setHistoryOpen({ ...historyOpen, [jobName]: open });
+    if (open) {
+      try {
+        const res = await fetch(`/api/jobs/${jobName}/status?limit=5`);
+        if (res.ok) {
+          const data = await res.json();
+          setHistories({ ...histories, [jobName]: data });
+        }
+      } catch {}
+    }
+  };
+
+  const runUniverseRefreshNow = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/universe/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ download: true }) });
+      if (!res.ok) {
+        const err = await res.json();
+        setMessage(`Error: ${err.detail || 'Failed to refresh'}`);
+      } else {
+        setMessage('Universe refresh started');
+      }
+      await loadJobsSummary();
+    } catch (e) {
+      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+    setLoading(false);
+  };
+
+  const truncateSymbolsTable = async () => {
+    if (!confirm('This will TRUNCATE symbols. Are you sure?')) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/universe/clear', { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        setMessage(data.message || 'Symbols table truncated');
+      } else {
+        const err = await res.json();
+        setMessage(`Error: ${err.detail || 'Failed to truncate symbols'}`);
+      }
+    } catch (e) {
+      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+    setLoading(false);
+  };
+
+  const runTechNow = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/tech/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      if (res.ok) {
+        const data = await res.json();
+        setMessage(`Technical compute started (job #${data.job_id || '?'} for ${data.latest_trade_date || ''})`);
+        await loadJobsSummary();
+        // kick off immediate status poll
+        loadTechLatest();
+      } else {
+        let detail = '';
+        try { const err = await res.json(); detail = err.detail || JSON.stringify(err); } catch {}
+        setMessage(`Failed to start technical compute${detail ? ': ' + detail : ''}`);
+      }
+    } catch (e) {
+      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+    setLoading(false);
+  };
+
+  const runMarketDataNow = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/jobs/market-data/run', { method: 'POST' });
+      await loadJobsSummary();
+      setMessage('Market data refresh started');
+    } catch {}
     setLoading(false);
   };
 
@@ -364,6 +437,34 @@ export const JobSettings: React.FC = () => {
   return (
     <div className="space-y-6 p-6">
       <Card>
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Schwab Authentication</CardTitle>
+            <p className="text-sm text-gray-600">Refresh tokens expire every 7 days. Use this to re‑authenticate and obtain a new refresh token.</p>
+            <p className="text-xs text-gray-500 mt-1">If accessing via Tailscale, run <span className="font-mono">tailscale serve --https=443 localhost:8000</span> before starting the login so the OAuth callback can reach your app.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="default" onClick={() => window.open('/api/auth/login', '_blank')}>Open Schwab Login</Button>
+            <Button variant="outline" onClick={loadOauthStatus}>Check Status</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {oauthStatus ? (
+            <div className="text-sm">
+              <div><span className="font-medium">Configured Client:</span> {oauthStatus.client_id}</div>
+              <div className={oauthStatus.authenticated ? 'text-green-700' : 'text-red-700'}>
+                {oauthStatus.authenticated ? 'Refresh token detected in backend environment.' : 'No refresh token configured in backend.'}
+              </div>
+              <div className="mt-2 text-gray-600">
+                After completing login, the callback page will display a new refresh token. Copy it into your .env as SCHWAB_REFRESH_TOKEN and restart the backend.
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">Loading authentication status…</div>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
         <CardHeader>
           <CardTitle>Background Job Settings</CardTitle>
           <p className="text-sm text-gray-600">
@@ -415,7 +516,7 @@ export const JobSettings: React.FC = () => {
                         {jobConfig.enabled ? 'Disable' : 'Enable'}
                       </Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => toggleJobHistory(job.job_name)}>
+                    <Button variant="outline" size="sm" onClick={() => toggleJobHistory(job.job_name)}>
                       {historyOpen[job.job_name] ? 'Hide History' : 'Show History'}
                     </Button>
                     {job.job_name === 'nasdaq_universe_refresh' && (
@@ -424,60 +525,30 @@ export const JobSettings: React.FC = () => {
                         <Button size="sm" variant="destructive" onClick={truncateSymbolsTable} disabled={loading}>Truncate Symbols</Button>
                       </>
                     )}
+                    {job.job_name === 'technical_compute' && (
+                      <Button size="sm" onClick={runTechNow} disabled={loading}>Run Now</Button>
+                    )}
+                    {job.job_name === 'market_data_refresh' && (
+                      <Button size="sm" onClick={runMarketDataNow} disabled={loading}>Run Now</Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
-              
-              {job.last_run && (
-                <CardContent className="border-t">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Last Run:</span>
-                      <Badge variant={getStatusBadgeVariant(job.last_run.status)}>
-                        {job.last_run.status.toUpperCase()}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                      <div>
-                        <span className="font-medium">Started:</span> {formatDateTime(job.last_run.started_at)}
-                      </div>
-                      {job.last_run.completed_at && (
-                        <div>
-                          <span className="font-medium">Completed:</span> {formatDateTime(job.last_run.completed_at)}
-                        </div>
-                      )}
-                      {job.last_run.duration_seconds && job.last_run.completed_at && (
-                        <div>
-                          <span className="font-medium">Duration:</span> {job.last_run.duration_seconds}s
-                        </div>
-                      )}
-                      {!job.last_run.completed_at && (
-                        <div>
-                          <span className="font-medium">Elapsed:</span> {formatDuration((Date.now() - new Date(job.last_run.started_at).getTime()) / 1000)}
-                        </div>
-                      )}
-                      {job.last_run.records_processed && (
-                        <div>
-                          <span className="font-medium">Records:</span> {job.last_run.records_processed}
-                        </div>
-                      )}
-                    </div>
-                    {job.last_run.error_message && (
-                      <div className="text-sm text-red-600 mt-2">
-                        <span className="font-medium">Error:</span> {job.last_run.error_message}
-                      </div>
-                    )}
-                    {job.last_run.next_run_at && (
-                      <div className="text-sm text-blue-600 mt-2">
-                        <span className="font-medium">Next Run:</span> {formatDateTime(job.last_run.next_run_at)}
-                      </div>
+
+              {/* Live status for technical compute */}
+              {job.job_name === 'technical_compute' && techLatest && (
+                <CardContent className="pt-0">
+                  <div className="text-xs text-blue-700">
+                    <span className="font-medium">Live:</span>
+                    <span className="ml-2">{techLatest.status}</span>
+                    <span className="ml-2">updated {techLatest.updated_symbols} / {techLatest.total_symbols}</span>
+                    <span className="ml-2">errors {techLatest.errors}</span>
+                    {techLatest.finished_at && (
+                      <span className="ml-2">finished {new Date(techLatest.finished_at).toLocaleString()}</span>
                     )}
                   </div>
                 </CardContent>
               )}
-
-              {isEditing && jobConfig && renderEditForm(jobConfig)}
-
               {historyOpen[job.job_name] && histories[job.job_name] && (
                 <CardContent className="border-t">
                   <div className="space-y-2 text-sm">
@@ -489,7 +560,7 @@ export const JobSettings: React.FC = () => {
                       <div key={h.id} className="flex justify-between border-b py-1">
                         <div>
                           <Badge variant={getStatusBadgeVariant(h.status)}>{h.status.toUpperCase()}</Badge>
-                          <span className="ml-2">{formatDateTime(h.started_at)}</span>
+                          <span className="ml-2">{new Date(h.started_at).toLocaleString()}</span>
                         </div>
                         <div className="text-gray-600">
                           {h.records_processed ? (<span>{h.records_processed} records</span>) : null}
@@ -499,6 +570,8 @@ export const JobSettings: React.FC = () => {
                   </div>
                 </CardContent>
               )}
+
+              {isEditing && jobConfig && renderEditForm(jobConfig)}
             </Card>
           );
         })}

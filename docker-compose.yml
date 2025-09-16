@@ -9,6 +9,10 @@ services:
       - DATABASE_URL=postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist
       - TZ=America/Chicago
       - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
+      - SCHWAB_CLIENT_ID=${SCHWAB_CLIENT_ID}
+      - SCHWAB_CLIENT_SECRET=${SCHWAB_CLIENT_SECRET}
+      - SCHWAB_REFRESH_TOKEN=${SCHWAB_REFRESH_TOKEN}
+      - SCHWAB_BASE_URL=${SCHWAB_BASE_URL:-https://api.schwabapi.com}
     volumes:
       - ./backend:/app
       - C:\Users\raghu\Downloads:/downloads
@@ -22,8 +26,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:8000
       - TZ=America/Chicago
+      - VITE_API_URL=http://host.docker.internal:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules

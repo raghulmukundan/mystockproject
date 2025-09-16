@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
 
 type EodScan = {
   id: number
@@ -40,21 +41,29 @@ type EodScanError = {
 const JobStatus: React.FC = () => {
   const [eodScans, setEodScans] = useState<EodScan[]>([])
   const [importJobs, setImportJobs] = useState<ImportJob[]>([])
+  const [techRuns, setTechRuns] = useState<any[]>([])
   const [starting, setStarting] = useState(false)
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [expandedScanId, setExpandedScanId] = useState<number | null>(null)
   const [scanErrors, setScanErrors] = useState<Record<number, EodScanError[]>>({})
   const [loadingErrors, setLoadingErrors] = useState<Record<number, boolean>>({})
+  const [jobsSummary, setJobsSummary] = useState<any[]>([])
+  const [jobHistories, setJobHistories] = useState<Record<string, any[]>>({})
+  const [jobHistoryOpen, setJobHistoryOpen] = useState<Record<string, boolean>>({})
 
   const loadData = async () => {
     try {
-      const [eodRes, jobsRes] = await Promise.all([
+      const [eodRes, jobsRes, jobsSummaryRes, techHistRes] = await Promise.all([
         fetch('/api/eod/scan/list'),
         fetch('/api/import/status'),
+        fetch('/api/jobs/summary'),
+        fetch('/api/jobs/technical_compute/status?limit=5'),
       ])
       if (eodRes.ok) setEodScans(await eodRes.json())
       if (jobsRes.ok) setImportJobs(await jobsRes.json())
+      if (jobsSummaryRes.ok) setJobsSummary(await jobsSummaryRes.json())
+      if (techHistRes.ok) setTechRuns(await techHistRes.json())
     } catch (e) {
       console.error('Failed to load job status', e)
     }
@@ -85,6 +94,44 @@ const JobStatus: React.FC = () => {
     } finally {
       setStarting(false)
     }
+  }
+
+  const toggleJobHistory = async (jobName: string) => {
+    const open = !jobHistoryOpen[jobName]
+    setJobHistoryOpen(prev => ({ ...prev, [jobName]: open }))
+    if (open) {
+      try {
+        const res = await fetch(`/api/jobs/${jobName}/status?limit=5`)
+        if (res.ok) {
+          const data = await res.json()
+          setJobHistories(prev => ({ ...prev, [jobName]: data }))
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+
+  const runUniverseRefreshNow = async () => {
+    try {
+      const res = await fetch('/api/universe/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ download: true }) })
+      if (res.ok) await loadData()
+    } catch {}
+  }
+
+  const truncateSymbolsTable = async () => {
+    if (!confirm('This will TRUNCATE symbols. Are you sure?')) return
+    try {
+      await fetch('/api/universe/clear', { method: 'DELETE' })
+      await loadData()
+    } catch {}
+  }
+
+  const runTechNow = async () => {
+    try {
+      await fetch('/api/tech/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      await loadData()
+    } catch {}
   }
 
   const truncatePricesDaily = async () => {
@@ -245,6 +292,33 @@ const JobStatus: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Technical Compute Runs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {techRuns.length === 0 ? (
+            <div className="text-gray-500">No runs yet.</div>
+          ) : (
+            <div className="space-y-1 text-sm">
+              {techRuns.map((h: any) => (
+                <div key={h.id} className="flex justify-between">
+                  <div>
+                    <Badge variant={h.status === 'completed' ? 'default' : h.status === 'failed' ? 'destructive' : 'secondary'}>
+                      {h.status.toUpperCase()}
+                    </Badge>
+                    <span className="ml-2">{new Date(h.started_at).toLocaleString()}</span>
+                  </div>
+                  {h.records_processed ? (<div className="text-gray-600">{h.records_processed} records</div>) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Background Jobs moved to Job Settings page */}
 
       <Card>
         <CardHeader>

@@ -1,10 +1,10 @@
 import axios from 'axios'
 import { Watchlist, UploadResponse, WatchlistItem } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
+// Force same-origin base to avoid any leaked env overriding baseURL at runtime
+const SAME_ORIGIN_API = `${window.location.origin}/api`;
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+  baseURL: SAME_ORIGIN_API,
   headers: {
     'Content-Type': 'application/json',
   },

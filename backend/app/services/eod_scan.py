@@ -146,7 +146,32 @@ def run_eod_scan_all_symbols(
     try:
         SchwabTokenManager().get_access_token()
     except Exception as e:
-        logger.warning(f"Pre-warm Schwab token failed (will retry in workers): {e}")
+        logger.error(f"Pre-warm Schwab token failed: {e}")
+        # Mark scan failed early to avoid flooding errors when auth is down
+        dbf = next(get_db())
+        try:
+            scanf = dbf.query(EodScan).filter(EodScan.id == eod_scan_id).first()
+            if scanf:
+                scanf.status = 'failed'
+                scanf.completed_at = datetime.utcnow()
+                dbf.commit()
+            err = EodScanError(
+                eod_scan_id=eod_scan_id,
+                symbol='AUTH',
+                error_type='auth',
+                error_message=str(e),
+                http_status=None,
+            )
+            dbf.add(err)
+            dbf.commit()
+        finally:
+            dbf.close()
+        return {
+            "inserted": 0,
+            "updated": 0,
+            "skipped": 0,
+            "errors": 1,
+        }
 
     import concurrent.futures as cf
     started_t = time.time()

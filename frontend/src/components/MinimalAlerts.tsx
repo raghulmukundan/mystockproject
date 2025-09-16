@@ -14,7 +14,7 @@ const MinimalAlerts: React.FC = () => {
   useEffect(() => {
     const loadAlerts = async () => {
       try {
-        const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/alerts/`;
+        const API_URL = `/api/alerts/`;
         const response = await fetch(API_URL);
         
         if (!response.ok) {

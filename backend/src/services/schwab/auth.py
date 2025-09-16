@@ -31,7 +31,7 @@ class SchwabTokenManager:
         self.credentials_available = all([self.client_id, self.client_secret, self.refresh_token])
         if not self.credentials_available:
             print("Warning: Schwab credentials not configured. Price history endpoints will not work.")
-    
+        print("SchwabTokenManager initialized. {self.credentials_available} ")
     def is_token_stale(self) -> bool:
         """Check if current token is stale or missing"""
         if not self.__class__._access_token or not self.__class__._obtained_at:
@@ -60,10 +60,19 @@ class SchwabTokenManager:
         auth = (self.client_id, self.client_secret)
         
         last_err: Optional[Exception] = None
+        last_detail: Optional[str] = None
         for attempt in range(self.token_max_retries + 1):
             try:
                 response = requests.post(token_url, data=data, headers=headers, auth=auth, timeout=30)
-                response.raise_for_status()
+                try:
+                    response.raise_for_status()
+                except requests.HTTPError as he:
+                    # Capture detailed error payload for diagnostics
+                    try:
+                        last_detail = f"HTTP {response.status_code}: {response.text}"
+                    except Exception:
+                        last_detail = str(he)
+                    raise
                 token_data = response.json()
                 self.__class__._access_token = token_data['access_token']
                 self.__class__._obtained_at = time.time()
@@ -75,8 +84,15 @@ class SchwabTokenManager:
                 else:
                     break
             except KeyError as e:
+                # Include body to aid debugging
+                try:
+                    last_detail = f"Malformed token response: {response.text}"
+                except Exception:
+                    last_detail = None
                 last_err = e
                 break
+        if last_detail:
+            raise Exception(f"Failed to refresh Schwab access token: {last_detail}")
         raise Exception(f"Failed to refresh Schwab access token: {str(last_err)}")
     
     def get_access_token(self) -> str:

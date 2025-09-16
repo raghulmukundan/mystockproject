@@ -5,6 +5,8 @@ import pytz
 from dotenv import load_dotenv
 
 from src.services.universe.service import UniverseService
+from src.services.tech.run import run_technical_compute
+from app.services.job_status import begin_job, complete_job, fail_job, prune_history
 
 load_dotenv()
 
@@ -39,6 +41,39 @@ class UniverseScheduler:
             ),
             id='universe_refresh',
             name='Weekly Universe Refresh',
+            replace_existing=True
+        )
+
+        # Technical compute Mon–Fri at TECH_RUN_TIME
+        run_time = os.getenv("TECH_RUN_TIME", "17:40")
+        try:
+            h, m = [int(x) for x in run_time.split(":", 1)]
+        except Exception:
+            h, m = 17, 40
+        def _tech_job():
+            job_name = 'technical_compute'
+            job_id = None
+            try:
+                job_id = begin_job(job_name)
+                result = run_technical_compute(None)
+                processed = int(result.get('daily_rows_upserted', 0)) + int(result.get('latest_rows_upserted', 0))
+                complete_job(job_id, records_processed=processed)
+                prune_history(job_name, keep=5)
+            except Exception as e:
+                if job_id is not None:
+                    fail_job(job_id, str(e))
+                    prune_history(job_name, keep=5)
+
+        self.scheduler.add_job(
+            func=_tech_job,
+            trigger=CronTrigger(
+                day_of_week='mon-fri',
+                hour=h,
+                minute=m,
+                timezone=tz
+            ),
+            id='technical_compute',
+            name='Daily technical indicator compute',
             replace_existing=True
         )
         

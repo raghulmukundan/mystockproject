@@ -14,14 +14,68 @@ from app.api.price_history import router as price_history_router
 from app.api.jobs import router as jobs_router
 from src.api.import_api import router as import_router
 from src.api.prices_browser import router as prices_browser_router
+from src.api.tech import router as tech_router
 from app.api.eod_scan import router as eod_scan_router
 from app.core.database import init_db
 from app.core.scheduler import scheduler
+from src.db.models import SessionLocal, JobConfiguration
+
+def _ensure_default_jobs():
+    db = SessionLocal()
+    try:
+        defaults = [
+            {
+                'job_name': 'market_data_refresh',
+                'description': 'Refresh current market data for watchlists',
+                'schedule_type': 'interval',
+                'interval_value': 30,
+                'interval_unit': 'minutes',
+                'only_market_hours': True,
+            },
+            {
+                'job_name': 'nasdaq_universe_refresh',
+                'description': 'Refresh NASDAQ universe symbols',
+                'schedule_type': 'cron',
+                'cron_day_of_week': 'sun',
+                'cron_hour': 8,
+                'cron_minute': 0,
+                'only_market_hours': False,
+            },
+            {
+                'job_name': 'eod_price_scan',
+                'description': 'End-of-day price scan using Schwab API',
+                'schedule_type': 'cron',
+                'cron_day_of_week': 'mon,tue,wed,thu,fri',
+                'cron_hour': 17,
+                'cron_minute': 30,
+                'only_market_hours': False,
+            },
+            {
+                'job_name': 'technical_compute',
+                'description': 'Compute technical indicators from merged prices',
+                'schedule_type': 'cron',
+                'cron_day_of_week': 'mon,tue,wed,thu,fri',
+                'cron_hour': 17,
+                'cron_minute': 40,
+                'only_market_hours': False,
+            },
+        ]
+        for cfg in defaults:
+            if not db.query(JobConfiguration).filter(JobConfiguration.job_name == cfg['job_name']).first():
+                db.add(JobConfiguration(**cfg))
+        db.commit()
+    finally:
+        db.close()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     init_db()
+    # Ensure default job configurations exist for UI visibility
+    try:
+        _ensure_default_jobs()
+    except Exception as e:
+        print(f"Warning: ensure default jobs failed: {e}")
     
     # Temporarily disable universe auto-population to allow clean startup
     print("Universe auto-population disabled - database startup successful")
@@ -70,10 +124,13 @@ app.include_router(alerts_router, prefix="/api/alerts")
 app.include_router(rss_router, prefix="/api")
 app.include_router(universe_router, prefix="/api")
 app.include_router(oauth_router)
+# Also expose OAuth routes under /api for frontend proxy convenience
+app.include_router(oauth_router, prefix="/api")
 app.include_router(price_history_router, prefix="/api")
 app.include_router(jobs_router, prefix="/api")
 app.include_router(import_router)
 app.include_router(prices_browser_router)
+app.include_router(tech_router)
 app.include_router(eod_scan_router)
 
 @app.get("/")

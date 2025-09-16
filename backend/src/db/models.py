@@ -200,6 +200,70 @@ Index("failed_files_status_idx", FailedFile.status)
 Index("eod_scans_status_idx", EodScan.status)
 Index("eod_scan_errors_scan_idx", EodScanError.eod_scan_id)
 
+# --- Technical indicator tables ---
+class TechnicalDaily(Base):
+    __tablename__ = "technical_daily"
+
+    symbol = Column(String, primary_key=True)
+    date   = Column(String, primary_key=True)  # YYYY-MM-DD
+    close  = Column(Float, nullable=False)
+    volume = Column(Integer, nullable=False)
+    sma20  = Column(Float); sma50 = Column(Float); sma200 = Column(Float)
+    rsi14  = Column(Float); adx14 = Column(Float)
+    atr14  = Column(Float)
+    donch20_high = Column(Float); donch20_low = Column(Float)
+    macd = Column(Float); macd_signal = Column(Float); macd_hist = Column(Float)
+    avg_vol20 = Column(Float)
+    high_252  = Column(Float)
+
+Index("tech_daily_symbol_date_idx", TechnicalDaily.symbol, TechnicalDaily.date)
+
+
+class TechnicalLatest(Base):
+    __tablename__ = "technical_latest"
+
+    symbol = Column(String, primary_key=True)
+    date   = Column(String, nullable=False)
+    close  = Column(Float, nullable=False)
+    volume = Column(Integer, nullable=False)
+    sma20  = Column(Float); sma50 = Column(Float); sma200 = Column(Float)
+    rsi14  = Column(Float); adx14 = Column(Float)
+    atr14  = Column(Float)
+    donch20_high = Column(Float); donch20_low = Column(Float)
+    macd = Column(Float); macd_signal = Column(Float); macd_hist = Column(Float)
+    avg_vol20 = Column(Float)
+    high_252  = Column(Float)
+    # derived for screener
+    distance_to_52w_high = Column(Float)   # (high_252 - close)/high_252
+    rel_volume = Column(Float)             # volume/avg_vol20
+    sma_slope  = Column(Float)             # sma20 - sma50
+
+
+class TechJob(Base):
+    __tablename__ = "tech_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at  = Column(String, nullable=False)  # ISO UTC
+    finished_at = Column(String)
+    status = Column(String, nullable=False)       # running|success|partial|failed
+    latest_trade_date = Column(String, nullable=False)
+    total_symbols = Column(Integer, default=0)
+    updated_symbols = Column(Integer, default=0)
+    daily_rows_upserted = Column(Integer, default=0)
+    latest_rows_upserted = Column(Integer, default=0)
+    errors = Column(Integer, default=0)
+    message = Column(String, default="")
+
+
+class TechJobError(Base):
+    __tablename__ = "tech_job_errors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tech_job_id = Column(Integer, nullable=False)
+    occurred_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    symbol = Column(String, nullable=True)
+    error_message = Column(Text, nullable=False)
+
 # Import config from centralized location
 try:
     from app.core.config import DATABASE_URL, DATA_DIR

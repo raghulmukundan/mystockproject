@@ -9,7 +9,7 @@ const SimpleAlerts: React.FC = () => {
     const fetchAlerts = async () => {
       try {
         console.log('Fetching alerts...');
-        const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/alerts/`;
+        const API_URL = `/api/alerts/`;
         console.log('API URL:', API_URL);
         
         const response = await fetch(API_URL);

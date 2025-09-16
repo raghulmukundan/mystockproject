@@ -8,6 +8,9 @@ from src.db.models import JobConfiguration, JobExecutionStatus
 from app.core.scheduler import scheduler
 from app.services.market_data import _is_market_open
 from datetime import timedelta
+from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+from src.services.tech.run import run_technical_compute
+from app.services.market_data import update_market_data
 
 router = APIRouter()
 
@@ -233,3 +236,18 @@ def get_job_status_history(job_name: str, limit: int = 10, db: Session = Depends
         )
         for status in statuses
     ]
+
+
+@router.post("/jobs/market-data/run")
+def run_market_data_now():
+    job_name = 'market_data_refresh'
+    job_id = begin_job(job_name)
+    try:
+        update_market_data()
+        complete_job(job_id, records_processed=0)
+        prune_history(job_name, keep=5)
+        return {"message": "market data refresh triggered"}
+    except Exception as e:
+        fail_job(job_id, str(e))
+        prune_history(job_name, keep=5)
+        raise HTTPException(status_code=500, detail=str(e))

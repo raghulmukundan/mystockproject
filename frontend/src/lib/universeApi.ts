@@ -1,5 +1,5 @@
 // Universe API service
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_PATH = '/api';
 
 export interface RefreshRequest {
   download?: boolean;
@@ -66,7 +66,7 @@ export interface QueryParams {
 
 class UniverseApi {
   async refreshUniverse(request: RefreshRequest = { download: true }): Promise<RefreshResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/universe/refresh`, {
+    const response = await fetch(`${API_BASE_PATH}/universe/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -82,7 +82,7 @@ class UniverseApi {
   }
 
   async getStats(): Promise<StatsResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/universe/stats`);
+    const response = await fetch(`${API_BASE_PATH}/universe/stats`);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch stats: ${response.statusText}`);
@@ -92,7 +92,7 @@ class UniverseApi {
   }
 
   async getFacets(): Promise<FacetsResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/universe/facets`);
+    const response = await fetch(`${API_BASE_PATH}/universe/facets`);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch facets: ${response.statusText}`);
@@ -110,7 +110,7 @@ class UniverseApi {
       }
     });
 
-    const response = await fetch(`${API_BASE_URL}/api/universe/symbols?${searchParams}`);
+    const response = await fetch(`${API_BASE_PATH}/universe/symbols?${searchParams}`);
     
     if (!response.ok) {
       throw new Error(`Failed to query symbols: ${response.statusText}`);
@@ -120,7 +120,7 @@ class UniverseApi {
   }
 
   async getNextRefresh(): Promise<NextRefreshResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/universe/next-refresh`);
+    const response = await fetch(`${API_BASE_PATH}/universe/next-refresh`);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch next refresh time: ${response.statusText}`);
@@ -138,7 +138,7 @@ class UniverseApi {
       }
     });
 
-    const response = await fetch(`${API_BASE_URL}/api/universe/symbols.csv?${searchParams}`);
+    const response = await fetch(`${API_BASE_PATH}/universe/symbols.csv?${searchParams}`);
     
     if (!response.ok) {
       throw new Error(`Failed to export CSV: ${response.statusText}`);

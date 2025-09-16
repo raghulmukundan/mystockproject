@@ -45,7 +45,13 @@ def init_db():
         
         # Import src models for historical data
         try:
-            from src.db.models import HistoricalPrice, AssetMetadata, ImportJob, ImportError
+            # Importing the module registers all models with the shared Base
+            from src.db import models as src_models  # noqa: F401
+            # Explicit class imports help linters and ensure table names are referenced
+            from src.db.models import (
+                HistoricalPrice, AssetMetadata, ImportJob, ImportError,
+                TechnicalDaily, TechnicalLatest, TechJob, TechJobError,
+            )  # noqa: F401
         except ImportError as e:
             logger.warning(f"Could not import src models: {e}")
             
