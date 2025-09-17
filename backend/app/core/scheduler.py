@@ -5,7 +5,7 @@ from app.services.market_data import update_market_data
 from app.services.eod_scan import run_eod_scan_all_symbols
 from app.services.job_ttl_cleanup import cleanup_old_job_records
 from app.core.config import TIMEZONE
-from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+from app.services.job_status import begin_job, complete_job, fail_job, prune_history, prune_tech_jobs
 from src.services.tech.run import run_technical_compute
 try:
     from zoneinfo import ZoneInfo
@@ -87,8 +87,9 @@ def eod_price_scan_job():
         tech_job_id = begin_job(tech_job_name)
         try:
             tech_result = run_technical_compute(None)
-            tech_processed = int(tech_result.get('daily_rows_upserted', 0)) + int(tech_result.get('latest_rows_upserted', 0))
+            tech_processed = int(tech_result.get('updated_symbols', 0))
             complete_job(tech_job_id, records_processed=tech_processed)
+            prune_tech_jobs(keep=5)
         except Exception as te:
             fail_job(tech_job_id, str(te))
         finally:

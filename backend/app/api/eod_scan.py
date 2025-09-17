@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 
 from app.core.database import get_db
@@ -33,12 +33,23 @@ class EodScanErrorResponse(BaseModel):
 
 
 def _to_summary(row: EodScan) -> EodScanSummary:
+    # Treat naive datetimes as UTC for consistent client rendering
+    def _iso_utc(dt: datetime | None) -> str | None:
+        if not dt:
+            return None
+        try:
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc).isoformat()
+            return dt.astimezone(timezone.utc).isoformat()
+        except Exception:
+            return dt.isoformat()
+
     return EodScanSummary(
         id=row.id,
         status=row.status,
         scan_date=row.scan_date,
-        started_at=row.started_at.isoformat() if row.started_at else None,
-        completed_at=row.completed_at.isoformat() if row.completed_at else None,
+        started_at=_iso_utc(row.started_at),
+        completed_at=_iso_utc(row.completed_at),
         symbols_requested=row.symbols_requested or 0,
         symbols_fetched=row.symbols_fetched or 0,
         error_count=row.error_count or 0,

@@ -244,6 +244,19 @@ export const JobSettings: React.FC = () => {
   const formatDateTime = (isoString: string) => {
     return new Date(isoString).toLocaleString();
   };
+  // Display times in America/Chicago for consistency with EOD/Tech schedules
+  const formatChicago = (iso?: string | null) => {
+    if (!iso) return '';
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        timeZone: 'America/Chicago'
+      }).format(new Date(iso));
+    } catch {
+      return new Date(iso).toLocaleString();
+    }
+  };
   const formatDuration = (seconds: number) => {
     const s = Math.max(0, Math.round(seconds));
     const h = Math.floor(s / 3600);
@@ -544,7 +557,7 @@ export const JobSettings: React.FC = () => {
                     <span className="ml-2">updated {techLatest.updated_symbols} / {techLatest.total_symbols}</span>
                     <span className="ml-2">errors {techLatest.errors}</span>
                     {techLatest.finished_at && (
-                      <span className="ml-2">finished {new Date(techLatest.finished_at).toLocaleString()}</span>
+                      <span className="ml-2">finished {formatChicago(techLatest.finished_at)} (America/Chicago)</span>
                     )}
                   </div>
                 </CardContent>
@@ -560,7 +573,7 @@ export const JobSettings: React.FC = () => {
                       <div key={h.id} className="flex justify-between border-b py-1">
                         <div>
                           <Badge variant={getStatusBadgeVariant(h.status)}>{h.status.toUpperCase()}</Badge>
-                          <span className="ml-2">{new Date(h.started_at).toLocaleString()}</span>
+                          <span className="ml-2">{formatChicago(h.started_at)} (America/Chicago)</span>
                         </div>
                         <div className="text-gray-600">
                           {h.records_processed ? (<span>{h.records_processed} records</span>) : null}

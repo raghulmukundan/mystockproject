@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import pandas as pd
 
-from src.db.models import SessionLocal, TechJob, TechJobError
+from src.db.models import SessionLocal, TechJob, TechJobError, TechJobSkip, TechJobSuccess
 from .fetch_prices import get_latest_trade_date, get_symbols_for_date, get_cutoff, load_tail_df
 from .compute import compute_indicators_tail
 from .upsert import upsert_daily as upsert_daily_rows, upsert_latest as upsert_latest_row
@@ -53,6 +53,7 @@ def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
 
     tail_days = int(os.getenv("TECH_TAIL_DAYS", "260"))
     buffer_days = int(os.getenv("TECH_BUFFER_DAYS", "10"))
+    min_rows = int(os.getenv("TECH_MIN_ROWS", "60"))
 
     db = SessionLocal()
     job = None
@@ -86,16 +87,40 @@ def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
         job.total_symbols = len(sym_list)
         db.commit()
 
+        skipped_empty = 0
+        skipped_short_tail = 0
+        skipped_no_today = 0
+
         for sym in sym_list:
             try:
                 df = load_tail_df(db, sym, cutoff)
-                if df is None or df.empty or len(df) < 60:
+                if df is None or df.empty:
+                    skipped_empty += 1
+                    try:
+                        db.add(TechJobSkip(tech_job_id=job.id, symbol=sym, reason='empty', detail=f'No data since cutoff {cutoff}'))
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+                    continue
+                if len(df) < min_rows:
+                    skipped_short_tail += 1
+                    try:
+                        db.add(TechJobSkip(tech_job_id=job.id, symbol=sym, reason='short_tail', detail=f'Rows={len(df)} < min_rows={min_rows}'))
+                        db.commit()
+                    except Exception:
+                        db.rollback()
                     continue
                 df2 = compute_indicators_tail(df)
                 # select latest row (for latest table)
                 last_row = df2.iloc[-1]
                 if str(last_row["date"]) != latest_trade_date:
                     # Only act for today's trade date
+                    skipped_no_today += 1
+                    try:
+                        db.add(TechJobSkip(tech_job_id=job.id, symbol=sym, reason='no_today', detail=f'Last bar date={last_row["date"]}, latest_trade_date={latest_trade_date}'))
+                        db.commit()
+                    except Exception:
+                        db.rollback()
                     continue
                 # Build row dicts
                 latest = {
@@ -128,7 +153,11 @@ def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
                 count = upsert_daily_rows(db, [daily])
                 job.daily_rows_upserted += count
                 job.updated_symbols += 1
-                db.commit()
+                try:
+                    db.add(TechJobSuccess(tech_job_id=job.id, symbol=sym, date=latest_trade_date))
+                    db.commit()
+                except Exception:
+                    db.rollback()
             except Exception as e:
                 job.errors += 1
                 job.message = str(e)
@@ -149,6 +178,12 @@ def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
         job.finished_at = datetime.now(timezone.utc).isoformat()
         db.commit()
 
+        # Log a short summary for visibility
+        try:
+            print(f"[tech] summary: total={job.total_symbols} updated={job.updated_symbols} skipped_empty={skipped_empty} skipped_short_tail={skipped_short_tail} skipped_no_today={skipped_no_today} errors={job.errors}")
+        except Exception:
+            pass
+
         return {
             "job_id": job.id,
             "latest_trade_date": latest_trade_date,
@@ -157,6 +192,9 @@ def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
             "daily_rows_upserted": job.daily_rows_upserted,
             "latest_rows_upserted": job.latest_rows_upserted,
             "errors": job.errors,
+            "skipped_empty": skipped_empty,
+            "skipped_short_tail": skipped_short_tail,
+            "skipped_no_today": skipped_no_today,
         }
     finally:
         db.close()

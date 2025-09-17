@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 from app.core.database import get_db
 from src.db.models import JobConfiguration, JobExecutionStatus
@@ -53,6 +53,17 @@ class JobStatusResponse(BaseModel):
     records_processed: Optional[int] = None
     error_message: Optional[str] = None
     next_run_at: Optional[str] = None
+
+def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    if not dt:
+        return None
+    try:
+        # Treat naive datetimes as UTC and mark them explicitly
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc).isoformat()
+        return dt.astimezone(timezone.utc).isoformat()
+    except Exception:
+        return dt.isoformat()
 
 class JobSummaryResponse(BaseModel):
     job_name: str
@@ -121,12 +132,12 @@ def get_jobs_summary(db: Session = Depends(get_db)):
                 id=last_status.id,
                 job_name=last_status.job_name,
                 status=last_status.status,
-                started_at=last_status.started_at.isoformat(),
-                completed_at=last_status.completed_at.isoformat() if last_status.completed_at else None,
+                started_at=_iso_utc(last_status.started_at) or "",
+                completed_at=_iso_utc(last_status.completed_at),
                 duration_seconds=last_status.duration_seconds,
                 records_processed=last_status.records_processed,
                 error_message=last_status.error_message,
-                next_run_at=last_status.next_run_at.isoformat() if last_status.next_run_at else None
+                next_run_at=_iso_utc(last_status.next_run_at)
             )
         
         result.append(JobSummaryResponse(
@@ -221,18 +232,18 @@ def get_job_status_history(job_name: str, limit: int = 10, db: Session = Depends
     statuses = db.query(JobExecutionStatus).filter(
         JobExecutionStatus.job_name == job_name
     ).order_by(JobExecutionStatus.started_at.desc()).limit(limit).all()
-    
+
     return [
         JobStatusResponse(
             id=status.id,
             job_name=status.job_name,
             status=status.status,
-            started_at=status.started_at.isoformat(),
-            completed_at=status.completed_at.isoformat() if status.completed_at else None,
+            started_at=_iso_utc(status.started_at) or "",
+            completed_at=_iso_utc(status.completed_at),
             duration_seconds=status.duration_seconds,
             records_processed=status.records_processed,
             error_message=status.error_message,
-            next_run_at=status.next_run_at.isoformat() if status.next_run_at else None
+            next_run_at=_iso_utc(status.next_run_at)
         )
         for status in statuses
     ]

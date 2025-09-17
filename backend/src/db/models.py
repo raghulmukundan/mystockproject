@@ -264,6 +264,25 @@ class TechJobError(Base):
     symbol = Column(String, nullable=True)
     error_message = Column(Text, nullable=False)
 
+class TechJobSkip(Base):
+    __tablename__ = "tech_job_skips"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tech_job_id = Column(Integer, nullable=False)
+    symbol = Column(String, nullable=False)
+    reason = Column(String, nullable=False)  # 'empty' | 'short_tail' | 'no_today'
+    detail = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+class TechJobSuccess(Base):
+    __tablename__ = "tech_job_successes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tech_job_id = Column(Integer, nullable=False)
+    symbol = Column(String, nullable=False)
+    date = Column(String, nullable=False)  # latest_trade_date
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
 # Import config from centralized location
 try:
     from app.core.config import DATABASE_URL, DATA_DIR

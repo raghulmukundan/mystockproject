@@ -41,6 +41,12 @@ type EodScanError = {
 const JobStatus: React.FC = () => {
   const [eodScans, setEodScans] = useState<EodScan[]>([])
   const [importJobs, setImportJobs] = useState<ImportJob[]>([])
+  const [techJobs, setTechJobs] = useState<any[]>([])
+  const [selectedTechJobId, setSelectedTechJobId] = useState<number | null>(null)
+  const [techSkips, setTechSkips] = useState<any[]>([])
+  const [techSuccesses, setTechSuccesses] = useState<any[]>([])
+  const [techErrors, setTechErrors] = useState<any[]>([])
+  const [techLoading, setTechLoading] = useState(false)
   const [techRuns, setTechRuns] = useState<any[]>([])
   const [starting, setStarting] = useState(false)
   const [startDate, setStartDate] = useState<string>('')
@@ -54,16 +60,16 @@ const JobStatus: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [eodRes, jobsRes, jobsSummaryRes, techHistRes] = await Promise.all([
+      const [eodRes, jobsRes, jobsSummaryRes, techJobsRes] = await Promise.all([
         fetch('/api/eod/scan/list'),
         fetch('/api/import/status'),
         fetch('/api/jobs/summary'),
-        fetch('/api/jobs/technical_compute/status?limit=5'),
+        fetch('/api/tech/jobs?limit=5'),
       ])
       if (eodRes.ok) setEodScans(await eodRes.json())
       if (jobsRes.ok) setImportJobs(await jobsRes.json())
       if (jobsSummaryRes.ok) setJobsSummary(await jobsSummaryRes.json())
-      if (techHistRes.ok) setTechRuns(await techHistRes.json())
+      if (techJobsRes.ok) setTechJobs(await techJobsRes.json())
     } catch (e) {
       console.error('Failed to load job status', e)
     }
@@ -295,24 +301,102 @@ const JobStatus: React.FC = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Technical Compute Runs</CardTitle>
+          <CardTitle>Technical Compute</CardTitle>
         </CardHeader>
         <CardContent>
-          {techRuns.length === 0 ? (
-            <div className="text-gray-500">No runs yet.</div>
+          {techJobs.length === 0 ? (
+            <div className="text-gray-500 text-sm">No runs yet.</div>
           ) : (
-            <div className="space-y-1 text-sm">
-              {techRuns.map((h: any) => (
-                <div key={h.id} className="flex justify-between">
-                  <div>
-                    <Badge variant={h.status === 'completed' ? 'default' : h.status === 'failed' ? 'destructive' : 'secondary'}>
-                      {h.status.toUpperCase()}
-                    </Badge>
-                    <span className="ml-2">{new Date(h.started_at).toLocaleString()}</span>
+            <div className="space-y-2 text-sm">
+              {techJobs.map((j: any) => {
+                const updated = j.updated_symbols || 0
+                const total = j.total_symbols || 0
+                const skips = j.skip_count || 0
+                const errors = j.errors || 0
+                const pct = total > 0 ? Math.round((updated / total) * 100) : 0
+                return (
+                  <div key={j.id} className={`border rounded p-3 ${selectedTechJobId === j.id ? 'bg-blue-50' : ''}`}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <Badge variant={j.status === 'completed' ? 'default' : j.status === 'failed' ? 'destructive' : 'secondary'}>
+                          {j.status.toUpperCase()}
+                        </Badge>
+                        <span className="ml-2">Job #{j.id}</span>
+                        <span className="ml-2">{new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Chicago' }).format(new Date(j.started_at))} (America/Chicago)</span>
+                      </div>
+                      <div className="text-gray-700">
+                        <span className="mr-3">Updated {updated}/{total}</span>
+                        <span className="mr-3">Skips {skips}</span>
+                        {errors > 0 && (<span className="text-red-600">Errors {errors}</span>)}
+                      </div>
+                    </div>
+                    <div className="mt-2 bg-gray-200 h-2 rounded"><div className="bg-green-500 h-2 rounded" style={{ width: `${pct}%` }} /></div>
+                    <div className="mt-2 flex gap-2">
+                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechSkips([]); await fetch(`/api/tech/skips/${j.id}`).then(r=>r.ok?r.json():[]).then(setTechSkips).finally(()=>setTechLoading(false)); }}>View Skips</Button>
+                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechSuccesses([]); await fetch(`/api/tech/success/${j.id}`).then(r=>r.ok?r.json():[]).then(setTechSuccesses).finally(()=>setTechLoading(false)); }}>View Successes</Button>
+                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechErrors([]); await fetch(`/api/tech/errors/${j.id}`).then(r=>r.ok?r.json():[]).then(setTechErrors).finally(()=>setTechLoading(false)); }}>View Errors</Button>
+                    </div>
                   </div>
-                  {h.records_processed ? (<div className="text-gray-600">{h.records_processed} records</div>) : null}
+                )
+              })}
+            </div>
+          )}
+
+          {selectedTechJobId && (
+            <div className="mt-4 space-y-4">
+              {techLoading && <div className="text-gray-500 text-sm">Loading…</div>}
+              {techSkips.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Skips</div>
+                  <div className="max-h-64 overflow-y-auto text-sm">
+                    <div className="grid grid-cols-4 gap-2 font-medium border-b pb-1">
+                      <div>Symbol</div><div>Reason</div><div>Detail</div><div>When</div>
+                    </div>
+                    {techSkips.map((s: any, idx: number) => (
+                      <div key={idx} className="grid grid-cols-4 gap-2 border-b py-1">
+                        <div>{s.symbol}</div>
+                        <div>{s.reason}</div>
+                        <div className="break-all">{s.detail || ''}</div>
+                        <div>{new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Chicago' }).format(new Date(s.created_at))} (America/Chicago)</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
+              {techSuccesses.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Successes</div>
+                  <div className="max-h-64 overflow-y-auto text-sm">
+                    <div className="grid grid-cols-3 gap-2 font-medium border-b pb-1">
+                      <div>Symbol</div><div>Date</div><div>When</div>
+                    </div>
+                    {techSuccesses.map((s: any, idx: number) => (
+                      <div key={idx} className="grid grid-cols-3 gap-2 border-b py-1">
+                        <div>{s.symbol}</div>
+                        <div>{s.date}</div>
+                        <div>{new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Chicago' }).format(new Date(s.created_at))} (America/Chicago)</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {techErrors.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Errors</div>
+                  <div className="max-h-64 overflow-y-auto text-sm">
+                    <div className="grid grid-cols-3 gap-2 font-medium border-b pb-1">
+                      <div>Symbol</div><div>Error</div><div>When</div>
+                    </div>
+                    {techErrors.map((e: any, idx: number) => (
+                      <div key={idx} className="grid grid-cols-3 gap-2 border-b py-1">
+                        <div>{e.symbol || ''}</div>
+                        <div className="break-all">{e.error_message}</div>
+                        <div>{new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Chicago' }).format(new Date(e.occurred_at))} (America/Chicago)</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

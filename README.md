@@ -177,3 +177,96 @@ npm run test  # Run Vitest
 ## License
 
 MIT License
+
+## Technical Indicators & Jobs (Current Snapshot)
+
+This section documents the technical indicator pipeline, the tables it writes to, how scheduled jobs are configured, and how retention (TTL) is applied. It will be expanded as we add more features.
+
+### Data Sources and Merge
+- historical_prices (src): Long-term OHLCV data by symbol/date. Used as the baseline history.
+- prices_daily (app): Schwab EOD OHLCV upserts by symbol/date. Treated as the primary source for “today”.
+- Merge rules for indicator compute (tail recompute):
+  - Pull recent bars from both tables using a cutoff = latest_trade_date − (TECH_TAIL_DAYS + TECH_BUFFER_DAYS).
+  - Concatenate; when duplicate dates exist, prefer prices_daily over historical_prices.
+  - Sort by date ASC; require a minimum tail length (TECH_MIN_ROWS, default 60) to compute stable indicators.
+
+### Indicators (pandas‑ta)
+- Core indicators computed per symbol: SMA(20/50/200), RSI(14), ATR(14), ADX(14), Donchian(20), MACD (12/26/9), avg_vol(20), 52‑week high (252)
+- Derived (screener) fields: distance_to_52w_high, rel_volume, sma_slope
+
+### Technical Tables
+- technical_daily
+  - PK: (symbol, date)
+  - Contains core indicators and inputs (close, volume, SMA/RSI/ATR/ADX/Donchian/MACD/avg_vol/high_252)
+  - No derived screener fields; they can be computed on demand from these inputs
+  - Today’s row is upserted (idempotent) each time the job runs
+
+- technical_latest
+  - PK: symbol
+  - One row per symbol for the latest trade date
+  - Includes both core and derived screener fields (distance_to_52w_high, rel_volume, sma_slope)
+  - Optimized for fast “today-only” screening in the UI
+
+### Tech Job Tracking Tables
+- tech_jobs
+  - One row per technical compute run (started_at, finished_at, status, latest_trade_date)
+  - Counters: total_symbols, updated_symbols, daily_rows_upserted, latest_rows_upserted, errors
+
+- tech_job_skips
+  - Per‑symbol reasons for skipping in a run; reason in {'empty','short_tail','no_today'}
+  - empty: no data in merge window; short_tail: insufficient rows (< TECH_MIN_ROWS); no_today: latest bar didn’t match latest_trade_date
+
+- tech_job_successes
+  - Per‑symbol success rows (symbol, date) for each run
+
+- job_execution_status (shared)
+  - Per job_name execution history with status, duration, and records_processed
+  - For technical_compute, records_processed = updated_symbols
+
+### Jobs & Scheduling
+- market_data_refresh (interval)
+  - Every 30 minutes (honors market-hours logic inside the job)
+
+- nasdaq_universe_refresh (cron)
+  - Sundays 08:00 America/Chicago
+  - Populates/updates the symbols universe with filters (excludes test issues, warrants, SPAC units, rights, preferred/hybrid suffixes, specific class/test suffixes)
+
+- eod_price_scan (cron)
+  - Mon–Fri 17:30 America/Chicago
+  - Pulls Schwab EOD OHLCV into prices_daily, in batches with rate limiting
+  - Fails fast if Schwab auth refresh fails to avoid flooding downstream errors
+
+- technical_compute (cron & chained)
+  - Mon–Fri 17:40 America/Chicago AND triggered automatically after eod_price_scan completes
+  - Tail recompute from merged sources; writes to technical_daily and technical_latest
+  - Logs per‑symbol errors, skips (with reason), and successes
+
+### Retention (TTL)
+- JobExecutionStatus: keep last 5 runs per job (prune_history)
+- EOD scans: keep last 5 eod_scans and their eod_scan_errors (prune_eod_scans)
+- Tech runs: keep last 5 tech_jobs and their tech_job_skips / tech_job_successes (prune_tech_jobs)
+- A days‑based cleanup job also runs (job_ttl_cleanup.py) that deletes very old job data across tables
+
+### UI Overview
+- Job Settings
+  - Configure jobs, enable/disable, view last run details
+  - Run Now buttons for universe/market data/tech; live status for tech
+  - Schwab Authentication card to start OAuth flow (refresh tokens expire every 7 days). If using Tailscale, run `tailscale serve --https=443 localhost:8000` before login so the callback can reach the app.
+
+- Job Status
+  - EOD Scans: progress, errors, retry failed, truncate prices_daily
+  - Technical Compute: last runs with progress bars, updated/skips/errors counts; per‑run “View Skips”, “View Successes”, “View Errors” (loaded on demand)
+
+### Schwab OAuth & Tokens
+- Access tokens are short‑lived and automatically refreshed in memory
+- Refresh tokens have a hard 7‑day expiry (Schwab policy). You must re‑authenticate weekly via the browser OAuth flow to obtain a new refresh token, then update SCHWAB_REFRESH_TOKEN in your environment and restart the backend
+
+### Key Environment Variables
+- SCHWAB_CLIENT_ID, SCHWAB_CLIENT_SECRET, SCHWAB_REFRESH_TOKEN, SCHWAB_BASE_URL
+- TECH_TAIL_DAYS (default 260), TECH_BUFFER_DAYS (default 10), TECH_MIN_ROWS (default 60)
+- TIMEZONE configured to America/Chicago for job triggers (UI renders times in America/Chicago)
+
+### Making Sense of the Technical Tables
+- For fast “today” screens → technical_latest (has derived fields out of the box)
+- For historical analysis/backtesting → technical_daily (one row per date per symbol)
+- You can derive distance_to_52w_high, rel_volume, and sma_slope from technical_daily using its inputs; latest is kept as a convenience/performance cache

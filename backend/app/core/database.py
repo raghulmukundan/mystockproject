@@ -50,7 +50,7 @@ def init_db():
             # Explicit class imports help linters and ensure table names are referenced
             from src.db.models import (
                 HistoricalPrice, AssetMetadata, ImportJob, ImportError,
-                TechnicalDaily, TechnicalLatest, TechJob, TechJobError,
+                TechnicalDaily, TechnicalLatest, TechJob, TechJobError, TechJobSkip, TechJobSuccess,
             )  # noqa: F401
         except ImportError as e:
             logger.warning(f"Could not import src models: {e}")

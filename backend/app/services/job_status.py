@@ -6,6 +6,8 @@ from sqlalchemy import text
 from app.core.database import get_db
 from src.db.models import JobExecutionStatus
 from src.db.models import EodScan, EodScanError
+from src.db.models import TechJob
+from src.db.models import TechJobSkip, TechJobSuccess
 
 
 def begin_job(job_name: str, next_run_at: Optional[datetime] = None) -> int:
@@ -99,6 +101,24 @@ def prune_eod_scans(keep: int = 5):
         db.query(EodScanError).filter(~EodScanError.eod_scan_id.in_(ids_to_keep)).delete(synchronize_session=False)
         # Delete scans not in keep set
         db.query(EodScan).filter(~EodScan.id.in_(ids_to_keep)).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+
+def prune_tech_jobs(keep: int = 5):
+    """Keep only the most recent N tech jobs and related skips/successes."""
+    keep = max(0, int(keep))
+    db = next(get_db())
+    try:
+        ids_to_keep = [r.id for r in db.query(TechJob.id).order_by(TechJob.id.desc()).limit(keep).all()]
+        if not ids_to_keep:
+            return
+        # Delete related rows
+        db.query(TechJobSkip).filter(~TechJobSkip.tech_job_id.in_(ids_to_keep)).delete(synchronize_session=False)
+        db.query(TechJobSuccess).filter(~TechJobSuccess.tech_job_id.in_(ids_to_keep)).delete(synchronize_session=False)
+        # Delete older jobs
+        db.query(TechJob).filter(~TechJob.id.in_(ids_to_keep)).delete(synchronize_session=False)
         db.commit()
     finally:
         db.close()
