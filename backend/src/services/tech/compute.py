@@ -14,7 +14,7 @@ def compute_indicators_tail(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     out = df.copy()
-
+    
     out["sma20"]  = ta.sma(out["close"], length=20)
     out["sma50"]  = ta.sma(out["close"], length=50)
     out["sma200"] = ta.sma(out["close"], length=200)

@@ -47,6 +47,9 @@ const JobStatus: React.FC = () => {
   const [techSuccesses, setTechSuccesses] = useState<any[]>([])
   const [techErrors, setTechErrors] = useState<any[]>([])
   const [techLoading, setTechLoading] = useState(false)
+  const [skipOffset, setSkipOffset] = useState(0)
+  const [successOffset, setSuccessOffset] = useState(0)
+  const [errorOffset, setErrorOffset] = useState(0)
   const [techRuns, setTechRuns] = useState<any[]>([])
   const [starting, setStarting] = useState(false)
   const [startDate, setStartDate] = useState<string>('')
@@ -332,9 +335,9 @@ const JobStatus: React.FC = () => {
                     </div>
                     <div className="mt-2 bg-gray-200 h-2 rounded"><div className="bg-green-500 h-2 rounded" style={{ width: `${pct}%` }} /></div>
                     <div className="mt-2 flex gap-2">
-                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechSkips([]); await fetch(`/api/tech/skips/${j.id}`).then(r=>r.ok?r.json():[]).then(setTechSkips).finally(()=>setTechLoading(false)); }}>View Skips</Button>
-                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechSuccesses([]); await fetch(`/api/tech/success/${j.id}`).then(r=>r.ok?r.json():[]).then(setTechSuccesses).finally(()=>setTechLoading(false)); }}>View Successes</Button>
-                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechErrors([]); await fetch(`/api/tech/errors/${j.id}`).then(r=>r.ok?r.json():[]).then(setTechErrors).finally(()=>setTechLoading(false)); }}>View Errors</Button>
+                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechSkips([]); setSkipOffset(0); await fetch(`/api/tech/skips/${j.id}?limit=1000&offset=0`).then(r=>r.ok?r.json():[]).then(setTechSkips).finally(()=>setTechLoading(false)); }}>View Skips</Button>
+                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechSuccesses([]); setSuccessOffset(0); await fetch(`/api/tech/success/${j.id}?limit=1000&offset=0`).then(r=>r.ok?r.json():[]).then(setTechSuccesses).finally(()=>setTechLoading(false)); }}>View Successes</Button>
+                      <Button size="sm" variant="outline" onClick={async () => { setSelectedTechJobId(j.id); setTechLoading(true); setTechErrors([]); setErrorOffset(0); await fetch(`/api/tech/errors/${j.id}?limit=1000&offset=0`).then(r=>r.ok?r.json():[]).then(setTechErrors).finally(()=>setTechLoading(false)); }}>View Errors</Button>
                     </div>
                   </div>
                 )
@@ -361,6 +364,9 @@ const JobStatus: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                  {selectedTechJobId && (techSkips.length < (techJobs.find(j => j.id === selectedTechJobId)?.skip_count || 0)) && (
+                    <div className="mt-2"><Button size="sm" variant="outline" onClick={async () => { const next = skipOffset + 1000; setTechLoading(true); await fetch(`/api/tech/skips/${selectedTechJobId}?limit=1000&offset=${next}`).then(r=>r.ok?r.json():[]).then((more)=> setTechSkips(prev=>[...prev, ...more])).finally(()=>{ setSkipOffset(next); setTechLoading(false); }); }}>Load More Skips</Button></div>
+                  )}
                 </div>
               )}
               {techSuccesses.length > 0 && (
@@ -378,6 +384,9 @@ const JobStatus: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                  {selectedTechJobId && (techSuccesses.length < (techJobs.find(j => j.id === selectedTechJobId)?.success_count || 0)) && (
+                    <div className="mt-2"><Button size="sm" variant="outline" onClick={async () => { const next = successOffset + 1000; setTechLoading(true); await fetch(`/api/tech/success/${selectedTechJobId}?limit=1000&offset=${next}`).then(r=>r.ok?r.json():[]).then((more)=> setTechSuccesses(prev=>[...prev, ...more])).finally(()=>{ setSuccessOffset(next); setTechLoading(false); }); }}>Load More Successes</Button></div>
+                  )}
                 </div>
               )}
               {techErrors.length > 0 && (
@@ -395,6 +404,9 @@ const JobStatus: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                  {selectedTechJobId && (techErrors.length < (techJobs.find(j => j.id === selectedTechJobId)?.errors || 0)) && (
+                    <div className="mt-2"><Button size="sm" variant="outline" onClick={async () => { const next = errorOffset + 1000; setTechLoading(true); await fetch(`/api/tech/errors/${selectedTechJobId}?limit=1000&offset=${next}`).then(r=>r.ok?r.json():[]).then((more)=> setTechErrors(prev=>[...prev, ...more])).finally(()=>{ setErrorOffset(next); setTechLoading(false); }); }}>Load More Errors</Button></div>
+                  )}
                 </div>
               )}
             </div>

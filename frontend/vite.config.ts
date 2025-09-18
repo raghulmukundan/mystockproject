@@ -9,7 +9,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://backend:8000',
+        target: process.env.NODE_ENV === 'development' ? 'http://backend:8000' : 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       }

@@ -58,7 +58,7 @@ def load_tail_df(db: Session, symbol: str, cutoff_date: str) -> pd.DataFrame:
         HistoricalPrice.asset_type == 'stock',  # ensure only stocks
     ).all()
     hp = pd.DataFrame(hp_rows, columns=cols)
-
+  
     if PriceDaily is not None:
         cp_rows = db.query(PriceDaily.date, PriceDaily.open, PriceDaily.high, PriceDaily.low,
                            PriceDaily.close, PriceDaily.volume).filter(

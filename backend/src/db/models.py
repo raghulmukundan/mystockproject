@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Text, Float, Index, DateTime, Boolean
 from sqlalchemy.orm import sessionmaker
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Use the same Base class as the app models
 try:
@@ -59,7 +59,7 @@ class AssetMetadata(Base):
     industry = Column(String, nullable=True)        # Industry classification
     market_cap = Column(String, nullable=True)      # Market cap category
     currency = Column(String, nullable=True)        # Trading currency
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 # Tracking tables for import operations
@@ -165,7 +165,7 @@ class JobConfiguration(Base):
     market_start_hour = Column(Integer, nullable=True, default=9)    # 9 AM
     market_end_hour = Column(Integer, nullable=True, default=16)     # 4 PM
     
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class JobExecutionStatus(Base):

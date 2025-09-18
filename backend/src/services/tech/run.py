@@ -21,38 +21,55 @@ DAILY_FIELDS = {
 
 
 def _ensure_env_defaults():
-    """Append TECH_* defaults to .env if keys are missing. Safe no-op if .env not present."""
+    """
+    Append TECH_* defaults to .env only when BOTH of the following are true:
+      - The key is not set in the current process environment (os.environ)
+      - The key is not already present in the .env file
+
+    This avoids accidentally overriding values provided via Docker/compose env.
+    Safe no-op if .env does not exist or is unreadable.
+    """
     env_path = os.path.join(os.getcwd(), ".env")
     defaults = {
-        "TECH_TAIL_DAYS": "260",
-        "TECH_BUFFER_DAYS": "10",
+        "TECH_TAIL_DAYS": "800",
+        "TECH_BUFFER_DAYS": "30",
         "TECH_RUN_TIME": "17:40",
     }
+    if not os.path.exists(env_path):
+        return
     existing = {}
-    if os.path.exists(env_path):
+    try:
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if '=' in line and not line.strip().startswith('#'):
+                    k, v = line.strip().split('=', 1)
+                    existing[k.strip()] = v.strip()
+    except Exception:
+        return  # don't fail if unreadable
+
+    # Only append keys missing from both process env and .env
+    to_append = []
+    for k, v in defaults.items():
+        if os.getenv(k):
+            continue  # present in env; respect external config
+        if k in existing:
+            continue  # present in .env already
+        to_append.append((k, v))
+
+    if to_append:
         try:
-            with open(env_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if '=' in line and not line.strip().startswith('#'):
-                        k, v = line.strip().split('=', 1)
-                        existing[k.strip()] = v.strip()
+            with open(env_path, 'a', encoding='utf-8') as f:
+                for k, v in to_append:
+                    f.write(f"\n{k}={v}\n")
         except Exception:
-            return  # don't fail if unreadable
-        missing = [k for k in defaults if k not in existing]
-        if missing:
-            try:
-                with open(env_path, 'a', encoding='utf-8') as f:
-                    for k in missing:
-                        f.write(f"\n{k}={defaults[k]}\n")
-            except Exception:
-                pass
+            pass
 
 
 def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
     _ensure_env_defaults()
 
-    tail_days = int(os.getenv("TECH_TAIL_DAYS", "260"))
-    buffer_days = int(os.getenv("TECH_BUFFER_DAYS", "10"))
+    tail_days = int(os.getenv("TECH_TAIL_DAYS", "800"))
+    buffer_days = int(os.getenv("TECH_BUFFER_DAYS", "30"))
     min_rows = int(os.getenv("TECH_MIN_ROWS", "60"))
 
     db = SessionLocal()
@@ -83,7 +100,11 @@ def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
         else:
             sym_list = get_symbols_for_date(db, latest_trade_date)
         cutoff = get_cutoff(latest_trade_date, tail_days, buffer_days)
-
+        try:
+            print(f"[tech] config: latest_trade_date={latest_trade_date} tail_days={tail_days} buffer_days={buffer_days} cutoff={cutoff} min_rows={min_rows}")
+        except Exception:
+            pass
+        
         job.total_symbols = len(sym_list)
         db.commit()
 
@@ -110,6 +131,7 @@ def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
                     except Exception:
                         db.rollback()
                     continue
+                
                 df2 = compute_indicators_tail(df)
                 # select latest row (for latest table)
                 last_row = df2.iloc[-1]

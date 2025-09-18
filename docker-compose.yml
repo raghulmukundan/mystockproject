@@ -13,6 +13,10 @@ services:
       - SCHWAB_CLIENT_SECRET=${SCHWAB_CLIENT_SECRET}
       - SCHWAB_REFRESH_TOKEN=${SCHWAB_REFRESH_TOKEN}
       - SCHWAB_BASE_URL=${SCHWAB_BASE_URL:-https://api.schwabapi.com}
+      # Technical compute tail/window settings
+      - TECH_TAIL_DAYS=${TECH_TAIL_DAYS:-800}
+      - TECH_BUFFER_DAYS=${TECH_BUFFER_DAYS:-30}
+      - TECH_MIN_ROWS=${TECH_MIN_ROWS:-252}
     volumes:
       - ./backend:/app
       - C:\Users\raghu\Downloads:/downloads

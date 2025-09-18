@@ -5,6 +5,7 @@ import time
 import threading
 
 from src.db.models import SessionLocal, TechJob, TechJobSkip, TechJobSuccess
+from datetime import datetime, timezone
 from src.services.tech.run import run_technical_compute
 from src.services.tech.fetch_prices import get_latest_trade_date
 from app.services.job_status import begin_job, complete_job, fail_job, prune_history, prune_tech_jobs
@@ -167,15 +168,24 @@ class SkipItem(BaseModel):
 
 
 @router.get("/api/tech/skips/{job_id}", response_model=List[SkipItem])
-async def list_job_skips(job_id: int, reason: Optional[str] = None, limit: int = 1000):
+async def list_job_skips(job_id: int, reason: Optional[str] = None, limit: int = 1000, offset: int = 0):
     db = SessionLocal()
     try:
         q = db.query(TechJobSkip).filter(TechJobSkip.tech_job_id == job_id).order_by(TechJobSkip.id.asc())
         if reason:
             q = q.filter(TechJobSkip.reason == reason)
-        rows = q.limit(min(5000, max(1, limit))).all()
+        rows = q.offset(max(0, offset)).limit(min(5000, max(1, limit))).all()
+        def _iso_utc(dt: Optional[datetime]) -> str:
+            if not dt:
+                return ''
+            try:
+                if dt.tzinfo is None:
+                    return dt.replace(tzinfo=timezone.utc).isoformat()
+                return dt.astimezone(timezone.utc).isoformat()
+            except Exception:
+                return dt.isoformat()
         return [
-            SkipItem(symbol=r.symbol, reason=r.reason, detail=r.detail, created_at=r.created_at.isoformat() if r.created_at else '')
+            SkipItem(symbol=r.symbol, reason=r.reason, detail=r.detail, created_at=_iso_utc(r.created_at))
             for r in rows
         ]
     finally:
@@ -189,12 +199,21 @@ class SuccessItem(BaseModel):
 
 
 @router.get("/api/tech/success/{job_id}", response_model=List[SuccessItem])
-async def list_job_success(job_id: int, limit: int = 2000):
+async def list_job_success(job_id: int, limit: int = 2000, offset: int = 0):
     db = SessionLocal()
     try:
-        rows = db.query(TechJobSuccess).filter(TechJobSuccess.tech_job_id == job_id).order_by(TechJobSuccess.id.asc()).limit(min(10000, max(1, limit))).all()
+        rows = db.query(TechJobSuccess).filter(TechJobSuccess.tech_job_id == job_id).order_by(TechJobSuccess.id.asc()).offset(max(0, offset)).limit(min(10000, max(1, limit))).all()
+        def _iso_utc(dt: Optional[datetime]) -> str:
+            if not dt:
+                return ''
+            try:
+                if dt.tzinfo is None:
+                    return dt.replace(tzinfo=timezone.utc).isoformat()
+                return dt.astimezone(timezone.utc).isoformat()
+            except Exception:
+                return dt.isoformat()
         return [
-            SuccessItem(symbol=r.symbol, date=r.date, created_at=r.created_at.isoformat() if r.created_at else '')
+            SuccessItem(symbol=r.symbol, date=r.date, created_at=_iso_utc(r.created_at))
             for r in rows
         ]
     finally:
@@ -208,13 +227,22 @@ class ErrorItem(BaseModel):
 
 
 @router.get("/api/tech/errors/{job_id}", response_model=List[ErrorItem])
-async def list_job_errors(job_id: int, limit: int = 1000):
+async def list_job_errors(job_id: int, limit: int = 1000, offset: int = 0):
     db = SessionLocal()
     try:
         from src.db.models import TechJobError
-        rows = db.query(TechJobError).filter(TechJobError.tech_job_id == job_id).order_by(TechJobError.id.asc()).limit(min(10000, max(1, limit))).all()
+        rows = db.query(TechJobError).filter(TechJobError.tech_job_id == job_id).order_by(TechJobError.id.asc()).offset(max(0, offset)).limit(min(10000, max(1, limit))).all()
+        def _iso_utc(dt: Optional[datetime]) -> str:
+            if not dt:
+                return ''
+            try:
+                if dt.tzinfo is None:
+                    return dt.replace(tzinfo=timezone.utc).isoformat()
+                return dt.astimezone(timezone.utc).isoformat()
+            except Exception:
+                return dt.isoformat()
         return [
-            ErrorItem(symbol=getattr(r, 'symbol', None), error_message=r.error_message, occurred_at=r.__dict__.get('occurred_at').isoformat() if r.__dict__.get('occurred_at') else '')
+            ErrorItem(symbol=getattr(r, 'symbol', None), error_message=r.error_message, occurred_at=_iso_utc(getattr(r, 'occurred_at', None)))
             for r in rows
         ]
     finally:
