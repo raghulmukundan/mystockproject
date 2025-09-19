@@ -23,3 +23,6 @@ UNIVERSE_FILE = os.getenv("UNIVERSE_FILE", "nasdaqtraded.txt")
 # Price caching configuration
 PRICE_CACHE_TTL_MINUTES = int(os.getenv("PRICE_CACHE_TTL_MINUTES", "30"))  # 30 minutes default
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "demo")
+
+# External APIs service configuration
+EXTERNAL_APIS_SERVICE_URL = os.getenv("EXTERNAL_APIS_SERVICE_URL", "http://external-apis:8003")

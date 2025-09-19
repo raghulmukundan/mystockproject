@@ -25,6 +25,22 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  external-apis:
+    build: ./external-apis
+    ports:
+      - "8003:8003"
+    environment:
+      - TZ=America/Chicago
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
+      - SCHWAB_CLIENT_ID=${SCHWAB_CLIENT_ID}
+      - SCHWAB_CLIENT_SECRET=${SCHWAB_CLIENT_SECRET}
+      - SCHWAB_REFRESH_TOKEN=${SCHWAB_REFRESH_TOKEN}
+      - SCHWAB_BASE_URL=${SCHWAB_BASE_URL:-https://api.schwabapi.com}
+    volumes:
+      - ./external-apis:/app
+    networks:
+      - app-network
+
   frontend:
     build: ./frontend
     ports:
@@ -39,6 +55,7 @@ services:
       - app-network
     depends_on:
       - backend
+      - external-apis
 
 networks:
   app-network:

@@ -185,7 +185,22 @@ async def refresh_token(request: RefreshTokenRequest):
 async def oauth_status():
     """
     Check OAuth configuration and authentication status.
+    Uses external APIs service with fallback to local implementation.
     """
+    # Try external APIs service first
+    try:
+        from ..services.external_apis_client import external_apis_client
+        result = await external_apis_client.get_schwab_auth_status()
+        if result:
+            return OAuthStatus(
+                authenticated=result.get("authenticated", False),
+                client_id=result.get("client_id", "Not configured"),
+                scope=result.get("scope", "readonly")
+            )
+    except Exception as e:
+        print(f"External APIs service unavailable, using fallback: {e}")
+    
+    # Fallback to original implementation
     service = get_oauth_service()
     
     if not service:
