@@ -39,7 +39,12 @@
       "Bash(psql:*)",
       "Bash(make:*)",
       "Bash(uvicorn:*)",
-      "Bash(docker cp:*)"
+      "Bash(docker cp:*)",
+      "Bash(npm install:*)",
+      "Bash(npm test)",
+      "Bash(npm test:*)",
+      "Bash(./validate-and-start.bat validate)",
+      "Bash(./validate-and-start.bat help)"
     ],
     "deny": [],
     "ask": []

@@ -31,7 +31,7 @@ services:
       - "3000:3000"
     environment:
       - TZ=America/Chicago
-      - VITE_API_URL=http://host.docker.internal:8000
+      - VITE_API_URL=http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules

@@ -1,19 +1,56 @@
-import axios from 'axios'
+import axios, { AxiosInstance } from 'axios'
 import { Watchlist, UploadResponse, WatchlistItem } from '../types'
 
-// Force same-origin base to avoid any leaked env overriding baseURL at runtime
-const SAME_ORIGIN_API = `${window.location.origin}/api`;
-const api = axios.create({
-  baseURL: SAME_ORIGIN_API,
+// Create axios instance that works from host browser
+// When accessing from host browser, use localhost:8000 directly since backend is exposed on port 8000
+const api: AxiosInstance = axios.create({
+  baseURL: 'http://localhost:8000/api',
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
   },
+  timeout: 10000,
+  responseType: 'json', // Ensure JSON parsing
 })
+
+// Clear any potential global defaults that might interfere
+delete (api.defaults as any).transformRequest
+delete (api.defaults as any).transformResponse
+
+console.log('🔍 API instance created with baseURL:', api.defaults.baseURL);
+
+// Debug interceptor
+api.interceptors.request.use(config => {
+  console.log('🚀 Request config:', {
+    url: config.url,
+    baseURL: config.baseURL,
+    method: config.method
+  });
+  return config;
+});
+
+api.interceptors.response.use(
+  response => {
+    console.log('✅ Response received:', response.config.url);
+    return response;
+  },
+  error => {
+    console.error('❌ Request failed:', {
+      message: error.message,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      status: error.response?.status
+    });
+    return Promise.reject(error);
+  }
+);
 
 export const watchlistsApi = {
   async getAll(): Promise<Watchlist[]> {
     const response = await api.get('/watchlists/')
-    return response.data
+    // Ensure JSON parsing if response is a string
+    const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+    return data
   },
 
   async getById(id: number): Promise<Watchlist> {

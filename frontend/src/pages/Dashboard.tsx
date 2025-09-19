@@ -184,9 +184,14 @@ export default function Dashboard() {
   const loadWatchlists = async () => {
     try {
       const data = await watchlistsApi.getAll()
-      setWatchlists(data)
+      console.log('🔍 Received watchlists data:', data)
+      console.log('🔍 Data type:', typeof data, 'Is array:', Array.isArray(data))
+
+      // Ensure data is an array
+      const watchlistsArray = Array.isArray(data) ? data : []
+      setWatchlists(watchlistsArray)
       setLoading(false) // Show dashboard immediately
-      
+
       // Prices will be loaded from backend cache when needed
       // No automatic price loading on page load
     } catch (err: any) {
@@ -261,14 +266,14 @@ export default function Dashboard() {
 
   // Calculate statistics
   const totalWatchlists = watchlists.length
-  const allSymbols = watchlists.flatMap(w => w.items.map(item => item.symbol))
+  const allSymbols = Array.isArray(watchlists) ? watchlists.flatMap(w => w.items?.map(item => item.symbol) || []) : []
   const uniqueSymbols = new Set(allSymbols).size
   
   // Calculate performance metrics
-  const watchlistPerformances = watchlists.map(watchlist => ({
+  const watchlistPerformances = Array.isArray(watchlists) ? watchlists.map(watchlist => ({
     ...watchlist,
     performance: calculateWatchlistPerformance(watchlist, priceData)
-  }))
+  })) : []
   
   const bestPerforming = watchlistPerformances.reduce((best, current) => 
     current.performance.performance > (best?.performance.performance || -Infinity) ? current : best, 
