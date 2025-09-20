@@ -33,6 +33,7 @@ import {
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice, CompanyProfile } from '../services/stockApi'
+import { jobsApiService } from '../services/jobsApi'
 import { Watchlist, WatchlistItem } from '../types'
 import EditWatchlistModal from '../components/EditWatchlistModal'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
@@ -113,9 +114,7 @@ const computeLocalNext = (): Date => {
 
 const getServerNextRefresh = async (): Promise<Date | null> => {
   try {
-    const res = await fetch('/api/jobs/next-market-refresh')
-    if (!res.ok) return null
-    const data = await res.json()
+    const data = await jobsApiService.getNextMarketRefresh()
     return data.next_run_at ? new Date(data.next_run_at) : computeLocalNext()
   } catch {
     return computeLocalNext()
@@ -125,6 +124,24 @@ const getServerNextRefresh = async (): Promise<Date | null> => {
 export default function WatchlistDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+
+  // Early return if no ID to prevent infinite loops
+  if (!id) {
+    return (
+      <div className="px-4 py-6 sm:px-0">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">No watchlist ID provided in URL</p>
+          <Link
+            to="/watchlists"
+            className="text-blue-600 hover:text-blue-800 underline"
+          >
+            ← Back to Watchlists
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const [watchlist, setWatchlist] = useState<Watchlist | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -161,7 +178,7 @@ export default function WatchlistDetail() {
     if (id) {
       loadWatchlist(parseInt(id))
       loadAllWatchlists()
-      
+
       // Check if this watchlist is a favorite
       const savedFavorites = localStorage.getItem('favoriteWatchlists')
       if (savedFavorites) {
@@ -172,8 +189,11 @@ export default function WatchlistDetail() {
           console.error('Failed to parse favorite watchlists', e)
         }
       }
+    } else {
+      setError('No watchlist ID provided')
+      setLoading(false)
     }
-    
+
     // Fetch initial next run from backend
     ;(async () => {
       const next = await getServerNextRefresh()
@@ -202,7 +222,7 @@ export default function WatchlistDetail() {
   }
 
   useEffect(() => {
-    if (watchlist && watchlist.items.length > 0) {
+    if (watchlist && watchlist.items && watchlist.items.length > 0) {
       const symbols = watchlist.items
         .map(item => item.symbol)
         .filter(symbol => symbol && typeof symbol === 'string' && symbol.trim().length > 0)
@@ -219,12 +239,14 @@ export default function WatchlistDetail() {
   }, [watchlist])
 
   const loadWatchlist = async (watchlistId: number) => {
+    setLoading(true)
+    setError(null)
     try {
       const data = await watchlistsApi.getById(watchlistId)
       setWatchlist(data)
     } catch (err: any) {
+      console.error('Failed to load watchlist:', err)
       setError('Failed to load watchlist details')
-      console.error(err)
     } finally {
       setLoading(false)
     }
@@ -428,12 +450,12 @@ export default function WatchlistDetail() {
   const handleSelectAllItems = () => {
     if (!watchlist) return
     
-    if (selectedItems.length === watchlist.items.length) {
+    if (selectedItems.length === (watchlist.items?.length || 0)) {
       // Deselect all
       setSelectedItems([])
     } else {
       // Select all
-      setSelectedItems(watchlist.items.map(item => item.id))
+      setSelectedItems(watchlist.items?.map(item => item.id) || [])
     }
   }
 
@@ -448,7 +470,7 @@ export default function WatchlistDetail() {
 
   // Calculate watchlist metrics
   const watchlistMetrics: StockMetrics | null = useMemo(() => {
-    if (!watchlist || watchlist.items.length === 0) return null
+    if (!watchlist || !watchlist.items || watchlist.items.length === 0) return null
     
     let totalPerformance = 0
     let validPerformanceCount = 0
@@ -459,7 +481,7 @@ export default function WatchlistDetail() {
     const nearTarget: { symbol: string, percent: number }[] = []
     const nearStop: { symbol: string, percent: number }[] = []
     
-    watchlist.items.forEach(item => {
+    watchlist.items?.forEach(item => {
       const performance = calculatePerformance(item)
       if (performance) {
         totalPerformance += performance.gainLossPercent
@@ -490,7 +512,7 @@ export default function WatchlistDetail() {
     
     return {
       avgPerformance: validPerformanceCount > 0 ? totalPerformance / validPerformanceCount : 0,
-      totalSymbols: watchlist.items.length,
+      totalSymbols: watchlist.items?.length || 0,
       gainers,
       losers,
       highestPerformer: highestPerformer.symbol ? highestPerformer : null,
@@ -505,7 +527,7 @@ export default function WatchlistDetail() {
     if (!watchlist) return []
     
     // Filter out items with undefined or null symbols first
-    let result = watchlist.items.filter(item => 
+    let result = (watchlist.items || []).filter(item => 
       item.symbol && typeof item.symbol === 'string' && item.symbol.trim().length > 0
     )
     
@@ -603,6 +625,8 @@ export default function WatchlistDetail() {
     if (groupBy === 'none') return { 'All Items': filteredAndSortedItems }
     return groupWatchlistItems(filteredAndSortedItems, groupBy)
   }, [filteredAndSortedItems, groupBy])
+
+  // Component renders every second due to countdown timer - this is expected
 
   if (loading) {
     return (
@@ -900,7 +924,7 @@ export default function WatchlistDetail() {
           </div>
 
           {/* No Items State */}
-          {watchlist.items.length === 0 ? (
+          {(watchlist.items?.length || 0) === 0 ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
               <div className="text-center">
                 <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
@@ -1284,7 +1308,7 @@ export default function WatchlistDetail() {
                           </div>
                         </div>
                         <div className="text-xs text-gray-500 text-right">
-                          {watchlist.items.length} symbols in this watchlist
+                          {watchlist.items?.length || 0} symbols in this watchlist
                         </div>
                       </div>
                       

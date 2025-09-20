@@ -78,6 +78,7 @@ export default function Upload() {
         watchlistName.trim(),
         description.trim()
       )
+      console.log('Upload response:', response)
       setResult(response)
       setFile(null)
       setPreview(null)
@@ -118,29 +119,29 @@ export default function Upload() {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-green-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-green-700">{result.valid_symbols.length}</div>
+                <div className="text-2xl font-bold text-green-700">{result.valid_symbols?.length || 0}</div>
                 <div className="text-sm text-green-600">Valid Symbols</div>
               </div>
               <div className="bg-red-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-red-700">{result.invalid_symbols.length}</div>
+                <div className="text-2xl font-bold text-red-700">{result.invalid_symbols?.length || 0}</div>
                 <div className="text-sm text-red-600">Invalid Symbols</div>
               </div>
               <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-blue-700">{result.total_processed}</div>
+                <div className="text-2xl font-bold text-blue-700">{result.total_processed || 0}</div>
                 <div className="text-sm text-blue-600">Total Processed</div>
               </div>
             </div>
 
             <div className="mb-4">
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Watchlist: {result.watchlist.name}
+                Watchlist: {result.watchlist?.name || 'Unknown'}
               </h3>
-              {result.watchlist.description && (
+              {result.watchlist?.description && (
                 <p className="text-gray-600 mb-4">{result.watchlist.description}</p>
               )}
             </div>
 
-            {result.invalid_symbols.length > 0 && (
+            {result.invalid_symbols && result.invalid_symbols.length > 0 && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
                 <div className="flex items-center mb-2">
                   <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500 mr-2" />

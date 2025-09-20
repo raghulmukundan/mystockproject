@@ -17,7 +17,7 @@ def cleanup_historical_prices():
     logger.info("Cleaning up historical prices table...")
     
     # Use Docker container database URL
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist")
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:stockpass123@host.docker.internal:5432/stockwatchlist")
     
     try:
         engine = create_engine(DATABASE_URL)

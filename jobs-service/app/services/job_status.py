@@ -1,13 +1,13 @@
+"""
+Job status tracking service
+"""
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.core.database import get_db
-from src.db.models import JobExecutionStatus
-from src.db.models import EodScan, EodScanError
-from src.db.models import TechJob
-from src.db.models import TechJobSkip, TechJobSuccess
+from app.db.models import JobExecutionStatus
 
 
 def begin_job(job_name: str, next_run_at: Optional[datetime] = None) -> int:
@@ -29,6 +29,7 @@ def begin_job(job_name: str, next_run_at: Optional[datetime] = None) -> int:
 
 
 def complete_job(job_id: int, records_processed: int = 0):
+    """Mark job as completed with processing stats"""
     db = next(get_db())
     try:
         row = db.query(JobExecutionStatus).filter(JobExecutionStatus.id == job_id).first()
@@ -45,6 +46,7 @@ def complete_job(job_id: int, records_processed: int = 0):
 
 
 def fail_job(job_id: int, error_message: str):
+    """Mark job as failed with error message"""
     db = next(get_db())
     try:
         row = db.query(JobExecutionStatus).filter(JobExecutionStatus.id == job_id).first()
@@ -87,38 +89,23 @@ def prune_history(job_name: str, keep: int = 5):
         db.close()
 
 
-def prune_eod_scans(keep: int = 5):
-    """Keep only the most recent N EOD scans and related errors."""
-    keep = max(0, int(keep))
+def get_job_latest_status(job_name: str) -> Optional[JobExecutionStatus]:
+    """Get the latest status for a job"""
     db = next(get_db())
     try:
-        # Collect ids to keep
-        ids_to_keep = [r.id for r in db.query(EodScan.id).order_by(EodScan.started_at.desc()).limit(keep).all()]
-        if not ids_to_keep:
-            # Nothing to prune
-            return
-        # Delete errors for scans not in keep set
-        db.query(EodScanError).filter(~EodScanError.eod_scan_id.in_(ids_to_keep)).delete(synchronize_session=False)
-        # Delete scans not in keep set
-        db.query(EodScan).filter(~EodScan.id.in_(ids_to_keep)).delete(synchronize_session=False)
-        db.commit()
+        return db.query(JobExecutionStatus).filter(
+            JobExecutionStatus.job_name == job_name
+        ).order_by(JobExecutionStatus.started_at.desc()).first()
     finally:
         db.close()
 
 
-def prune_tech_jobs(keep: int = 5):
-    """Keep only the most recent N tech jobs and related skips/successes."""
-    keep = max(0, int(keep))
+def get_job_history(job_name: str, limit: int = 10) -> list[JobExecutionStatus]:
+    """Get job execution history"""
     db = next(get_db())
     try:
-        ids_to_keep = [r.id for r in db.query(TechJob.id).order_by(TechJob.id.desc()).limit(keep).all()]
-        if not ids_to_keep:
-            return
-        # Delete related rows
-        db.query(TechJobSkip).filter(~TechJobSkip.tech_job_id.in_(ids_to_keep)).delete(synchronize_session=False)
-        db.query(TechJobSuccess).filter(~TechJobSuccess.tech_job_id.in_(ids_to_keep)).delete(synchronize_session=False)
-        # Delete older jobs
-        db.query(TechJob).filter(~TechJob.id.in_(ids_to_keep)).delete(synchronize_session=False)
-        db.commit()
+        return db.query(JobExecutionStatus).filter(
+            JobExecutionStatus.job_name == job_name
+        ).order_by(JobExecutionStatus.started_at.desc()).limit(limit).all()
     finally:
         db.close()

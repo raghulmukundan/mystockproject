@@ -6,7 +6,7 @@ import io
 import csv
 
 from app.services.universe.service import UniverseService
-from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+# Job status tracking removed - now handled by separate jobs service
 
 router = APIRouter()
 
@@ -47,9 +47,8 @@ universe_service = UniverseService()
 async def refresh_universe(request: RefreshRequest = RefreshRequest()):
     """
     Refresh universe data by downloading and parsing nasdaqtraded.txt
+    Note: Job tracking is now handled by the separate jobs service
     """
-    job_name = "nasdaq_universe_refresh"
-    job_id = begin_job(job_name)
     try:
         result = universe_service.refresh_symbols(download=request.download)
         
@@ -64,13 +63,8 @@ async def refresh_universe(request: RefreshRequest = RefreshRequest()):
             total=result['total'],
             file_path=file_path
         )
-        # Mark job complete and prune history to last 5
-        complete_job(job_id, records_processed=result.get('total', 0))
-        prune_history(job_name, keep=5)
         return resp
     except Exception as e:
-        fail_job(job_id, str(e))
-        prune_history(job_name, keep=5)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/universe/stats", response_model=StatsResponse)

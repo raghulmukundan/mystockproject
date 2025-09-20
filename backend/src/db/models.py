@@ -290,7 +290,7 @@ except Exception:
     # Fallback for when running outside of app context
     from dotenv import load_dotenv
     load_dotenv()
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist")
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:stockpass123@host.docker.internal:5432/stockwatchlist")
     DATA_DIR = os.getenv("DATA_DIR", "./data")
 
 # Create data directory if it doesn't exist

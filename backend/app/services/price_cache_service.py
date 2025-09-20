@@ -123,22 +123,40 @@ class PriceCacheService:
             db.close()
     
     async def get_cached_prices(self, symbols: List[str]) -> Dict[str, dict]:
-        """Get cached prices from database"""
+        """Get cached prices from jobs service cached_prices table"""
         db = next(get_db())
         try:
-            prices = db.query(CurrentPrice).filter(CurrentPrice.symbol.in_(symbols)).all()
-            
+            # Query the cached_prices table directly (used by jobs service)
+            query = text("""
+                SELECT symbol, current_price, change_amount, change_percent,
+                       volume, market_cap, updated_at
+                FROM cached_prices
+                WHERE symbol = ANY(:symbols)
+            """)
+
+            result_proxy = db.execute(query, {"symbols": symbols})
+            rows = result_proxy.fetchall()
+
             result = {}
-            for price in prices:
-                result[price.symbol] = price.to_dict()
-            
+            for row in rows:
+                result[row.symbol] = {
+                    'symbol': row.symbol,
+                    'current_price': float(row.current_price),
+                    'change': float(row.change_amount) if row.change_amount else 0.0,
+                    'change_percent': float(row.change_percent) if row.change_percent else 0.0,
+                    'volume': int(row.volume) if row.volume else 0,
+                    'market_cap': int(row.market_cap) if row.market_cap else 0,
+                    'last_updated': row.updated_at.isoformat() if row.updated_at else None
+                }
+
             # Check for missing symbols and log
             missing_symbols = set(symbols) - set(result.keys())
             if missing_symbols:
                 logger.warning(f"Missing cached prices for symbols: {missing_symbols}")
-            
+
+            logger.info(f"Retrieved {len(result)} cached prices from jobs service cache")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error getting cached prices: {e}")
             return {}

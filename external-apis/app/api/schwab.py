@@ -1,14 +1,16 @@
 """
 Schwab API endpoints
 """
+import time
+import os
 from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 from ..clients.schwab.client import SchwabHTTPClient
 from ..clients.schwab.oauth import SchwabOAuthService
 from ..clients.schwab.symbols import to_schwab_symbol, from_schwab_symbol
+from ..services.prices.providers.schwab_history import SchwabHistoryProvider, ProviderError
 import urllib.parse
-import os
 
 router = APIRouter()
 
@@ -18,6 +20,25 @@ class OAuthStatus(BaseModel):
     client_id: str
     scope: Optional[str] = "readonly"
 
+class SymbolResult(BaseModel):
+    symbol: str
+    bars_count: int
+    error: Optional[str] = None
+
+class FetchHistoryResponse(BaseModel):
+    start: str
+    end: str
+    results: List[SymbolResult]
+    duration_s: float
+
+class BarResponse(BaseModel):
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
 # Initialize clients
 schwab_client = SchwabHTTPClient()
 try:
@@ -25,6 +46,15 @@ try:
 except Exception as e:
     print(f"Warning: OAuth service initialization failed: {e}")
     oauth_service = None
+
+# Lazy provider initialization
+history_provider = None
+
+def get_history_provider():
+    global history_provider
+    if history_provider is None:
+        history_provider = SchwabHistoryProvider()
+    return history_provider
 
 @router.get("/health")
 async def schwab_health():
@@ -81,57 +111,17 @@ async def exchange_oauth_code(authorization_code: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/auth/status", response_model=OAuthStatus)
-async def oauth_status():
-    """
-    Check OAuth configuration and authentication status.
-    """
-    if oauth_service is None:
-        return OAuthStatus(
-            authenticated=False,
-            client_id="Not configured"
-        )
-    
-    # Check if we have a refresh token configured
-    refresh_token = os.getenv("SCHWAB_REFRESH_TOKEN", "")
-    
-    return OAuthStatus(
-        authenticated=bool(refresh_token),
-        client_id=oauth_service.client_id[:8] + "..." if oauth_service.client_id else "Not configured",
-        scope="readonly"
-    )
-
 @router.get("/quotes/{symbol}")
 async def get_quote(symbol: str):
     """Get stock quote for symbol"""
     try:
         schwab_symbol = to_schwab_symbol(symbol)
-        endpoint = f"/v1/marketdata/{urllib.parse.quote(schwab_symbol)}/quotes"
+        endpoint = f"/marketdata/v1/{urllib.parse.quote(schwab_symbol)}/quotes"
         response = schwab_client.get(endpoint)
         data = response.json()
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/auth/status", response_model=OAuthStatus)
-async def oauth_status():
-    """
-    Check OAuth configuration and authentication status.
-    """
-    if oauth_service is None:
-        return OAuthStatus(
-            authenticated=False,
-            client_id="Not configured"
-        )
-    
-    # Check if we have a refresh token configured
-    refresh_token = os.getenv("SCHWAB_REFRESH_TOKEN", "")
-    
-    return OAuthStatus(
-        authenticated=bool(refresh_token),
-        client_id=oauth_service.client_id[:8] + "..." if oauth_service.client_id else "Not configured",
-        scope="readonly"
-    )
 
 @router.get("/quotes")
 async def get_multiple_quotes(symbols: str = Query(..., description="Comma-separated list of symbols")):
@@ -141,7 +131,7 @@ async def get_multiple_quotes(symbols: str = Query(..., description="Comma-separ
         schwab_symbols = [to_schwab_symbol(s) for s in symbol_list]
         encoded_symbols = urllib.parse.quote(",".join(schwab_symbols))
         
-        endpoint = f"/v1/marketdata/quotes?symbols={encoded_symbols}"
+        endpoint = f"/marketdata/v1/quotes?symbols={encoded_symbols}"
         response = schwab_client.get(endpoint)
         data = response.json()
         return data
@@ -159,9 +149,10 @@ async def get_price_history(
     """Get price history for symbol"""
     try:
         schwab_symbol = to_schwab_symbol(symbol)
-        endpoint = f"/v1/marketdata/{urllib.parse.quote(schwab_symbol)}/pricehistory"
+        endpoint = f"/marketdata/v1/pricehistory"
         
         params = {
+            "symbol": schwab_symbol,
             "periodType": period_type,
             "period": period,
             "frequencyType": frequency_type,
@@ -174,24 +165,112 @@ async def get_price_history(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/auth/status", response_model=OAuthStatus)
-async def oauth_status():
+@router.get("/history/{symbol}/daily", response_model=List[BarResponse])
+async def get_daily_history(
+    symbol: str,
+    start: str = Query(..., description="Start date YYYY-MM-DD"),
+    end: str = Query(..., description="End date YYYY-MM-DD")
+):
     """
-    Check OAuth configuration and authentication status.
+    Get daily OHLCV bars for a single symbol.
+    Returns bars in ascending date order.
+    NO MOCK DATA - uses real Schwab API only.
     """
-    if oauth_service is None:
-        return OAuthStatus(
-            authenticated=False,
-            client_id="Not configured"
-        )
+    try:
+        provider = get_history_provider()
+        bars = provider.get_daily_history(symbol, start, end)
+        
+        return [
+            BarResponse(
+                date=bar.date,
+                open=bar.open,
+                high=bar.high,
+                low=bar.low,
+                close=bar.close,
+                volume=bar.volume
+            )
+            for bar in bars
+        ]
+        
+    except ProviderError as e:
+        if e.status_code == 404:
+            raise HTTPException(status_code=404, detail=e.message)
+        else:
+            raise HTTPException(status_code=500, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/history/fetch", response_model=FetchHistoryResponse)
+async def fetch_price_history(
+    symbols: List[str],
+    start: str = Query(..., description="Start date YYYY-MM-DD"),
+    end: str = Query(..., description="End date YYYY-MM-DD")
+):
+    """
+    Fetch daily price history for multiple symbols.
+    Returns structured bars data that can be consumed by the backend.
+    NO MOCK DATA - uses real Schwab API only.
+    """
+    start_time = time.time()
     
-    # Check if we have a refresh token configured
-    refresh_token = os.getenv("SCHWAB_REFRESH_TOKEN", "")
+    # Validate request
+    if not symbols:
+        raise HTTPException(status_code=400, detail="Symbols list cannot be empty")
     
-    return OAuthStatus(
-        authenticated=bool(refresh_token),
-        client_id=oauth_service.client_id[:8] + "..." if oauth_service.client_id else "Not configured",
-        scope="readonly"
+    if len(symbols) > 500:
+        raise HTTPException(status_code=400, detail="Maximum 500 symbols allowed per request")
+    
+    # Get sleep configuration
+    sleep_ms = int(os.getenv("SCHWAB_REQ_SLEEP_MS", "250"))
+    
+    results = []
+    provider = get_history_provider()
+    
+    for i, symbol in enumerate(symbols):
+        symbol = symbol.strip().upper()
+        
+        if not symbol:
+            results.append(SymbolResult(
+                symbol=symbol,
+                bars_count=0,
+                error="Empty symbol"
+            ))
+            continue
+        
+        try:
+            # Sleep between symbols for politeness (except first)
+            if i > 0 and sleep_ms > 0:
+                time.sleep(sleep_ms / 1000.0)
+            
+            # Fetch price history - REAL API ONLY
+            bars = provider.get_daily_history(symbol, start, end)
+            
+            results.append(SymbolResult(
+                symbol=symbol,
+                bars_count=len(bars),
+                error=None
+            ))
+            
+        except ProviderError as e:
+            results.append(SymbolResult(
+                symbol=symbol,
+                bars_count=0,
+                error=f"Provider error {e.status_code}: {e.message}" if e.status_code else e.message
+            ))
+        except Exception as e:
+            results.append(SymbolResult(
+                symbol=symbol,
+                bars_count=0,
+                error=str(e)
+            ))
+    
+    duration = time.time() - start_time
+    
+    return FetchHistoryResponse(
+        start=start,
+        end=end,
+        results=results,
+        duration_s=round(duration, 2)
     )
 
 @router.get("/instruments/search")
@@ -201,7 +280,7 @@ async def search_instruments(
 ):
     """Search for instruments"""
     try:
-        endpoint = "/v1/instruments"
+        endpoint = "/marketdata/v1/instruments"
         params = {
             "symbol": symbol,
             "projection": projection
@@ -212,23 +291,3 @@ async def search_instruments(
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/auth/status", response_model=OAuthStatus)
-async def oauth_status():
-    """
-    Check OAuth configuration and authentication status.
-    """
-    if oauth_service is None:
-        return OAuthStatus(
-            authenticated=False,
-            client_id="Not configured"
-        )
-    
-    # Check if we have a refresh token configured
-    refresh_token = os.getenv("SCHWAB_REFRESH_TOKEN", "")
-    
-    return OAuthStatus(
-        authenticated=bool(refresh_token),
-        client_id=oauth_service.client_id[:8] + "..." if oauth_service.client_id else "Not configured",
-        scope="readonly"
-    )

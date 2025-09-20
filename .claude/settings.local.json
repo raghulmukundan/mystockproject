@@ -45,7 +45,10 @@
       "Bash(npm test:*)",
       "Bash(./validate-and-start.bat validate)",
       "Bash(./validate-and-start.bat help)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git restore:*)",
+      "Bash(del test_upload.csv)",
+      "Bash(npm run test:configs:*)"
     ],
     "deny": [],
     "ask": []

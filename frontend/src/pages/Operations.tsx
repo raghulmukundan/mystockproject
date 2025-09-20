@@ -6,13 +6,14 @@ import { PricesBrowser as PricesBrowserComponent } from '../components/PricesBro
 import JobStatus from './JobStatus';
 import { JobSettings } from './JobSettings';
 
-type TabKey = 'history' | 'prices' | 'settings' | 'status';
+type TabKey = 'history' | 'prices' | 'settings' | 'status' | 'api-tester';
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'history', label: 'History Import' },
   { key: 'prices', label: 'Price Browser' },
   { key: 'settings', label: 'Job Settings' },
   { key: 'status', label: 'Job Status' },
+  { key: 'api-tester', label: 'API Tester' },
 ];
 
 const Operations: React.FC = () => {
@@ -58,6 +59,16 @@ const Operations: React.FC = () => {
           {active === 'status' && (
             <div>
               <JobStatus />
+            </div>
+          )}
+          {active === 'api-tester' && (
+            <div>
+              <p className="text-sm text-gray-600 mb-4">Test Schwab and Finnhub API endpoints with real market data.</p>
+              <iframe
+                src="http://localhost:8003/tester"
+                className="w-full h-[800px] border rounded-lg"
+                title="API Tester"
+              />
             </div>
           )}
         </CardContent>

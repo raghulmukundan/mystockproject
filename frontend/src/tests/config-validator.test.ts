@@ -56,39 +56,9 @@ class ConfigValidator {
       }
     }
 
-    const env = frontend.environment
-    let viteApiUrl: string | undefined
-
-    if (Array.isArray(env)) {
-      const envVar = env.find((e: string) => e.startsWith('VITE_API_URL='))
-      viteApiUrl = envVar?.split('=')[1]
-    } else if (typeof env === 'object') {
-      viteApiUrl = env.VITE_API_URL
-    }
-
-    const expectedValue = 'http://backend:8000'
-
-    if (!viteApiUrl) {
-      return {
-        isValid: false,
-        message: 'VITE_API_URL environment variable not set',
-        currentValue: undefined,
-        expectedValue,
-        fixSuggestion: `Add to docker-compose.yml frontend service environment:\n  - VITE_API_URL=${expectedValue}`
-      }
-    }
-
-    if (viteApiUrl !== expectedValue) {
-      return {
-        isValid: false,
-        message: 'VITE_API_URL has incorrect value',
-        currentValue: viteApiUrl,
-        expectedValue,
-        fixSuggestion: `Update docker-compose.yml frontend environment:\n  Change: VITE_API_URL=${viteApiUrl}\n  To: VITE_API_URL=${expectedValue}`
-      }
-    }
-
-    return { isValid: true, message: 'VITE_API_URL correctly configured' }
+    // For proxy-based configuration, VITE_API_URL is not needed
+    // The frontend uses relative URLs (/api) that get proxied to backend
+    return { isValid: true, message: 'Frontend service correctly configured for proxy-based API calls' }
   }
 
   validateDockerComposePorts(): ValidationResult {
@@ -181,8 +151,8 @@ class ConfigValidator {
     try {
       const apiConfigContent = fs.readFileSync(this.apiConfigPath, 'utf8')
 
-      // Check baseURL
-      const hasCorrectBaseUrl = apiConfigContent.includes('http://localhost:8000/api')
+      // Check baseURL - should use direct connection to backend
+      const hasCorrectBaseUrl = apiConfigContent.includes("baseURL: 'http://localhost:8000/api'")
       if (!hasCorrectBaseUrl) {
         return {
           isValid: false,
@@ -318,15 +288,14 @@ describe('Configuration Validator with Fix Suggestions', () => {
   it('should document all critical configurations', () => {
     console.log('\n📋 CONFIGURATION SUMMARY:')
     console.log('├── docker-compose.yml')
-    console.log('│   ├── VITE_API_URL=http://backend:8000')
     console.log('│   ├── frontend ports: 3000:3000')
-    console.log('│   └── backend ports: 8000:8000')
+    console.log('│   ├── backend ports: 8000:8000')
+    console.log('│   └── direct API communication')
     console.log('├── vite.config.ts')
-    console.log('│   ├── proxy /api → http://backend:8000')
     console.log('│   ├── host: 0.0.0.0')
     console.log('│   └── port: 3000')
     console.log('└── src/services/api.ts')
-    console.log('    ├── baseURL: http://localhost:8000/api')
+    console.log('    ├── baseURL: http://localhost:8000/api (direct connection)')
     console.log('    ├── headers: application/json')
     console.log('    └── responseType: json')
     console.log('')

@@ -1,8 +1,7 @@
 import axios, { AxiosInstance } from 'axios'
 import { Watchlist, UploadResponse, WatchlistItem } from '../types'
 
-// Create axios instance that works from host browser
-// When accessing from host browser, use localhost:8000 directly since backend is exposed on port 8000
+// Simple direct connection to backend
 const api: AxiosInstance = axios.create({
   baseURL: 'http://localhost:8000/api',
   headers: {
@@ -24,7 +23,8 @@ api.interceptors.request.use(config => {
   console.log('🚀 Request config:', {
     url: config.url,
     baseURL: config.baseURL,
-    method: config.method
+    method: config.method,
+    fullURL: `${config.baseURL}${config.url}`
   });
   return config;
 });
@@ -55,7 +55,9 @@ export const watchlistsApi = {
 
   async getById(id: number): Promise<Watchlist> {
     const response = await api.get(`/watchlists/${id}`)
-    return response.data
+    // Ensure JSON parsing if response is a string
+    const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+    return data
   },
 
   async create(data: { name: string; description?: string }): Promise<Watchlist> {
@@ -76,7 +78,11 @@ export const watchlistsApi = {
         'Content-Type': 'multipart/form-data',
       },
     })
-    return response.data
+
+    // Ensure JSON parsing if response is a string
+    const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+    console.log('Upload API response data:', data)
+    return data
   },
 
   async update(id: number, data: { 

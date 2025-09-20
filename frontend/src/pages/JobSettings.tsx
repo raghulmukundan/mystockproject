@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
+import { jobsApiService } from '../services/jobsApi';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -60,11 +61,20 @@ export const JobSettings: React.FC = () => {
 
   const loadJobs = async () => {
     try {
-      const response = await fetch('/api/jobs');
-      if (response.ok) {
-        const data: JobConfiguration[] = await response.json();
-        setJobs(data);
-      }
+      // Note: JobConfiguration interface matches the response from jobs service
+      const data = await jobsApiService.getJobsSummary();
+      // Convert JobSummaryResponse to JobConfiguration format for compatibility
+      const jobConfigs: JobConfiguration[] = data.map(job => ({
+        id: 0, // Not provided in summary
+        job_name: job.job_name,
+        description: job.description,
+        enabled: job.enabled,
+        schedule_type: 'interval', // Default values for missing fields
+        only_market_hours: false,
+        created_at: '',
+        updated_at: ''
+      }));
+      setJobs(jobConfigs);
     } catch (error) {
       console.error('Error loading jobs:', error);
     }
@@ -74,11 +84,8 @@ export const JobSettings: React.FC = () => {
 
   const loadJobsSummary = async () => {
     try {
-      const response = await fetch('/api/jobs/summary');
-      if (response.ok) {
-        const data: JobSummary[] = await response.json();
-        setJobsSummary(data);
-      }
+      const data = await jobsApiService.getJobsSummary();
+      setJobsSummary(data);
     } catch (error) {
       console.error('Error loading jobs summary:', error);
     }
@@ -155,11 +162,8 @@ export const JobSettings: React.FC = () => {
     setHistoryOpen({ ...historyOpen, [jobName]: open });
     if (open) {
       try {
-        const res = await fetch(`/api/jobs/${jobName}/status?limit=5`);
-        if (res.ok) {
-          const data = await res.json();
-          setHistories({ ...histories, [jobName]: data });
-        }
+        const data = await jobsApiService.getJobStatus(jobName, 5);
+        setHistories({ ...histories, [jobName]: data });
       } catch {}
     }
   };
@@ -225,7 +229,7 @@ export const JobSettings: React.FC = () => {
   const runMarketDataNow = async () => {
     setLoading(true);
     try {
-      await fetch('/api/jobs/market-data/run', { method: 'POST' });
+      await jobsApiService.runMarketDataRefresh();
       await loadJobsSummary();
       setMessage('Market data refresh started');
     } catch {}

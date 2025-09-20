@@ -8,7 +8,7 @@ import psycopg2
 from psycopg2 import sql
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = "postgresql://stockuser:stockpass123@localhost:5432/stockwatchlist"
 
 def fix_import_jobs_overflow():
     """Change row count columns in import_jobs table from integer to bigint"""

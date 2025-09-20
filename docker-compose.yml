@@ -1,12 +1,41 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: stockuser
+      POSTGRES_PASSWORD: stockpass123
+      POSTGRES_DB: stockwatchlist
+      # Performance optimizations for large data imports
+      POSTGRES_SHARED_PRELOAD_LIBRARIES: pg_stat_statements
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    command: >
+      postgres -c shared_buffers=256MB
+               -c effective_cache_size=1GB
+               -c maintenance_work_mem=128MB
+               -c checkpoint_completion_target=0.9
+               -c wal_buffers=16MB
+               -c default_statistics_target=100
+               -c random_page_cost=1.1
+               -c effective_io_concurrency=200
+               -c work_mem=4MB
+               -c min_wal_size=1GB
+               -c max_wal_size=4GB
+               -c max_connections=200
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist
+      - DATABASE_URL=postgresql://stockuser:stockpass123@postgres:5432/stockwatchlist
       - TZ=America/Chicago
       - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
       - SCHWAB_CLIENT_ID=${SCHWAB_CLIENT_ID}
@@ -24,6 +53,8 @@ services:
       - app-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
 
   external-apis:
     build: ./external-apis
@@ -41,13 +72,36 @@ services:
     networks:
       - app-network
 
+  jobs-service:
+    build: ./jobs-service
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql://stockuser:stockpass123@postgres:5432/stockwatchlist
+      - TZ=America/Chicago
+      - TIMEZONE=America/Chicago
+      - BACKEND_URL=http://backend:8000
+      - EXTERNAL_APIS_URL=http://external-apis:8003
+      - KEEP_JOB_HISTORY=5
+      - TTL_CLEANUP_DAYS=30
+      - MARKET_OPEN_HOUR=9
+      - MARKET_CLOSE_HOUR=16
+    volumes:
+      - ./jobs-service:/app
+    networks:
+      - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
+      - external-apis
+
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
     environment:
       - TZ=America/Chicago
-      - VITE_API_URL=http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -56,7 +110,11 @@ services:
     depends_on:
       - backend
       - external-apis
+      - jobs-service
 
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:

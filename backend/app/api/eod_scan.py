@@ -7,7 +7,7 @@ import threading
 from app.core.database import get_db
 from src.db.models import EodScan, EodScanError
 from app.services.eod_scan import run_eod_scan_all_symbols, retry_failed_for_scan
-from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+# Job status tracking removed - now handled by separate jobs service
 
 router = APIRouter()
 
@@ -80,17 +80,8 @@ def start_eod_scan_now(req: EodScanStartRequest):
 
         def _runner(scan_id: int):
             try:
-                # Record job status for EOD run
-                job_id = begin_job('eod_price_scan')
-                try:
-                    result = run_eod_scan_all_symbols(eod_scan_id=scan_id, start_date=req.start, end_date=req.end)
-                    processed = int(result.get('inserted', 0)) + int(result.get('updated', 0)) + int(result.get('skipped', 0))
-                    complete_job(job_id, records_processed=processed)
-                except Exception as e:
-                    fail_job(job_id, str(e))
-                    raise
-                finally:
-                    prune_history('eod_price_scan', keep=5)
+                # Note: Job status tracking moved to separate jobs service
+                result = run_eod_scan_all_symbols(eod_scan_id=scan_id, start_date=req.start, end_date=req.end)
             except Exception:
                 db2 = next(get_db())
                 try:

@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:stockpass123@host.docker.internal:5432/stockwatchlist")
 NASDAQ_API_KEY = os.getenv("NASDAQ_API_KEY", "")
 TIMEZONE = os.getenv("TIMEZONE", "America/Chicago")
 # Use IANA timezone if available (handles DST), fallback to fixed offset

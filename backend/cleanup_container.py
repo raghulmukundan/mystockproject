@@ -17,7 +17,7 @@ def cleanup_all_data():
     logger.info("Cleaning up all import and historical data...")
     
     # Use Docker container database URL
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@postgres:5432/stockwatchlist")
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:stockpass123@postgres:5432/stockwatchlist")
     
     try:
         engine = create_engine(DATABASE_URL)

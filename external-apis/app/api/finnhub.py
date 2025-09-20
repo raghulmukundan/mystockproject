@@ -29,6 +29,35 @@ async def get_quote(symbol: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/quotes")
+async def get_quotes(symbols: str = Query(..., description="Comma-separated list of symbols")):
+    """Get stock quotes for multiple symbols"""
+    try:
+        symbol_list = [s.strip().upper() for s in symbols.split(",")]
+        result = {}
+        
+        for symbol in symbol_list:
+            try:
+                quote_data = finnhub_client.get_quote(symbol)
+                if quote_data:
+                    result[symbol] = {
+                        'current_price': quote_data.get('c', 0.0),  # Current price
+                        'change': quote_data.get('d', 0.0),         # Change amount
+                        'change_percent': quote_data.get('dp', 0.0), # Change percent
+                        'volume': quote_data.get('v', 0),           # Volume (if available)
+                        'high': quote_data.get('h', 0.0),           # High
+                        'low': quote_data.get('l', 0.0),            # Low
+                        'open': quote_data.get('o', 0.0)            # Open
+                    }
+            except Exception as symbol_error:
+                # Log error but continue with other symbols
+                print(f"Error fetching data for {symbol}: {symbol_error}")
+                continue
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/company/{symbol}")
 async def get_company_profile(symbol: str):
     """Get company profile information"""

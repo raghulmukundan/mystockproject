@@ -8,7 +8,7 @@ import psycopg2
 from psycopg2 import sql
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = "postgresql://stockuser:stockpass123@localhost:5432/stockwatchlist"
 
 def add_processed_files_table():
     """Create processed_files table for tracking import progress"""

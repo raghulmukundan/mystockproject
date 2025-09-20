@@ -8,7 +8,7 @@ import psycopg2
 from psycopg2 import sql
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = "postgresql://stockuser:stockpass123@localhost:5432/stockwatchlist"
 
 def add_progress_columns():
     """Add current_file and current_folder columns to import_jobs table"""

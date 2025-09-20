@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import uvicorn
 import os
 from dotenv import load_dotenv
@@ -31,11 +33,30 @@ app.include_router(finnhub.router, prefix="/finnhub", tags=["finnhub"])
 
 @app.get("/")
 async def root():
-    return {"service": "external-apis", "status": "running", "version": "1.0.0"}
+    return {
+        "service": "external-apis", 
+        "status": "running", 
+        "version": "1.0.0",
+        "endpoints": {
+            "api_docs": "/docs",
+            "api_tester": "/tester",
+            "health": "/health",
+            "schwab": "/schwab/*",
+            "finnhub": "/finnhub/*"
+        }
+    }
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+@app.get("/tester")
+async def api_tester():
+    """Serve the API testing UI"""
+    return FileResponse("app/static/api-tester.html")
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -8,7 +8,7 @@ import psycopg2
 from psycopg2 import sql
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = "postgresql://stockuser:stockpass123@localhost:5432/stockwatchlist"
 
 def cleanup_stuck_imports():
     """Clean up stuck or failed import jobs"""

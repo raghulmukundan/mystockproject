@@ -7,7 +7,7 @@ This is safe to run before repurposing current_prices for a different schema.
 import os
 import psycopg2
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:stockpass123@localhost:5432/stockwatchlist")
 
 def main():
     conn = psycopg2.connect(DATABASE_URL)

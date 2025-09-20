@@ -45,31 +45,12 @@ async def get_stock_price(symbol: str):
                 market_cap=cached_price['market_cap']
             )
         
-        # Fallback to direct API call with market-aware logic
-        market_open = price_cache_service._is_market_open()
-        
-        # Check if symbol is in a watchlist
-        from app.models.watchlist_item import WatchlistItem
-        from app.core.database import get_db
-        
-        db = next(get_db())
-        try:
-            is_watchlist_symbol = db.query(WatchlistItem).filter(WatchlistItem.symbol == symbol).first() is not None
-        finally:
-            db.close()
-        
-        # Only fetch from API if market is open OR symbol is not in watchlists
-        if market_open or not is_watchlist_symbol:
-            logger.info(f"Fetching price for {symbol} from API (market_open: {market_open}, in_watchlist: {is_watchlist_symbol})")
-            price_data = await stock_data_service.get_stock_price(symbol)
-            if not price_data:
-                raise HTTPException(status_code=404, detail=f"Stock price not found for {symbol}")
-            
-            # Cache the result for future requests
-            await price_cache_service.force_refresh_symbol(symbol)
-        else:
-            logger.info(f"Market closed and {symbol} is in watchlist - no price data available")
-            raise HTTPException(status_code=404, detail=f"Market closed - cached price not available for {symbol}")
+        # No fallback - cache service required
+        logger.error(f"Cached price not available for {symbol} (no fallback available)")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Price not available for {symbol}. No fallback available."
+        )
         
         return StockPriceResponse(
             symbol=price_data.symbol,
@@ -113,51 +94,13 @@ async def get_multiple_stock_prices(symbols: List[str] = Query(..., description=
             else:
                 missing_symbols.append(symbol)
         
-        # If we have missing symbols, fetch them directly (fallback)
+        # If missing symbols, return error - no fallback allowed
         if missing_symbols:
-            market_open = price_cache_service._is_market_open()
-            
-            # Check which missing symbols are in watchlists
-            from app.models.watchlist_item import WatchlistItem
-            from app.core.database import get_db
-            
-            db = next(get_db())
-            try:
-                watchlist_symbols = set([item.symbol for item in db.query(WatchlistItem.symbol).distinct().all()])
-            finally:
-                db.close()
-            
-            missing_watchlist = [s for s in missing_symbols if s in watchlist_symbols]
-            missing_non_watchlist = [s for s in missing_symbols if s not in watchlist_symbols]
-            
-            symbols_to_fetch = []
-            
-            if market_open:
-                # Market open: fetch all missing symbols
-                symbols_to_fetch = missing_symbols
-                logger.info(f"Market open - fetching {len(missing_symbols)} symbols from API: {missing_symbols}")
-            else:
-                # Market closed: only fetch non-watchlist symbols (allow viewing new symbols)
-                symbols_to_fetch = missing_non_watchlist
-                if missing_watchlist:
-                    logger.info(f"Market closed - skipping {len(missing_watchlist)} watchlist symbols: {missing_watchlist}")
-                if missing_non_watchlist:
-                    logger.info(f"Market closed - fetching {len(missing_non_watchlist)} non-watchlist symbols: {missing_non_watchlist}")
-            
-            if symbols_to_fetch:
-                fallback_data = await stock_data_service.get_multiple_stock_prices(symbols_to_fetch)
-                
-                for symbol, data in fallback_data.items():
-                    response[symbol] = StockPriceResponse(
-                        symbol=data.symbol,
-                        current_price=data.current_price,
-                        change=data.change,
-                        change_percent=data.change_percent,
-                        volume=data.volume,
-                        market_cap=data.market_cap
-                    )
-                    # Cache the result for future requests
-                    await price_cache_service.force_refresh_symbol(symbol)
+            logger.error(f"Missing symbols from cache (no fallback available): {missing_symbols}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Price data not available for symbols: {', '.join(missing_symbols)}. No fallback available."
+            )
         
         logger.info(f"Returning {len(response)} stock prices ({len(cached_prices)} from cache, {len(missing_symbols)} from API)")
         return response
@@ -172,117 +115,10 @@ async def get_company_profile(symbol: str):
     try:
         profile_data = await stock_data_service.get_company_profile(symbol)
         if not profile_data:
-            # Return mock profile data for development
-            mock_profiles = {
-                'AAPL': {
-                    'name': 'Apple Inc.',
-                    'sector': 'Technology',
-                    'industry': 'Consumer Electronics',
-                    'market_cap': 2800000000000,
-                    'description': 'Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide.'
-                },
-                'GOOGL': {
-                    'name': 'Alphabet Inc.',
-                    'sector': 'Communication Services',
-                    'industry': 'Internet Content & Information',
-                    'market_cap': 1600000000000,
-                    'description': 'Alphabet Inc. provides online advertising services in the United States, Europe, the Middle East, Africa, the Asia-Pacific, Canada, and Latin America.'
-                },
-                'MSFT': {
-                    'name': 'Microsoft Corporation',
-                    'sector': 'Technology',
-                    'industry': 'Software—Infrastructure',
-                    'market_cap': 2600000000000,
-                    'description': 'Microsoft Corporation develops, licenses, and supports software, services, devices, and solutions worldwide.'
-                },
-                'TSLA': {
-                    'name': 'Tesla, Inc.',
-                    'sector': 'Consumer Cyclical',
-                    'industry': 'Auto Manufacturers',
-                    'market_cap': 750000000000,
-                    'description': 'Tesla, Inc. designs, develops, manufactures, leases, and sells electric vehicles, and energy generation and storage systems in the United States, China, and internationally.'
-                },
-                'COST': {
-                    'name': 'Costco Wholesale Corporation',
-                    'sector': 'Consumer Staples',
-                    'industry': 'Discount Stores',
-                    'market_cap': 305000000000,
-                    'description': 'Costco Wholesale Corporation operates membership warehouses and e-commerce websites.'
-                },
-                'TPR': {
-                    'name': 'Tapestry, Inc.',
-                    'sector': 'Consumer Cyclical',
-                    'industry': 'Luxury Goods',
-                    'market_cap': 12000000000,
-                    'description': 'Tapestry, Inc. provides luxury accessories and branded lifestyle products.'
-                },
-                'GE': {
-                    'name': 'General Electric Company',
-                    'sector': 'Industrials',
-                    'industry': 'Conglomerates',
-                    'market_cap': 125000000000,
-                    'description': 'General Electric Company operates as a high-tech industrial company worldwide.'
-                },
-                'DE': {
-                    'name': 'Deere & Company',
-                    'sector': 'Industrials',
-                    'industry': 'Farm & Heavy Construction Machinery',
-                    'market_cap': 125000000000,
-                    'description': 'Deere & Company manufactures and distributes various equipment worldwide.'
-                },
-                'CAT': {
-                    'name': 'Caterpillar Inc.',
-                    'sector': 'Industrials',
-                    'industry': 'Farm & Heavy Construction Machinery',
-                    'market_cap': 155000000000,
-                    'description': 'Caterpillar Inc. manufactures construction and mining equipment, diesel and natural gas engines, industrial gas turbines, and diesel-electric locomotives worldwide.'
-                },
-                'XOM': {
-                    'name': 'Exxon Mobil Corporation',
-                    'sector': 'Energy',
-                    'industry': 'Oil & Gas Integrated',
-                    'market_cap': 405000000000,
-                    'description': 'Exxon Mobil Corporation explores for and produces crude oil and natural gas.'
-                },
-                'CVX': {
-                    'name': 'Chevron Corporation',
-                    'sector': 'Energy',
-                    'industry': 'Oil & Gas Integrated',
-                    'market_cap': 275000000000,
-                    'description': 'Chevron Corporation engages in integrated energy, chemicals, and petroleum operations worldwide.'
-                },
-                'JPM': {
-                    'name': 'JPMorgan Chase & Co.',
-                    'sector': 'Financial Services',
-                    'industry': 'Banks—Diversified',
-                    'market_cap': 485000000000,
-                    'description': 'JPMorgan Chase & Co. operates as a financial services company worldwide.'
-                }
-            }
-            
-            mock_data = mock_profiles.get(symbol.upper())
-            if mock_data:
-                return CompanyProfileResponse(
-                    symbol=symbol.upper(),
-                    company_name=mock_data['name'],
-                    sector=mock_data['sector'],
-                    industry=mock_data['industry'],
-                    market_cap=mock_data['market_cap'],
-                    description=mock_data['description'],
-                    country='US',
-                    exchange='NASDAQ'
-                )
-            
-            # Default fallback
-            return CompanyProfileResponse(
-                symbol=symbol.upper(),
-                company_name=f"{symbol.upper()} Corporation",
-                sector='Technology',
-                industry='Software',
-                market_cap=None,
-                description=f"Information for {symbol.upper()} is not available.",
-                country='US',
-                exchange='NASDAQ'
+            # No mock data - external service required
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Company profile not available for {symbol}. No fallback available."
             )
         
         return CompanyProfileResponse(

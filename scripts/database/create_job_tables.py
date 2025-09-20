@@ -8,7 +8,7 @@ import psycopg2
 from psycopg2 import sql
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = "postgresql://stockuser:stockpass123@localhost:5432/stockwatchlist"
 
 def create_job_tables():
     """Create job_configurations and job_execution_status tables"""
