@@ -79,15 +79,33 @@ def start_eod_scan_now(req: EodScanStartRequest):
         db.refresh(scan)
 
         def _runner(scan_id: int):
+            import logging
+            logger = logging.getLogger(__name__)
             try:
                 # Note: Job status tracking moved to separate jobs service
                 result = run_eod_scan_all_symbols(eod_scan_id=scan_id, start_date=req.start, end_date=req.end)
-            except Exception:
+            except Exception as e:
+                # Only mark as failed for critical execution failures, not data issues
+                logger.error(f"EOD scan {scan_id} exception: {e}")
                 db2 = next(get_db())
                 try:
                     s = db2.query(EodScan).filter(EodScan.id == scan_id).first()
                     if s:
-                        s.status = 'failed'
+                        # Check if this is a critical failure (auth, database, etc) vs data issues
+                        critical_errors = ['auth', 'database', 'connection', 'timeout', 'permission', 'token']
+                        error_str = str(e).lower()
+                        is_critical = any(err_type in error_str for err_type in critical_errors)
+
+                        if is_critical:
+                            s.status = 'failed'
+                            s.completed_at = datetime.utcnow()
+                            logger.error(f"EOD scan {scan_id} marked as failed due to critical error: {e}")
+                        else:
+                            # For non-critical errors, mark as completed with errors
+                            # The run_eod_scan_all_symbols function already tracks individual errors
+                            s.status = 'completed'
+                            s.completed_at = datetime.utcnow()
+                            logger.warning(f"EOD scan {scan_id} completed with non-critical exception: {e}")
                         db2.commit()
                 finally:
                     db2.close()

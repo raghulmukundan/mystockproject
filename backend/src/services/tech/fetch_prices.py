@@ -55,7 +55,7 @@ def load_tail_df(db: Session, symbol: str, cutoff_date: str) -> pd.DataFrame:
                        HistoricalPrice.close, HistoricalPrice.volume).filter(
         HistoricalPrice.symbol == symbol,
         HistoricalPrice.date >= cutoff_date,
-        HistoricalPrice.asset_type == 'stock',  # ensure only stocks
+        HistoricalPrice.asset_type.in_(['stock', 'etf']),  # include stocks and ETFs
     ).all()
     hp = pd.DataFrame(hp_rows, columns=cols)
   

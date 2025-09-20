@@ -48,7 +48,13 @@
       "Bash(grep:*)",
       "Bash(git restore:*)",
       "Bash(del test_upload.csv)",
-      "Bash(npm run test:configs:*)"
+      "Bash(npm run test:configs:*)",
+      "Bash(findstr:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist)",
+      "Bash(docker run:*)",
+      "Bash(docker port:*)",
+      "Bash(docker restart:*)"
     ],
     "deny": [],
     "ask": []

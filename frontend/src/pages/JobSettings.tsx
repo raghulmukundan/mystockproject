@@ -54,6 +54,11 @@ export const JobSettings: React.FC = () => {
   const techPollRef = useRef<number | null>(null);
   const [oauthStatus, setOauthStatus] = useState<{authenticated: boolean; client_id: string} | null>(null);
 
+  // EOD Scan controls
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [starting, setStarting] = useState(false)
+
   useEffect(() => {
     loadJobs();
     loadJobsSummary();
@@ -205,26 +210,6 @@ export const JobSettings: React.FC = () => {
     setLoading(false);
   };
 
-  const runTechNow = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tech/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-      if (res.ok) {
-        const data = await res.json();
-        setMessage(`Technical compute started (job #${data.job_id || '?'} for ${data.latest_trade_date || ''})`);
-        await loadJobsSummary();
-        // kick off immediate status poll
-        loadTechLatest();
-      } else {
-        let detail = '';
-        try { const err = await res.json(); detail = err.detail || JSON.stringify(err); } catch {}
-        setMessage(`Failed to start technical compute${detail ? ': ' + detail : ''}`);
-      }
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
 
   const runMarketDataNow = async () => {
     setLoading(true);
@@ -235,6 +220,78 @@ export const JobSettings: React.FC = () => {
     } catch {}
     setLoading(false);
   };
+
+  // EOD Scan functions
+  const startEod = async () => {
+    setStarting(true)
+    setMessage('')
+    try {
+      const body: any = {}
+      if (startDate) body.start = startDate
+      if (endDate) body.end = endDate || startDate
+      const res = await fetch('/api/eod/scan/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMessage(`EOD scan started (scan #${data.id})`)
+        await loadJobsSummary()
+      } else {
+        const err = await res.json()
+        setMessage(`Error: ${err.detail || 'Failed to start EOD scan'}`)
+      }
+    } catch (e) {
+      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  const truncatePricesDaily = async () => {
+    if (!confirm('This will truncate prices_daily. Are you sure?')) return
+    setLoading(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/prices/daily/truncate', { method: 'DELETE' })
+      if (res.ok) {
+        const data = await res.json()
+        setMessage(data.message || 'prices_daily truncated')
+      } else {
+        const err = await res.json()
+        setMessage(`Error: ${err.detail || 'Failed to truncate'}`)
+      }
+    } catch (e) {
+      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runTechNow = async () => {
+    setLoading(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/tech/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+      if (res.ok) {
+        setMessage('Tech scan started')
+        await loadJobsSummary()
+        await loadTechLatest()
+      } else {
+        const err = await res.json()
+        setMessage(`Error: ${err.detail || 'Failed to start tech scan'}`)
+      }
+    } catch (e) {
+      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -593,6 +650,63 @@ export const JobSettings: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Manual Job Triggers */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Manual Job Triggers</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* EOD Scan */}
+            <div className="border rounded p-4">
+              <h3 className="font-medium mb-3">EOD Scan</h3>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm text-gray-700">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="border rounded px-2 py-1 text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm text-gray-700">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="border rounded px-2 py-1 text-sm"
+                  />
+                </div>
+                <Button onClick={startEod} disabled={starting || loading}>
+                  {starting ? 'Starting…' : 'Start EOD Scan'}
+                </Button>
+                <Button variant="destructive" onClick={truncatePricesDaily} disabled={loading}>
+                  Truncate prices_daily
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Leave dates empty for today's scan. End date defaults to start date if not specified.
+              </p>
+            </div>
+
+            {/* Tech Scan */}
+            <div className="border rounded p-4">
+              <h3 className="font-medium mb-3">Tech Scan</h3>
+              <div className="flex gap-2 items-center">
+                <Button onClick={runTechNow} disabled={loading}>
+                  {loading ? 'Starting…' : 'Run Tech Scan Now'}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Runs technical analysis calculations for all symbols.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

@@ -52,9 +52,6 @@ const JobStatus: React.FC = () => {
   const [successOffset, setSuccessOffset] = useState(0)
   const [errorOffset, setErrorOffset] = useState(0)
   const [techRuns, setTechRuns] = useState<any[]>([])
-  const [starting, setStarting] = useState(false)
-  const [startDate, setStartDate] = useState<string>('')
-  const [endDate, setEndDate] = useState<string>('')
   const [expandedScanId, setExpandedScanId] = useState<number | null>(null)
   const [scanErrors, setScanErrors] = useState<Record<number, EodScanError[]>>({})
   const [loadingErrors, setLoadingErrors] = useState<Record<number, boolean>>({})
@@ -85,26 +82,6 @@ const JobStatus: React.FC = () => {
     return () => clearInterval(t)
   }, [])
 
-  const startEod = async () => {
-    setStarting(true)
-    try {
-      const body: any = {}
-      if (startDate) body.start = startDate
-      if (endDate) body.end = endDate || startDate
-      const res = await fetch('/api/eod/scan/start', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      if (res.ok) {
-        await loadData()
-      }
-    } catch (e) {
-      console.error('Failed to start EOD scan', e)
-    } finally {
-      setStarting(false)
-    }
-  }
 
   const toggleJobHistory = async (jobName: string) => {
     const open = !jobHistoryOpen[jobName]
@@ -134,22 +111,7 @@ const JobStatus: React.FC = () => {
     } catch {}
   }
 
-  const runTechNow = async () => {
-    try {
-      await fetch('/api/tech/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
-      await loadData()
-    } catch {}
-  }
 
-  const truncatePricesDaily = async () => {
-    if (!confirm('This will truncate prices_daily. Are you sure?')) return
-    try {
-      await fetch('/api/prices/daily/truncate', { method: 'DELETE' })
-      alert('prices_daily truncated')
-    } catch (e) {
-      console.error('Failed to truncate prices_daily', e)
-    }
-  }
 
   const toggleErrors = async (scanId: number) => {
     if (expandedScanId === scanId) {
@@ -204,24 +166,8 @@ const JobStatus: React.FC = () => {
   return (
     <div className="space-y-6 p-6">
       <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>EOD Scan</CardTitle>
-          <div className="flex flex-wrap gap-2 items-center">
-            <div className="flex gap-2 items-center">
-              <label className="text-sm text-gray-700">Start</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
-            </div>
-            <div className="flex gap-2 items-center">
-              <label className="text-sm text-gray-700">End</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
-            </div>
-            <Button onClick={startEod} disabled={starting}>
-              {starting ? 'Starting…' : 'Start EOD Scan'}
-            </Button>
-            <Button variant="destructive" onClick={truncatePricesDaily}>
-              Truncate prices_daily
-            </Button>
-          </div>
+        <CardHeader>
+          <CardTitle>EOD Scan Status</CardTitle>
         </CardHeader>
         <CardContent>
           {eodScans.length === 0 ? (
@@ -314,7 +260,8 @@ const JobStatus: React.FC = () => {
                 const total = j.total_symbols || 0
                 const skips = j.skip_count || 0
                 const errors = j.errors || 0
-                const pct = total > 0 ? Math.round((updated / total) * 100) : 0
+                const processed = updated + skips
+                const pct = total > 0 ? Math.round((processed / total) * 100) : 0
                 return (
                   <div key={j.id} className={`border rounded p-3 ${selectedTechJobId === j.id ? 'bg-blue-50' : ''}`}>
                     <div className="flex justify-between items-center">
@@ -326,7 +273,8 @@ const JobStatus: React.FC = () => {
                         <span className="ml-2">{new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Chicago' }).format(new Date(j.started_at))} (America/Chicago)</span>
                       </div>
                       <div className="text-gray-700">
-                        <span className="mr-3">Updated {updated}/{total}</span>
+                        <span className="mr-3">Processed {processed}/{total}</span>
+                        <span className="mr-3">Updated {updated}</span>
                         <span className="mr-3">Skips {skips}</span>
                         {errors > 0 && (<span className="text-red-600">Errors {errors}</span>)}
                       </div>
@@ -342,6 +290,7 @@ const JobStatus: React.FC = () => {
               })}
             </div>
           )}
+
 
           {selectedTechJobId && (
             <div className="mt-4 space-y-4">
