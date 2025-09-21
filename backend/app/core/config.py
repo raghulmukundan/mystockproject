@@ -17,7 +17,7 @@ load_dotenv()
 if _get_database_url:
     DATABASE_URL = _get_database_url()
 else:
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist")
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:stockpass123@host.docker.internal:5432/stockwatchlist")
 NASDAQ_API_KEY = os.getenv("NASDAQ_API_KEY", "")
 TIMEZONE = os.getenv("TIMEZONE", "America/Chicago")
 # Use IANA timezone if available (handles DST), fallback to fixed offset

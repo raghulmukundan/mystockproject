@@ -37,7 +37,7 @@ def init_db():
     logger.info("Initializing PostgreSQL database...")
     try:
         # Import all models to ensure they're registered with SQLAlchemy
-        from app.models import watchlist, watchlist_item, rule, symbol, price_daily, current_price
+        from app.models import watchlist, watchlist_item, rule, symbol, daily_ohlc_price, realtime_price_cache
         from src.db.models import HistoricalPrice, AssetMetadata, ImportJob, ImportError
         
         # Create all tables

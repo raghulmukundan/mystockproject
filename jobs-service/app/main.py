@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api import jobs
 from app.core.scheduler import scheduler
+from app.core.database import create_tables
 import logging
 
 # Configure logging
@@ -16,14 +17,14 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
     logger.info("Starting Jobs Service...")
-    
-    # Start the scheduler
+
+    # Start the scheduler (this will also setup job configurations)
     if not scheduler.running:
         scheduler.start()
         logger.info("Scheduler started successfully")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Jobs Service...")
     if scheduler.running:

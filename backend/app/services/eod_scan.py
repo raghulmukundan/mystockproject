@@ -35,7 +35,7 @@ def run_eod_scan_all_symbols(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> dict:
-    """Fetch today's daily OHLC for all symbols and upsert into prices_daily.
+    """Fetch today's daily OHLC for all symbols and upsert into prices_daily_ohlc.
 
     - Uses Schwab price history provider
     - Processes in batches to respect rate limits

@@ -3,8 +3,8 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 from datetime import datetime, timezone
 
-class CurrentPrice(Base):
-    __tablename__ = 'current_prices'
+class RealtimePriceCache(Base):
+    __tablename__ = 'prices_realtime_cache'
 
     symbol = Column(String, primary_key=True, index=True)
     current_price = Column(Float, nullable=False)
@@ -16,7 +16,7 @@ class CurrentPrice(Base):
     source = Column(String, default='finnhub')
 
     def __repr__(self):
-        return f"<CurrentPrice(symbol='{self.symbol}', price={self.current_price}, updated='{self.last_updated}')>"
+        return f"<RealtimePriceCache(symbol='{self.symbol}', price={self.current_price}, updated='{self.last_updated}')>"
 
     def to_dict(self):
         return {

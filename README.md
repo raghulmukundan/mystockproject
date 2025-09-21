@@ -184,10 +184,10 @@ This section documents the technical indicator pipeline, the tables it writes to
 
 ### Data Sources and Merge
 - historical_prices (src): Long-term OHLCV data by symbol/date. Used as the baseline history.
-- prices_daily (app): Schwab EOD OHLCV upserts by symbol/date. Treated as the primary source for “today”.
+- prices_daily_ohlc (app): Schwab EOD OHLCV upserts by symbol/date. Treated as the primary source for "today".
 - Merge rules for indicator compute (tail recompute):
   - Pull recent bars from both tables using a cutoff = latest_trade_date − (TECH_TAIL_DAYS + TECH_BUFFER_DAYS).
-  - Concatenate; when duplicate dates exist, prefer prices_daily over historical_prices.
+  - Concatenate; when duplicate dates exist, prefer prices_daily_ohlc over historical_prices.
   - Sort by date ASC; require a minimum tail length (TECH_MIN_ROWS, default 60) to compute stable indicators.
 
 ### Indicators (pandas‑ta)
@@ -233,7 +233,7 @@ This section documents the technical indicator pipeline, the tables it writes to
 
 - eod_price_scan (cron)
   - Mon–Fri 17:30 America/Chicago
-  - Pulls Schwab EOD OHLCV into prices_daily, in batches with rate limiting
+  - Pulls Schwab EOD OHLCV into prices_daily_ohlc, in batches with rate limiting
   - Fails fast if Schwab auth refresh fails to avoid flooding downstream errors
 
 - technical_compute (cron & chained)

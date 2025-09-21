@@ -102,13 +102,13 @@ def start_eod_scan_now(req: EodScanStartRequest):
 
 @router.delete("/api/prices/daily/truncate")
 def truncate_prices_daily():
-    """Dangerous: truncate the prices_daily table."""
+    """Dangerous: truncate the prices_daily_ohlc table."""
     from sqlalchemy import text
     db = next(get_db())
     try:
-        db.execute(text("TRUNCATE TABLE prices_daily"))
+        db.execute(text("TRUNCATE TABLE prices_daily_ohlc"))
         db.commit()
-        return {"message": "prices_daily truncated"}
+        return {"message": "prices_daily_ohlc truncated"}
     finally:
         db.close()
 

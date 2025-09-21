@@ -298,7 +298,7 @@ except Exception:
     if _get_database_url:
         DATABASE_URL = _get_database_url()
     else:
-        DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist')
+        DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://stockuser:stockpass123@host.docker.internal:5432/stockwatchlist')
     DATA_DIR = os.getenv("DATA_DIR", "./data")
 
 # Create data directory if it doesn't exist

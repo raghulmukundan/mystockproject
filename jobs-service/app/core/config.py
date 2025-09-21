@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/mydatabase")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:stockpass123@host.docker.internal:5432/stockwatchlist")
 
 # Timezone
 TIMEZONE = os.getenv("TIMEZONE", "America/Chicago")

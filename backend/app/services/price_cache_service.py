@@ -1,1 +1,1 @@
-# This file has been removed - functionality replaced by current_prices workflow
+# This file has been removed - functionality replaced by prices_realtime_cache workflow

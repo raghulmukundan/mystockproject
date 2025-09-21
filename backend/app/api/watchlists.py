@@ -55,7 +55,7 @@ class WatchlistUpdateRequest(BaseModel):
     items: List[WatchlistItemRequest] | None = None
 
 async def fetch_and_store_prices_for_symbols(symbols: List[str]):
-    """Fetch prices from Finnhub and store in current_prices table using new endpoint"""
+    """Fetch prices from Finnhub and store in prices_realtime_cache table using new endpoint"""
     try:
         async with httpx.AsyncClient() as client:
             payload = {"symbols": symbols}
@@ -502,7 +502,7 @@ async def delete_watchlist_item(watchlist_id: int, item_id: int, db: Session = D
 
 @router.get("/watchlists/{watchlist_id}/prices")
 async def get_watchlist_prices(watchlist_id: int, db: Session = Depends(get_db)):
-    """Get current prices for all symbols in a watchlist from current_prices table"""
+    """Get current prices for all symbols in a watchlist from prices_realtime_cache table"""
     try:
         # Check if watchlist exists
         watchlist = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()

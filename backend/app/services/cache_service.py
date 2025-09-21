@@ -1,1 +1,1 @@
-# This file has been removed - caching functionality not needed with current_prices workflow
+# This file has been removed - caching functionality not needed with prices_realtime_cache workflow

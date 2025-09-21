@@ -9,8 +9,10 @@ from app.services.job_status import begin_job, complete_job, fail_job, prune_his
 from app.services.market_data_job import update_market_data_job
 from app.services.eod_scan_job import run_eod_scan_job
 from app.services.universe_job import refresh_universe_job
-from app.services.tech_job import run_tech_job
+from app.services.tech_job import run_tech_job_scheduled
 from app.services.ttl_cleanup_job import cleanup_old_job_records
+from app.core.database import SessionLocal
+from app.db.models import JobConfiguration
 import logging
 
 try:
@@ -30,9 +32,87 @@ scheduler = BackgroundScheduler(
     timezone=ZoneInfo(TIMEZONE) if ZoneInfo is not None else TIMEZONE,
 )
 
+def setup_job_configurations():
+    """Setup job configurations in database"""
+    db = SessionLocal()
+    try:
+        job_configs = [
+            {
+                "job_name": "update_market_data",
+                "description": "Update market data every 30 minutes",
+                "enabled": True,
+                "schedule_type": "interval",
+                "interval_value": 30,
+                "interval_unit": "minutes",
+                "only_market_hours": True,
+                "market_start_hour": 9,
+                "market_end_hour": 16
+            },
+            {
+                "job_name": "refresh_universe",
+                "description": "Refresh NASDAQ universe every Sunday at 8 AM",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "sun",
+                "cron_hour": 8,
+                "cron_minute": 0,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "eod_price_scan",
+                "description": "EOD price scan at 5:30 PM",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "mon-fri",
+                "cron_hour": 17,
+                "cron_minute": 30,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "technical_compute",
+                "description": "Run technical analysis compute after EOD scan",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "mon-fri",
+                "cron_hour": 18,
+                "cron_minute": 0,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "job_ttl_cleanup",
+                "description": "Cleanup old job records",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_hour": 3,
+                "cron_minute": 0,
+                "only_market_hours": False
+            }
+        ]
+
+        for config in job_configs:
+            existing = db.query(JobConfiguration).filter(
+                JobConfiguration.job_name == config["job_name"]
+            ).first()
+
+            if not existing:
+                job_config = JobConfiguration(**config)
+                db.add(job_config)
+                logger.info(f"Created job configuration: {config['job_name']}")
+
+        db.commit()
+        logger.info("Job configurations initialized successfully")
+    except Exception as e:
+        logger.error(f"Error setting up job configurations: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
 def setup_jobs():
     """Setup all scheduled jobs"""
-    
+
+    # Initialize database job configurations first
+    setup_job_configurations()
+
     # Market data updates every 30 minutes
     scheduler.add_job(
         func=update_market_data_job,
@@ -41,7 +121,7 @@ def setup_jobs():
         name="Update market data every 30 minutes",
         replace_existing=True,
     )
-    
+
     # NASDAQ universe refresh every Sunday at 8 AM
     scheduler.add_job(
         func=refresh_universe_job,
@@ -50,7 +130,7 @@ def setup_jobs():
         name="Refresh NASDAQ universe every Sunday at 8 AM",
         replace_existing=True,
     )
-    
+
     # EOD daily OHLC scan at 5:30 PM America/Chicago (Mon–Fri)
     scheduler.add_job(
         func=run_eod_scan_job,
@@ -59,7 +139,16 @@ def setup_jobs():
         name="EOD price scan at 5:30 PM",
         replace_existing=True,
     )
-    
+
+    # Technical analysis compute after EOD scan at 6:00 PM (Mon-Fri)
+    scheduler.add_job(
+        func=run_tech_job_scheduled,
+        trigger=CronTrigger(day_of_week='mon-fri', hour=18, minute=0),
+        id="technical_compute",
+        name="Run technical analysis compute after EOD scan",
+        replace_existing=True,
+    )
+
     # TTL cleanup job daily at 3:00 AM
     scheduler.add_job(
         func=cleanup_old_job_records,
@@ -68,7 +157,7 @@ def setup_jobs():
         name="Cleanup old job records",
         replace_existing=True,
     )
-    
+
     logger.info("All scheduled jobs configured successfully")
 
 # Setup jobs when module is imported

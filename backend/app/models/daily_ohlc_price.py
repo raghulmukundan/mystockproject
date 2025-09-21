@@ -1,9 +1,9 @@
 from sqlalchemy import Column, String, Float, Integer, Index
 from app.core.database import Base
 
-class PriceDaily(Base):
-    __tablename__ = "prices_daily"
-    
+class DailyOHLCPrice(Base):
+    __tablename__ = "prices_daily_ohlc"
+
     symbol = Column(String, primary_key=True)   # e.g., AAPL
     date   = Column(String, primary_key=True)   # YYYY-MM-DD
     open   = Column(Float,  nullable=False)
@@ -14,4 +14,4 @@ class PriceDaily(Base):
     source = Column(String,  nullable=False, default="schwab")  # provenance
 
 # Index for fast lookups
-Index("prices_daily_symbol_date_idx", PriceDaily.symbol, PriceDaily.date)
+Index("prices_daily_ohlc_symbol_date_idx", DailyOHLCPrice.symbol, DailyOHLCPrice.date)

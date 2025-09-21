@@ -12,7 +12,7 @@ import asyncio
 
 from app.core.database import get_db
 from app.core.config import EXTERNAL_APIS_SERVICE_URL
-from app.models.current_price import CurrentPrice
+from app.models.realtime_price_cache import RealtimePriceCache
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ async def fetch_prices_from_finnhub(symbols: List[str]) -> Dict[str, Any]:
 @router.post("/fetch-and-store", response_model=PriceFetchAndStoreResponse)
 async def fetch_and_store_prices(request: PriceFetchRequest, db: Session = Depends(get_db)):
     """
-    Endpoint 2: Fetch prices from Finnhub and store in current_prices table
+    Endpoint 2: Fetch prices from Finnhub and store in prices_realtime_cache table
     Uses rate limiting built into Finnhub client
     """
     try:
@@ -92,7 +92,7 @@ async def fetch_and_store_prices(request: PriceFetchRequest, db: Session = Depen
                 message="No price data received from Finnhub"
             )
 
-        # Store prices in current_prices table
+        # Store prices in prices_realtime_cache table
         symbols_processed = []
         symbols_failed = []
 
@@ -103,8 +103,8 @@ async def fetch_and_store_prices(request: PriceFetchRequest, db: Session = Depen
                     continue
 
                 # Check if price already exists
-                existing_price = db.query(CurrentPrice).filter(
-                    CurrentPrice.symbol == symbol
+                existing_price = db.query(RealtimePriceCache).filter(
+                    RealtimePriceCache.symbol == symbol
                 ).first()
 
                 if existing_price:
@@ -118,7 +118,7 @@ async def fetch_and_store_prices(request: PriceFetchRequest, db: Session = Depen
                     existing_price.source = "finnhub"
                 else:
                     # Create new record
-                    current_price = CurrentPrice(
+                    current_price = RealtimePriceCache(
                         symbol=symbol,
                         current_price=price_info['current_price'],
                         change_amount=price_info.get('change', 0.0),
@@ -160,7 +160,7 @@ async def fetch_and_store_prices(request: PriceFetchRequest, db: Session = Depen
 @router.post("/get-from-db", response_model=List[PriceFromDBResponse])
 async def get_prices_from_db(request: PriceFetchRequest, db: Session = Depends(get_db)):
     """
-    Endpoint 3: Get current prices from current_prices table (no rate limiting)
+    Endpoint 3: Get current prices from prices_realtime_cache table (no rate limiting)
     """
     try:
         symbols = [s.upper().strip() for s in request.symbols if s.strip()]
@@ -172,8 +172,8 @@ async def get_prices_from_db(request: PriceFetchRequest, db: Session = Depends(g
         results = []
         for symbol in symbols:
             # Get the current price for this symbol
-            current_price = db.query(CurrentPrice).filter(
-                CurrentPrice.symbol == symbol
+            current_price = db.query(RealtimePriceCache).filter(
+                RealtimePriceCache.symbol == symbol
             ).first()
 
             if current_price:
@@ -198,13 +198,13 @@ async def get_prices_from_db(request: PriceFetchRequest, db: Session = Depends(g
 @router.get("/latest/{symbol}", response_model=Optional[PriceFromDBResponse])
 async def get_latest_price_for_symbol(symbol: str, db: Session = Depends(get_db)):
     """
-    Get current price for a single symbol from current_prices table
+    Get current price for a single symbol from prices_realtime_cache table
     """
     try:
         symbol = symbol.upper().strip()
 
-        current_price = db.query(CurrentPrice).filter(
-            CurrentPrice.symbol == symbol
+        current_price = db.query(RealtimePriceCache).filter(
+            RealtimePriceCache.symbol == symbol
         ).first()
 
         if not current_price:
