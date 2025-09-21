@@ -3,12 +3,12 @@
 Script to create job configuration and status tables
 """
 
-import os
 import psycopg2
 from psycopg2 import sql
+from backend.common.database import get_database_url
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = get_database_url()
 
 def create_job_tables():
     """Create job_configurations and job_execution_status tables"""

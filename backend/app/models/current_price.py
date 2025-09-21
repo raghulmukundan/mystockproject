@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 class CurrentPrice(Base):
     __tablename__ = 'current_prices'
-    
+
     symbol = Column(String, primary_key=True, index=True)
     current_price = Column(Float, nullable=False)
     change_amount = Column(Float)
@@ -14,10 +14,10 @@ class CurrentPrice(Base):
     market_cap = Column(BigInteger)
     last_updated = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     source = Column(String, default='finnhub')
-    
+
     def __repr__(self):
         return f"<CurrentPrice(symbol='{self.symbol}', price={self.current_price}, updated='{self.last_updated}')>"
-    
+
     def to_dict(self):
         return {
             'symbol': self.symbol,

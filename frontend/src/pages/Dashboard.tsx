@@ -18,6 +18,7 @@ import { Watchlist } from '../types'
 import TradingViewWidget from '../components/TradingViewWidget'
 import FinancialWidget from '../components/FinancialWidget'
 import StockDetailView from '../components/StockDetailView'
+import { jobsApiService } from '../services/jobsApi'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice } from '../services/stockApi'
 import { universeApi } from '../lib/universeApi'
@@ -94,9 +95,7 @@ const computeLocalNext = (): Date => {
 
 const getServerNextRefresh = async (): Promise<Date | null> => {
   try {
-    const res = await fetch('/api/jobs/next-market-refresh')
-    if (!res.ok) return null
-    const data = await res.json()
+    const data = await jobsApiService.getNextMarketRefresh()
     return data.next_run_at ? new Date(data.next_run_at) : computeLocalNext()
   } catch {
     return computeLocalNext()

@@ -7,6 +7,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend', 'src'))
 
 from sqlalchemy import text, create_engine
+from backend.common.database import get_database_url
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -16,8 +17,8 @@ def cleanup_historical_prices():
     """Clean up historical prices table for fresh import"""
     logger.info("Cleaning up historical prices table...")
     
-    # Use Docker container database URL
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist")
+    # Use shared database configuration
+    DATABASE_URL = get_database_url()
     
     try:
         engine = create_engine(DATABASE_URL)

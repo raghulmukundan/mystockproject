@@ -31,7 +31,7 @@ class SchwabTokenManager:
         self.credentials_available = all([self.client_id, self.client_secret, self.refresh_token])
         if not self.credentials_available:
             print("Warning: Schwab credentials not configured. Price history endpoints will not work.")
-        print("SchwabTokenManager initialized. {self.credentials_available} ")
+        print(f"SchwabTokenManager initialized. credentials_available={self.credentials_available}")
     def is_token_stale(self) -> bool:
         """Check if current token is stale or missing"""
         if not self.__class__._access_token or not self.__class__._obtained_at:

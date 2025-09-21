@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist
+      - DATABASE_URL=${DATABASE_URL}
       - TZ=America/Chicago
       - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
       - SCHWAB_CLIENT_ID=${SCHWAB_CLIENT_ID}
@@ -41,6 +41,29 @@ services:
     networks:
       - app-network
 
+  jobs-service:
+    build: ./jobs-service
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TZ=America/Chicago
+      - TIMEZONE=America/Chicago
+      - BACKEND_URL=http://backend:8000
+      - EXTERNAL_APIS_URL=http://external-apis:8003
+      - KEEP_JOB_HISTORY=5
+      - TTL_CLEANUP_DAYS=30
+      - MARKET_OPEN_HOUR=9
+      - MARKET_CLOSE_HOUR=16
+    volumes:
+      - ./jobs-service:/app
+    networks:
+      - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - external-apis
+
   frontend:
     build: ./frontend
     ports:
@@ -56,6 +79,7 @@ services:
     depends_on:
       - backend
       - external-apis
+      - jobs-service
 
 networks:
   app-network:

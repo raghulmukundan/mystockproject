@@ -21,12 +21,14 @@ class ExternalAPIsClient:
         """Make HTTP request to external APIs service with error handling"""
         try:
             url = f"{self.base_url}{endpoint}"
+            logger.debug(f"Making {method} request to external APIs: {url}")
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.request(method, url, **kwargs)
                 response.raise_for_status()
+                logger.debug(f"External APIs request successful: {response.status_code}")
                 return response.json()
         except Exception as e:
-            logger.error(f"External APIs service request failed: {e}")
+            logger.error(f"External APIs service request failed ({method} {url}): {e}")
             return None
     
     # Schwab API methods
@@ -46,6 +48,16 @@ class ExternalAPIsClient:
     async def get_schwab_history(self, symbol: str, **params) -> Optional[Dict[str, Any]]:
         """Get Schwab price history"""
         return await self._request("GET", f"/schwab/history/{symbol}", params=params)
+    
+    async def get_schwab_daily_history(self, symbol: str, start: str, end: str) -> Optional[List[Dict[str, Any]]]:
+        """Get Schwab daily OHLCV bars"""
+        return await self._request("GET", f"/schwab/history/{symbol}/daily", params={"start": start, "end": end})
+    
+    async def fetch_schwab_price_history(self, symbols: List[str], start: str, end: str) -> Optional[Dict[str, Any]]:
+        """Fetch price history for multiple symbols"""
+        return await self._request("POST", "/schwab/history/fetch", 
+                                 json=symbols, 
+                                 params={"start": start, "end": end})
     
     # Finnhub API methods
     async def get_finnhub_quote(self, symbol: str) -> Optional[Dict[str, Any]]:

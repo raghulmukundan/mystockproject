@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
+import { jobsApiService } from '../services/jobsApi'
 
 type EodScan = {
   id: number
@@ -63,15 +64,15 @@ const JobStatus: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [eodRes, jobsRes, jobsSummaryRes, techJobsRes] = await Promise.all([
+      const [eodRes, jobsRes, jobsSummaryData, techJobsRes] = await Promise.all([
         fetch('/api/eod/scan/list'),
         fetch('/api/import/status'),
-        fetch('/api/jobs/summary'),
+        jobsApiService.getJobsSummary(),
         fetch('/api/tech/jobs?limit=5'),
       ])
       if (eodRes.ok) setEodScans(await eodRes.json())
       if (jobsRes.ok) setImportJobs(await jobsRes.json())
-      if (jobsSummaryRes.ok) setJobsSummary(await jobsSummaryRes.json())
+      setJobsSummary(jobsSummaryData)
       if (techJobsRes.ok) setTechJobs(await techJobsRes.json())
     } catch (e) {
       console.error('Failed to load job status', e)
@@ -110,11 +111,8 @@ const JobStatus: React.FC = () => {
     setJobHistoryOpen(prev => ({ ...prev, [jobName]: open }))
     if (open) {
       try {
-        const res = await fetch(`/api/jobs/${jobName}/status?limit=5`)
-        if (res.ok) {
-          const data = await res.json()
-          setJobHistories(prev => ({ ...prev, [jobName]: data }))
-        }
+        const data = await jobsApiService.getJobStatus(jobName, 5)
+        setJobHistories(prev => ({ ...prev, [jobName]: data }))
       } catch (e) {
         // ignore
       }

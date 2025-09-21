@@ -3,12 +3,12 @@
 Script to add current_file and current_folder columns to ImportJob table
 """
 
-import os
 import psycopg2
 from psycopg2 import sql
+from backend.common.database import get_database_url
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = get_database_url()
 
 def add_progress_columns():
     """Add current_file and current_folder columns to import_jobs table"""

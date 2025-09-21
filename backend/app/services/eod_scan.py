@@ -12,7 +12,7 @@ from src.db.models import EodScan, EodScanError
 from src.services.schwab.auth import SchwabTokenManager
 from src.services.prices.providers.schwab_history import ProviderError
 from src.services.prices.providers.schwab_history import SchwabHistoryProvider
-from app.services.job_status import prune_eod_scans
+# Job status tracking removed - now handled by separate jobs service
 
 logger = logging.getLogger(__name__)
 

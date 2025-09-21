@@ -33,6 +33,7 @@ import {
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice, CompanyProfile } from '../services/stockApi'
+import { jobsApiService } from '../services/jobsApi'
 import { Watchlist, WatchlistItem } from '../types'
 import EditWatchlistModal from '../components/EditWatchlistModal'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
@@ -113,9 +114,7 @@ const computeLocalNext = (): Date => {
 
 const getServerNextRefresh = async (): Promise<Date | null> => {
   try {
-    const res = await fetch('/api/jobs/next-market-refresh')
-    if (!res.ok) return null
-    const data = await res.json()
+    const data = await jobsApiService.getNextMarketRefresh()
     return data.next_run_at ? new Date(data.next_run_at) : computeLocalNext()
   } catch {
     return computeLocalNext()
@@ -202,7 +201,7 @@ export default function WatchlistDetail() {
   }
 
   useEffect(() => {
-    if (watchlist && watchlist.items.length > 0) {
+    if (watchlist && watchlist.items && watchlist.items.length > 0) {
       const symbols = watchlist.items
         .map(item => item.symbol)
         .filter(symbol => symbol && typeof symbol === 'string' && symbol.trim().length > 0)
@@ -426,8 +425,8 @@ export default function WatchlistDetail() {
   }
 
   const handleSelectAllItems = () => {
-    if (!watchlist) return
-    
+    if (!watchlist || !watchlist.items) return
+
     if (selectedItems.length === watchlist.items.length) {
       // Deselect all
       setSelectedItems([])
@@ -448,7 +447,7 @@ export default function WatchlistDetail() {
 
   // Calculate watchlist metrics
   const watchlistMetrics: StockMetrics | null = useMemo(() => {
-    if (!watchlist || watchlist.items.length === 0) return null
+    if (!watchlist || !watchlist.items || watchlist.items.length === 0) return null
     
     let totalPerformance = 0
     let validPerformanceCount = 0
@@ -502,12 +501,26 @@ export default function WatchlistDetail() {
 
   // Filter and sort items
   const filteredAndSortedItems = useMemo(() => {
-    if (!watchlist) return []
-    
+    console.log('🔍 filteredAndSortedItems calculation:', {
+      watchlist: !!watchlist,
+      items: watchlist?.items?.length,
+      filterType,
+      searchTerm
+    })
+
+    if (!watchlist || !watchlist.items) {
+      console.log('❌ No watchlist or items')
+      return []
+    }
+
+    console.log('📋 Raw watchlist.items:', watchlist.items.slice(0, 3)) // Log first 3 items
+
     // Filter out items with undefined or null symbols first
-    let result = watchlist.items.filter(item => 
+    let result = watchlist.items.filter(item =>
       item.symbol && typeof item.symbol === 'string' && item.symbol.trim().length > 0
     )
+
+    console.log('🧹 After symbol filter:', result.length)
     
     // Apply search filter
     if (searchTerm) {
@@ -594,7 +607,9 @@ export default function WatchlistDetail() {
       
       return sortDirection === 'asc' ? comparison : -comparison
     })
-    
+
+    console.log('✅ Final filteredAndSortedItems:', result.length)
+
     return result
   }, [watchlist, searchTerm, filterType, sortField, sortDirection, priceData])
   
@@ -900,7 +915,7 @@ export default function WatchlistDetail() {
           </div>
 
           {/* No Items State */}
-          {watchlist.items.length === 0 ? (
+          {(!watchlist.items || watchlist.items.length === 0) ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
               <div className="text-center">
                 <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
@@ -1284,7 +1299,7 @@ export default function WatchlistDetail() {
                           </div>
                         </div>
                         <div className="text-xs text-gray-500 text-right">
-                          {watchlist.items.length} symbols in this watchlist
+                          {watchlist.items?.length || 0} symbols in this watchlist
                         </div>
                       </div>
                       

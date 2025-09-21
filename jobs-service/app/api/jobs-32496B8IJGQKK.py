@@ -1,16 +1,20 @@
+"""
+Jobs API endpoints
+"""
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from app.core.database import get_db
-from src.db.models import JobConfiguration, JobExecutionStatus
+from app.db.models import JobConfiguration, JobExecutionStatus
 from app.core.scheduler import scheduler
-from app.services.market_data import _is_market_open
-from datetime import timedelta
 from app.services.job_status import begin_job, complete_job, fail_job, prune_history
-from src.services.tech.run import run_technical_compute
-from app.services.market_data import update_market_data
+from app.services.market_data_job import _update_market_data_job, update_market_data_job_bypass_hours
+from app.services.eod_scan_job import _run_eod_scan_job
+from app.services.universe_job import _refresh_universe_job
+from app.services.tech_job import run_tech_job
+import asyncio
 
 router = APIRouter()
 
@@ -157,74 +161,12 @@ def get_next_market_refresh():
         job = scheduler.get_job("update_market_data")
         if not job or not job.next_run_time:
             return NextMarketRefreshResponse(next_run_at=None)
+        
         # Next scheduled run time from APScheduler (tz-aware)
         dt_local = job.next_run_time
-
-        # If market is closed at the next tick, advance in 30-minute steps until open
-        attempts = 0
-        step = timedelta(minutes=30)
-        while attempts < 48 and not _is_market_open(dt_local):
-            dt_local = dt_local + step
-            attempts += 1
-
         return NextMarketRefreshResponse(next_run_at=dt_local.isoformat())
     except Exception:
         return NextMarketRefreshResponse(next_run_at=None)
-
-@router.put("/jobs/{job_name}", response_model=JobConfigurationResponse)
-def update_job_configuration(job_name: str, update: JobConfigurationUpdate, db: Session = Depends(get_db)):
-    """Update job configuration"""
-    job = db.query(JobConfiguration).filter(JobConfiguration.job_name == job_name).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    # Update fields if provided
-    if update.enabled is not None:
-        job.enabled = update.enabled
-    if update.schedule_type is not None:
-        job.schedule_type = update.schedule_type
-    if update.interval_value is not None:
-        job.interval_value = update.interval_value
-    if update.interval_unit is not None:
-        job.interval_unit = update.interval_unit
-    if update.cron_day_of_week is not None:
-        job.cron_day_of_week = update.cron_day_of_week
-    if update.cron_hour is not None:
-        job.cron_hour = update.cron_hour
-    if update.cron_minute is not None:
-        job.cron_minute = update.cron_minute
-    if update.only_market_hours is not None:
-        job.only_market_hours = update.only_market_hours
-    if update.market_start_hour is not None:
-        job.market_start_hour = update.market_start_hour
-    if update.market_end_hour is not None:
-        job.market_end_hour = update.market_end_hour
-    
-    job.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(job)
-    
-    # TODO: Trigger scheduler update when scheduler supports dynamic updates
-    # from app.core.scheduler import update_job_schedule
-    # update_job_schedule(job_name)
-    
-    return JobConfigurationResponse(
-        id=job.id,
-        job_name=job.job_name,
-        description=job.description,
-        enabled=job.enabled,
-        schedule_type=job.schedule_type,
-        interval_value=job.interval_value,
-        interval_unit=job.interval_unit,
-        cron_day_of_week=job.cron_day_of_week,
-        cron_hour=job.cron_hour,
-        cron_minute=job.cron_minute,
-        only_market_hours=job.only_market_hours,
-        market_start_hour=job.market_start_hour,
-        market_end_hour=job.market_end_hour,
-        created_at=job.created_at.isoformat(),
-        updated_at=job.updated_at.isoformat()
-    )
 
 @router.get("/jobs/{job_name}/status", response_model=List[JobStatusResponse])
 def get_job_status_history(job_name: str, limit: int = 10, db: Session = Depends(get_db)):
@@ -248,17 +190,49 @@ def get_job_status_history(job_name: str, limit: int = 10, db: Session = Depends
         for status in statuses
     ]
 
-
+# Manual job execution endpoints
 @router.post("/jobs/market-data/run")
-def run_market_data_now():
-    job_name = 'market_data_refresh'
-    job_id = begin_job(job_name)
+async def run_market_data_now():
+    """Manually trigger market data refresh"""
     try:
-        update_market_data()
-        complete_job(job_id, records_processed=0)
-        prune_history(job_name, keep=5)
-        return {"message": "market data refresh triggered"}
+        await _update_market_data_job()
+        return {"message": "Market data refresh completed successfully"}
     except Exception as e:
-        fail_job(job_id, str(e))
-        prune_history(job_name, keep=5)
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/market-data/run-bypass-hours")
+async def run_market_data_bypass_hours():
+    """Trigger market data refresh bypassing market hours restriction"""
+    try:
+        await _update_market_data_job(bypass_market_hours=True)
+        return {"message": "Market data refresh completed successfully (bypassed market hours)"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/eod-scan/run")
+async def run_eod_scan_now():
+    """Manually trigger EOD scan"""
+    try:
+        await _run_eod_scan_job()
+        return {"message": "EOD scan completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/universe/run")
+async def run_universe_refresh_now():
+    """Manually trigger universe refresh"""
+    try:
+        await _refresh_universe_job()
+        return {"message": "Universe refresh completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/tech/run")
+async def run_tech_analysis_now():
+    """Manually trigger technical analysis"""
+    try:
+        await run_tech_job()
+        return {"message": "Technical analysis completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

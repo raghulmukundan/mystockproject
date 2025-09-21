@@ -2,6 +2,11 @@ from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Text,
 from sqlalchemy.orm import sessionmaker
 import os
 from datetime import datetime, timezone
+try:
+    from backend.common.database import get_database_url as _get_database_url
+except ImportError:
+    _get_database_url = None
+
 
 # Use the same Base class as the app models
 try:
@@ -290,7 +295,10 @@ except Exception:
     # Fallback for when running outside of app context
     from dotenv import load_dotenv
     load_dotenv()
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist")
+    if _get_database_url:
+        DATABASE_URL = _get_database_url()
+    else:
+        DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://stockuser:StockPass2024!@host.docker.internal:5432/stockwatchlist')
     DATA_DIR = os.getenv("DATA_DIR", "./data")
 
 # Create data directory if it doesn't exist

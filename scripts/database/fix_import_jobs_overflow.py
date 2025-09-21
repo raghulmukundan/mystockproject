@@ -3,12 +3,12 @@
 Script to fix integer overflow in import_jobs table by changing row count columns to BIGINT
 """
 
-import os
 import psycopg2
 from psycopg2 import sql
+from backend.common.database import get_database_url
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = get_database_url()
 
 def fix_import_jobs_overflow():
     """Change row count columns in import_jobs table from integer to bigint"""

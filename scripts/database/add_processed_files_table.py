@@ -3,12 +3,12 @@
 Script to add processed_files table for import resume functionality
 """
 
-import os
 import psycopg2
 from psycopg2 import sql
+from backend.common.database import get_database_url
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = get_database_url()
 
 def add_processed_files_table():
     """Create processed_files table for tracking import progress"""

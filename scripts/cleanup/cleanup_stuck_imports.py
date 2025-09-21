@@ -3,12 +3,12 @@
 Script to clean up stuck import jobs and reset database state
 """
 
-import os
 import psycopg2
 from psycopg2 import sql
+from backend.common.database import get_database_url
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = get_database_url()
 
 def cleanup_stuck_imports():
     """Clean up stuck or failed import jobs"""

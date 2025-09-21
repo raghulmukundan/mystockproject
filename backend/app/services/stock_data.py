@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import logging
 import os
 from collections import deque
-from .cache_service import cache_service
+# Removed cache_service - using direct API calls
 
 logger = logging.getLogger(__name__)
 
@@ -90,21 +90,9 @@ class StockDataService:
     async def get_stock_price(self, symbol: str) -> Optional[StockPrice]:
         """Get current stock price using Finnhub API"""
         try:
-            # Check global cache first
-            cache_key = f"stock_price_{symbol.upper()}"
-            cached_price = cache_service.get(cache_key)
-            if cached_price:
-                logger.debug(f"Using cached price for {symbol}")
-                return cached_price
+            # Direct API call - no caching
+            logger.debug(f"Fetching price for {symbol} from Finnhub API")
 
-            # Check market status and cache existence for API call decision
-            market_open = cache_service.should_fetch_data(cache_key)
-            if not market_open:
-                logger.info(f"Market closed, no cache for {symbol} - allowing first-time fetch")
-                # Continue to API call for first-time fetch during market close
-            else:
-                logger.debug(f"Market open, proceeding with API call for {symbol}")
-            
             # A valid API key is required
             if not self.finnhub_api_key:
                 raise ValueError(f"Cannot fetch price for {symbol} - FINNHUB_API_KEY is not set")
@@ -227,12 +215,7 @@ class StockDataService:
                             last_updated=datetime.now()
                         )
                         
-                        # Cache the result using global cache service with extended TTL if market is closed
-                        if not market_open:
-                            cache_service.set(cache_key, stock_price, extended_ttl=True)
-                            logger.info(f"Cached price for {symbol} until next market open")
-                        else:
-                            cache_service.set(cache_key, stock_price)
+                        # Return the result without caching
                         return stock_price
                     else:
                         logger.warning(f"Finnhub API error for {symbol}: {response.status}")
@@ -244,85 +227,25 @@ class StockDataService:
             raise
 
     async def get_multiple_stock_prices(self, symbols: List[str]) -> Dict[str, StockPrice]:
-        """Get prices for multiple stocks with cache-first strategy"""
+        """Get prices for multiple stocks from API"""
         if len(symbols) == 0:
             return {}
-        
-        logger.info(f"Fetching prices for {len(symbols)} symbols")
-        
-        # STEP 1: Check cache for ALL symbols first (super fast)
+
+        logger.info(f"Fetching prices for {len(symbols)} symbols from API")
+
+        # Fetch all symbols from API directly (no caching)
         price_data = {}
-        uncached_symbols = []
-        
+
         for symbol in symbols:
-            cache_key = f"stock_price_{symbol.upper()}"
-            cached_price = cache_service.get(cache_key)
-            if cached_price:
-                price_data[symbol.upper()] = cached_price
-                logger.debug(f"Cache hit: {symbol}")
-            else:
-                uncached_symbols.append(symbol)
-        
-        logger.info(f"Cache results: {len(price_data)} cached, {len(uncached_symbols)} need fetching")
-        
-        # STEP 2: For uncached symbols, check if we should fetch from API
-        if uncached_symbols:
-            market_open = cache_service.should_fetch_data()
-            
-            if not market_open:
-                logger.info(f"Market closed - proceeding with first-time fetch for {len(uncached_symbols)} symbols")
-                # During market close, use smaller batches and shorter timeout
-                batch_size = 3
-                timeout = 8.0
-            else:
-                logger.info(f"Market open - fetching {len(uncached_symbols)} symbols")
-                batch_size = 8
-                timeout = 15.0
-            
-            # STEP 3: Process uncached symbols in small batches
-            for i in range(0, len(uncached_symbols), batch_size):
-                batch = uncached_symbols[i:i + batch_size]
-                logger.info(f"API batch {i//batch_size + 1}: {batch}")
-                
-                # Process batch with individual API calls but with timeout
-                batch_results = await self._process_price_batch(batch, timeout)
-                price_data.update(batch_results)
-                
-                # Small delay between batches during market close
-                if not market_open and i + batch_size < len(uncached_symbols):
-                    await asyncio.sleep(1.0)
-        
-        logger.info(f"Final result: {len(price_data)} prices returned")
+            try:
+                price = await self.get_stock_price(symbol.upper())
+                if price:
+                    price_data[symbol.upper()] = price
+            except Exception as e:
+                logger.error(f"Failed to fetch price for {symbol}: {str(e)}")
+                continue
+
         return price_data
-    
-    async def _process_price_batch(self, symbols: List[str], timeout: float) -> Dict[str, StockPrice]:
-        """Process a small batch of symbols with error handling"""
-        batch_results = {}
-        
-        try:
-            # Create tasks for this batch
-            tasks = [self.get_stock_price(symbol) for symbol in symbols]
-            
-            # Execute with timeout
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=timeout
-            )
-            
-            # Process results
-            for symbol, result in zip(symbols, results):
-                if isinstance(result, StockPrice):
-                    batch_results[symbol.upper()] = result
-                    logger.debug(f"API success: {symbol}")
-                elif isinstance(result, Exception):
-                    # Log error but continue with other symbols
-                    logger.error(f"Error fetching price for {symbol}: {str(result)}")
-                
-        except asyncio.TimeoutError:
-            # Log timeout error
-            logger.error(f"Batch timeout for symbols: {symbols} (timeout: {timeout}s)")
-        
-        return batch_results
 
     async def get_company_profile(self, symbol: str) -> Optional[CompanyProfile]:
         """Get company profile data using Finnhub API"""

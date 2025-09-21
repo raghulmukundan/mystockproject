@@ -8,7 +8,7 @@ from src.db.models import SessionLocal, TechJob, TechJobSkip, TechJobSuccess
 from datetime import datetime, timezone
 from src.services.tech.run import run_technical_compute
 from src.services.tech.fetch_prices import get_latest_trade_date
-from app.services.job_status import begin_job, complete_job, fail_job, prune_history, prune_tech_jobs
+# Job status tracking removed - now handled by separate jobs service
 
 
 router = APIRouter()
@@ -36,24 +36,20 @@ async def tech_run(req: RunRequest):
     The client can poll /api/tech/status/latest for live status.
     """
     started = time.time()
-    job_name = 'technical_compute'
-    job_id = begin_job(job_name)
-    print(f"/api/tech/run accepted: job_id={job_id}")
+    print(f"/api/tech/run accepted")
+    # Note: Job status tracking moved to separate jobs service
 
-    def _worker(job_id: int, symbols: Optional[List[str]]):
+    def _worker(symbols: Optional[List[str]]):
         try:
             result = run_technical_compute(symbols)
             processed = int(result.get('updated_symbols', 0))
-            complete_job(job_id, records_processed=processed)
+            print(f"Technical compute completed: {processed} symbols processed")
         except Exception as e:
-            fail_job(job_id, str(e))
-        finally:
-            prune_history(job_name, keep=5)
-            prune_tech_jobs(keep=5)
+            print(f"Technical compute failed: {str(e)}")
 
-    t = threading.Thread(target=_worker, args=(job_id, req.symbols), daemon=True)
+    t = threading.Thread(target=_worker, args=(req.symbols,), daemon=True)
     t.start()
-    print(f"/api/tech/run worker started: job_id={job_id}")
+    print(f"/api/tech/run worker started")
 
     # Best-effort latest_trade_date for a friendly response
     db = SessionLocal()
@@ -64,7 +60,7 @@ async def tech_run(req: RunRequest):
 
     duration = time.time() - started
     return RunResponse(
-        job_id=job_id,
+        job_id=1,  # Placeholder job_id since job tracking moved to jobs service
         latest_trade_date=ltd,
         total_symbols=0,
         updated_symbols=0,

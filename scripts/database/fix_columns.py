@@ -3,12 +3,12 @@
 Script to fix PostgreSQL integer out of range error by changing volume and open_interest columns to BIGINT
 """
 
-import os
 import psycopg2
 from psycopg2 import sql
+from backend.common.database import get_database_url
 
 # Database connection parameters
-DATABASE_URL = "postgresql://stockuser:StockPass2024!@localhost:5432/stockwatchlist"
+DATABASE_URL = get_database_url()
 
 def fix_integer_columns():
     """Alter volume and open_interest columns from integer to bigint"""
