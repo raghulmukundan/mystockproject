@@ -17,7 +17,7 @@ import { HistoryLoader } from '../components/HistoryLoader';
 import { PricesBrowser as PricesBrowserComponent } from '../components/PricesBrowser';
 import JobStatus from './JobStatus';
 import { JobSettings } from './JobSettings';
-import { jobsApiService, JobSummaryResponse } from '../services/jobsApi';
+import jobsApi, { jobsApiService, JobSummaryResponse } from '../services/jobsApi';
 
 const jobNameOverrides: Record<string, string> = {
   update_market_data: 'Market Data Refresh',
@@ -203,8 +203,8 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
       return res.message;
     },
     job_ttl_cleanup: async () => {
-      const res = await jobsApiService.runJob('job_ttl_cleanup');
-      return res.message;
+      const response = await jobsApi.post('/jobs/job_ttl_cleanup/run');
+      return response.data.message;
     },
   };
 
@@ -213,10 +213,10 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
     setJobLoading(job.job_name);
 
     try {
-      const runner = runHandlers[job.job_name] || (async () => {
-        const res = await jobsApiService.runJob(job.job_name);
-        return res.message;
-      });
+      const runner = runHandlers[job.job_name];
+      if (!runner) {
+        throw new Error(`No handler found for job: ${job.job_name}`);
+      }
 
       const message = await runner();
       setFeedback({

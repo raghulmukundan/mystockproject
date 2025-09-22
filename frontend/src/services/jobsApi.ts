@@ -110,10 +110,6 @@ export const jobsApiService = {
     return response.data
   },
 
-  async runJob(jobName: string): Promise<{ message: string }> {
-    const response = await jobsApi.post(`/jobs/${jobName}/run`)
-    return response.data
-  },
 
   // Cleanup stuck jobs
   async cleanupStuckJobs(): Promise<CleanupResponse> {
