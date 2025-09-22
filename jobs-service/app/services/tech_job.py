@@ -3,8 +3,7 @@ Technical analysis job
 """
 import asyncio
 import logging
-from app.services.job_status import begin_job, complete_job, fail_job, prune_history
-from app.services.external_client import backend_client
+from app.services.tech_impl import run_technical_compute
 
 logger = logging.getLogger(__name__)
 
@@ -14,26 +13,12 @@ def run_tech_job_scheduled():
 
 async def run_tech_job():
     """Run technical analysis computation"""
-    job_name = "technical_compute"
-    job_id = None
     try:
         logger.info("Starting technical analysis job")
-        job_id = begin_job(job_name)
-        
-        # Call external APIs service to run technical analysis
-        result = await backend_client.run_tech_analysis()
-        
-        # Extract records processed from result
-        records_processed = result.get('updated_symbols', 0)
-        
-        complete_job(job_id, records_processed=records_processed)
-        prune_history(job_name, keep=5)
-        
-        logger.info(f"Technical analysis completed: {records_processed} symbols processed")
-        
+        result = await run_technical_compute()
+        logger.info(f"Technical analysis completed successfully: {result['updated_symbols']} symbols updated")
+        return result
+
     except Exception as e:
         logger.error(f"Technical analysis failed: {str(e)}")
-        if job_id is not None:
-            fail_job(job_id, str(e))
-            prune_history(job_name, keep=5)
         raise

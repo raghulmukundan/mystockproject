@@ -60,6 +60,12 @@ export interface NextMarketRefreshResponse {
   next_run_at?: string
 }
 
+export interface CleanupResponse {
+  eod_scans: number
+  job_executions: number
+  message: string
+}
+
 export const jobsApiService = {
   // Get job summaries
   async getJobsSummary(): Promise<JobSummaryResponse[]> {
@@ -85,8 +91,12 @@ export const jobsApiService = {
     return response.data
   },
 
-  async runEodScan(): Promise<{ message: string }> {
-    const response = await jobsApi.post('/jobs/eod-scan/run')
+  async runEodScan(startDate?: string, endDate?: string): Promise<{ message: string }> {
+    const params: any = {}
+    if (startDate) params.start_date = startDate
+    if (endDate) params.end_date = endDate
+
+    const response = await jobsApi.post('/jobs/eod-scan/run', params)
     return response.data
   },
 
@@ -97,6 +107,17 @@ export const jobsApiService = {
 
   async runTechAnalysis(): Promise<{ message: string }> {
     const response = await jobsApi.post('/jobs/tech/run')
+    return response.data
+  },
+
+  async runJob(jobName: string): Promise<{ message: string }> {
+    const response = await jobsApi.post(`/jobs/${jobName}/run`)
+    return response.data
+  },
+
+  // Cleanup stuck jobs
+  async cleanupStuckJobs(): Promise<CleanupResponse> {
+    const response = await jobsApi.post('/jobs/cleanup-stuck')
     return response.data
   }
 }

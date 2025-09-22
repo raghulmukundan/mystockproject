@@ -15,7 +15,7 @@ from app.api.prices import router as prices_router
 from src.api.import_api import router as import_router
 from src.api.prices_browser import router as prices_browser_router
 # from src.api.tech import router as tech_router  # Temporarily disabled due to NumPy compatibility issue
-from app.api.eod_scan import router as eod_scan_router
+# from app.api.eod_scan import router as eod_scan_router  # Moved to jobs-service
 from app.core.database import init_db
 
 
@@ -59,7 +59,7 @@ app.include_router(import_router)
 app.include_router(prices_browser_router)
 app.include_router(prices_router, prefix="/api/prices")
 # app.include_router(tech_router)  # Temporarily disabled due to NumPy compatibility issue
-app.include_router(eod_scan_router)
+# app.include_router(eod_scan_router)  # Moved to jobs-service
 
 @app.get("/")
 async def root():

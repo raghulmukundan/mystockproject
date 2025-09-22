@@ -46,7 +46,12 @@
       "Bash(./validate-and-start.bat validate)",
       "Bash(./validate-and-start.bat help)",
       "Bash(grep:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(docker restart:*)",
+      "Bash(docker ps:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(time curl:*)"
     ],
     "deny": [],
     "ask": []

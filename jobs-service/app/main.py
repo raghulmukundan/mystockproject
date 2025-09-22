@@ -18,6 +18,13 @@ async def lifespan(app: FastAPI):
     """Application lifespan management"""
     logger.info("Starting Jobs Service...")
 
+    # Create/update database tables
+    try:
+        create_tables()
+        logger.info("Database tables created/updated successfully")
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}")
+
     # Start the scheduler (this will also setup job configurations)
     if not scheduler.running:
         scheduler.start()
@@ -41,7 +48,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],  # Frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,12 +1,14 @@
 """
 Jobs API endpoints
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from app.core.database import get_db
+import asyncio
+import threading
 from app.db.models import JobConfiguration, JobExecutionStatus
 from app.core.scheduler import scheduler
 from app.services.job_status import begin_job, complete_job, fail_job, prune_history
@@ -14,6 +16,7 @@ from app.services.market_data_job import _update_market_data_job
 from app.services.eod_scan_job import _run_eod_scan_job
 from app.services.universe_job import _refresh_universe_job
 from app.services.tech_job import run_tech_job
+from app.services.ttl_cleanup_job import cleanup_old_job_records
 import asyncio
 
 router = APIRouter()
@@ -79,6 +82,10 @@ class JobSummaryResponse(BaseModel):
 class NextMarketRefreshResponse(BaseModel):
     next_run_at: Optional[str]
 
+class EodScanRequest(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
 @router.get("/jobs", response_model=List[JobConfigurationResponse])
 def get_all_jobs(db: Session = Depends(get_db)):
     """Get all job configurations"""
@@ -109,8 +116,11 @@ def get_jobs_summary(db: Session = Depends(get_db)):
     """Get job summaries with last run status"""
     jobs = db.query(JobConfiguration).all()
     result = []
-    
+
     for job in jobs:
+        # Skip deprecated job name (use nasdaq_universe_refresh instead)
+        if job.job_name == "refresh_universe":
+            continue
         # Get last execution status
         last_status = db.query(JobExecutionStatus).filter(
             JobExecutionStatus.job_name == job.job_name
@@ -126,6 +136,10 @@ def get_jobs_summary(db: Session = Depends(get_db)):
                 day_display = "Sunday"
             elif job.cron_day_of_week == 'mon,tue,wed,thu,fri':
                 day_display = "Weekdays"
+            elif job.cron_day_of_week == 'mon-fri':
+                day_display = "mon-fri"
+            elif job.cron_day_of_week is None:
+                day_display = "Daily"
             else:
                 day_display = job.cron_day_of_week
             schedule_display = f"{day_display} at {job.cron_hour:02d}:{job.cron_minute:02d}"
@@ -190,39 +204,208 @@ def get_job_status_history(job_name: str, limit: int = 10, db: Session = Depends
         for status in statuses
     ]
 
-# Manual job execution endpoints
-@router.post("/jobs/market-data/run")
-async def run_market_data_now():
-    """Manually trigger market data refresh"""
+async def _background_market_data():
+    """Background task for market data refresh"""
     try:
         await _update_market_data_job()
-        return {"message": "Market data refresh completed successfully"}
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Background market data refresh failed: {str(e)}")
+
+# Manual job execution endpoints
+@router.post("/jobs/market-data/run")
+async def run_market_data_now(background_tasks: BackgroundTasks):
+    """Manually trigger market data refresh"""
+    try:
+        background_tasks.add_task(_background_market_data)
+        return {"message": "Market data refresh started successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def _run_eod_scan_thread(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Run EOD scan in a separate thread"""
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        if start_date or end_date:
+            from app.services.eod_scan_impl import run_eod_scan_all_symbols
+            loop.run_until_complete(run_eod_scan_all_symbols(start_date=start_date, end_date=end_date))
+        else:
+            loop.run_until_complete(_run_eod_scan_job())
+
+        loop.close()
+        logger.info("Background EOD scan completed successfully")
+    except Exception as e:
+        logger.error(f"Background EOD scan failed: {str(e)}")
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
 
 @router.post("/jobs/eod-scan/run")
-async def run_eod_scan_now():
-    """Manually trigger EOD scan"""
+async def run_eod_scan_now(request: EodScanRequest = EodScanRequest()):
+    """Manually trigger EOD scan with optional date range"""
     try:
-        await _run_eod_scan_job()
-        return {"message": "EOD scan completed successfully"}
+        start_date = request.start_date
+        end_date = request.end_date
+
+        # Run EOD scan in a separate thread to avoid blocking the API
+        thread = threading.Thread(
+            target=_run_eod_scan_thread,
+            args=(start_date, end_date),
+            daemon=True
+        )
+        thread.start()
+
+        if start_date and end_date:
+            return {"message": f"EOD scan started for date range {start_date} to {end_date}"}
+        elif start_date or end_date:
+            return {"message": f"EOD scan started for date {start_date or end_date}"}
+        else:
+            return {"message": "EOD scan started successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/jobs/universe/run")
-async def run_universe_refresh_now():
-    """Manually trigger universe refresh"""
+async def _background_universe_refresh():
+    """Background task for universe refresh"""
     try:
         await _refresh_universe_job()
-        return {"message": "Universe refresh completed successfully"}
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Background universe refresh failed: {str(e)}")
+
+async def _background_tech_analysis():
+    """Background task for technical analysis"""
+    try:
+        await run_tech_job()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Background technical analysis failed: {str(e)}")
+
+@router.post("/jobs/universe/run")
+async def run_universe_refresh_now(background_tasks: BackgroundTasks):
+    """Manually trigger universe refresh"""
+    try:
+        background_tasks.add_task(_background_universe_refresh)
+        return {"message": "Universe refresh started successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/jobs/tech/run")
-async def run_tech_analysis_now():
+async def run_tech_analysis_now(background_tasks: BackgroundTasks):
     """Manually trigger technical analysis"""
     try:
-        await run_tech_job()
-        return {"message": "Technical analysis completed successfully"}
+        background_tasks.add_task(_background_tech_analysis)
+        return {"message": "Technical analysis started successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/job_ttl_cleanup/run")
+async def run_ttl_cleanup_now():
+    """Manually trigger TTL cleanup job"""
+    try:
+        cleanup_old_job_records()
+        return {"message": "TTL cleanup completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/cleanup-stuck")
+async def cleanup_stuck_jobs():
+    """Clean up stuck jobs that are marked as 'running' but are no longer active"""
+    from datetime import datetime, timezone
+    from sqlalchemy import text
+    from app.core.database import get_db
+
+    try:
+        db = next(get_db())
+        try:
+            cleanup_results = {
+                "eod_scans": 0,
+                "job_executions": 0,
+                "message": "Cleanup completed successfully"
+            }
+
+            # Mark stuck EOD scans as failed
+            result = db.execute(text("""
+                UPDATE eod_scans
+                SET status = 'failed', completed_at = :now
+                WHERE status = 'running' AND completed_at IS NULL
+                RETURNING id
+            """), {"now": datetime.now(timezone.utc)})
+
+            updated_scans = result.fetchall()
+            cleanup_results["eod_scans"] = len(updated_scans)
+
+            # Mark stuck job execution statuses as failed
+            result = db.execute(text("""
+                UPDATE job_execution_status
+                SET status = 'failed'
+                WHERE status = 'running' AND completed_at IS NULL
+                RETURNING id
+            """))
+
+            updated_jobs = result.fetchall()
+            cleanup_results["job_executions"] = len(updated_jobs)
+
+            db.commit()
+            return cleanup_results
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# EOD scan status endpoints
+@router.get("/eod/scan/list")
+async def get_eod_scans(limit: int = 20, db: Session = Depends(get_db)):
+    """Get list of EOD scans"""
+    from app.db.models import EodScan
+    try:
+        scans = db.query(EodScan).order_by(EodScan.started_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": scan.id,
+                "status": scan.status,
+                "scan_date": scan.scan_date,
+                "started_at": scan.started_at.isoformat() if scan.started_at else None,
+                "completed_at": scan.completed_at.isoformat() if scan.completed_at else None,
+                "symbols_requested": scan.symbols_requested or 0,
+                "symbols_fetched": scan.symbols_fetched or 0,
+                "error_count": scan.error_count or 0,
+            }
+            for scan in scans
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/eod/scan/errors/{scan_id}")
+async def get_eod_scan_errors(scan_id: int, limit: int = 100, db: Session = Depends(get_db)):
+    """Get errors for an EOD scan"""
+    from app.db.models import EodScanError
+    try:
+        errors = db.query(EodScanError).filter(
+            EodScanError.eod_scan_id == scan_id
+        ).order_by(EodScanError.created_at.desc()).limit(limit).all()
+
+        return [
+            {
+                "id": error.id,
+                "symbol": error.symbol,
+                "error_type": error.error_type,
+                "error_message": error.error_message,
+                "http_status": error.http_status,
+                "occurred_at": error.created_at.isoformat() if error.created_at else None,
+            }
+            for error in errors
+        ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

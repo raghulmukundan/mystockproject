@@ -49,7 +49,7 @@ def setup_job_configurations():
                 "market_end_hour": 16
             },
             {
-                "job_name": "refresh_universe",
+                "job_name": "nasdaq_universe_refresh",
                 "description": "Refresh NASDAQ universe every Sunday at 8 AM",
                 "enabled": True,
                 "schedule_type": "cron",
@@ -83,6 +83,7 @@ def setup_job_configurations():
                 "description": "Cleanup old job records",
                 "enabled": True,
                 "schedule_type": "cron",
+                "cron_day_of_week": None,
                 "cron_hour": 3,
                 "cron_minute": 0,
                 "only_market_hours": False

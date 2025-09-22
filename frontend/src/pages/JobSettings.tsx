@@ -168,74 +168,6 @@ export const JobSettings: React.FC = () => {
     }
   };
 
-  const runUniverseRefreshNow = async () => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await fetch('/api/universe/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ download: true }) });
-      if (!res.ok) {
-        const err = await res.json();
-        setMessage(`Error: ${err.detail || 'Failed to refresh'}`);
-      } else {
-        setMessage('Universe refresh started');
-      }
-      await loadJobsSummary();
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
-
-  const truncateSymbolsTable = async () => {
-    if (!confirm('This will TRUNCATE symbols. Are you sure?')) return;
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await fetch('/api/universe/clear', { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
-        setMessage(data.message || 'Symbols table truncated');
-      } else {
-        const err = await res.json();
-        setMessage(`Error: ${err.detail || 'Failed to truncate symbols'}`);
-      }
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
-
-  const runTechNow = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tech/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-      if (res.ok) {
-        const data = await res.json();
-        setMessage(`Technical compute started (job #${data.job_id || '?'} for ${data.latest_trade_date || ''})`);
-        await loadJobsSummary();
-        // kick off immediate status poll
-        loadTechLatest();
-      } else {
-        let detail = '';
-        try { const err = await res.json(); detail = err.detail || JSON.stringify(err); } catch {}
-        setMessage(`Failed to start technical compute${detail ? ': ' + detail : ''}`);
-      }
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
-
-  const runMarketDataNow = async () => {
-    setLoading(true);
-    try {
-      await jobsApiService.runMarketDataRefresh();
-      await loadJobsSummary();
-      setMessage('Market data refresh started');
-    } catch {}
-    setLoading(false);
-  };
-
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'completed': return 'default';
@@ -536,18 +468,6 @@ export const JobSettings: React.FC = () => {
                     <Button variant="outline" size="sm" onClick={() => toggleJobHistory(job.job_name)}>
                       {historyOpen[job.job_name] ? 'Hide History' : 'Show History'}
                     </Button>
-                    {job.job_name === 'nasdaq_universe_refresh' && (
-                      <>
-                        <Button size="sm" onClick={runUniverseRefreshNow} disabled={loading}>Run Now</Button>
-                        <Button size="sm" variant="destructive" onClick={truncateSymbolsTable} disabled={loading}>Truncate Symbols</Button>
-                      </>
-                    )}
-                    {job.job_name === 'technical_compute' && (
-                      <Button size="sm" onClick={runTechNow} disabled={loading}>Run Now</Button>
-                    )}
-                    {job.job_name === 'market_data_refresh' && (
-                      <Button size="sm" onClick={runMarketDataNow} disabled={loading}>Run Now</Button>
-                    )}
                   </div>
                 </div>
               </CardHeader>

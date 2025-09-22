@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
-import { jobsApiService } from '../services/jobsApi'
+import { jobsApiService, CleanupResponse } from '../services/jobsApi'
+import { ChevronDownIcon, ChevronRightIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 
 type EodScan = {
   id: number
@@ -43,6 +44,8 @@ const JobStatus: React.FC = () => {
   const [eodScans, setEodScans] = useState<EodScan[]>([])
   const [importJobs, setImportJobs] = useState<ImportJob[]>([])
   const [techJobs, setTechJobs] = useState<any[]>([])
+  const [universeJobs, setUniverseJobs] = useState<any[]>([])
+  const [ttlCleanupJobs, setTtlCleanupJobs] = useState<any[]>([])
   const [selectedTechJobId, setSelectedTechJobId] = useState<number | null>(null)
   const [techSkips, setTechSkips] = useState<any[]>([])
   const [techSuccesses, setTechSuccesses] = useState<any[]>([])
@@ -51,29 +54,50 @@ const JobStatus: React.FC = () => {
   const [skipOffset, setSkipOffset] = useState(0)
   const [successOffset, setSuccessOffset] = useState(0)
   const [errorOffset, setErrorOffset] = useState(0)
-  const [techRuns, setTechRuns] = useState<any[]>([])
-  const [starting, setStarting] = useState(false)
-  const [startDate, setStartDate] = useState<string>('')
-  const [endDate, setEndDate] = useState<string>('')
   const [expandedScanId, setExpandedScanId] = useState<number | null>(null)
   const [scanErrors, setScanErrors] = useState<Record<number, EodScanError[]>>({})
   const [loadingErrors, setLoadingErrors] = useState<Record<number, boolean>>({})
-  const [jobsSummary, setJobsSummary] = useState<any[]>([])
   const [jobHistories, setJobHistories] = useState<Record<string, any[]>>({})
   const [jobHistoryOpen, setJobHistoryOpen] = useState<Record<string, boolean>>({})
+  const [cleanupLoading, setCleanupLoading] = useState(false)
+  const [cleanupResult, setCleanupResult] = useState<CleanupResponse | null>(null)
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    eod: true,
+    tech: true,
+    universe: true,
+    ttl: true,
+    import: true
+  })
+  const [refreshingErrors, setRefreshingErrors] = useState<Record<number, boolean>>({})
 
   const loadData = async () => {
     try {
-      const [eodRes, jobsRes, jobsSummaryData, techJobsRes] = await Promise.all([
-        fetch('/api/eod/scan/list'),
+      const [eodRes, jobsRes, techJobsRes] = await Promise.all([
+        fetch('http://localhost:8004/api/eod/scan/list'),
         fetch('/api/import/status'),
-        jobsApiService.getJobsSummary(),
         fetch('/api/tech/jobs?limit=5'),
       ])
       if (eodRes.ok) setEodScans(await eodRes.json())
       if (jobsRes.ok) setImportJobs(await jobsRes.json())
-      setJobsSummary(jobsSummaryData)
       if (techJobsRes.ok) setTechJobs(await techJobsRes.json())
+
+      // Load universe jobs from jobs-service
+      try {
+        const universeJobsData = await jobsApiService.getJobStatus('nasdaq_universe_refresh', 10)
+        setUniverseJobs(universeJobsData)
+      } catch (e) {
+        console.log('No universe jobs found or error loading universe jobs:', e)
+        setUniverseJobs([])
+      }
+
+      // Load TTL cleanup jobs from jobs-service
+      try {
+        const ttlCleanupJobsData = await jobsApiService.getJobStatus('job_ttl_cleanup', 10)
+        setTtlCleanupJobs(ttlCleanupJobsData)
+      } catch (e) {
+        console.log('No TTL cleanup jobs found or error loading TTL cleanup jobs:', e)
+        setTtlCleanupJobs([])
+      }
     } catch (e) {
       console.error('Failed to load job status', e)
     }
@@ -84,27 +108,6 @@ const JobStatus: React.FC = () => {
     const t = setInterval(loadData, 5000)
     return () => clearInterval(t)
   }, [])
-
-  const startEod = async () => {
-    setStarting(true)
-    try {
-      const body: any = {}
-      if (startDate) body.start = startDate
-      if (endDate) body.end = endDate || startDate
-      const res = await fetch('/api/eod/scan/start', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      if (res.ok) {
-        await loadData()
-      }
-    } catch (e) {
-      console.error('Failed to start EOD scan', e)
-    } finally {
-      setStarting(false)
-    }
-  }
 
   const toggleJobHistory = async (jobName: string) => {
     const open = !jobHistoryOpen[jobName]
@@ -119,38 +122,6 @@ const JobStatus: React.FC = () => {
     }
   }
 
-  const runUniverseRefreshNow = async () => {
-    try {
-      const res = await fetch('/api/universe/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ download: true }) })
-      if (res.ok) await loadData()
-    } catch {}
-  }
-
-  const truncateSymbolsTable = async () => {
-    if (!confirm('This will TRUNCATE symbols. Are you sure?')) return
-    try {
-      await fetch('/api/universe/clear', { method: 'DELETE' })
-      await loadData()
-    } catch {}
-  }
-
-  const runTechNow = async () => {
-    try {
-      await fetch('/api/tech/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
-      await loadData()
-    } catch {}
-  }
-
-  const truncatePricesDaily = async () => {
-    if (!confirm('This will truncate prices_daily. Are you sure?')) return
-    try {
-      await fetch('/api/prices/daily/truncate', { method: 'DELETE' })
-      alert('prices_daily truncated')
-    } catch (e) {
-      console.error('Failed to truncate prices_daily', e)
-    }
-  }
-
   const toggleErrors = async (scanId: number) => {
     if (expandedScanId === scanId) {
       setExpandedScanId(null)
@@ -160,7 +131,7 @@ const JobStatus: React.FC = () => {
     if (!scanErrors[scanId]) {
       setLoadingErrors(prev => ({ ...prev, [scanId]: true }))
       try {
-        const res = await fetch(`/api/eod/scan/errors/${scanId}`)
+        const res = await fetch(`http://localhost:8004/api/eod/scan/errors/${scanId}`)
         if (res.ok) {
           const errs: EodScanError[] = await res.json()
           setScanErrors(prev => ({ ...prev, [scanId]: errs }))
@@ -173,9 +144,92 @@ const JobStatus: React.FC = () => {
     }
   }
 
+  const handleCleanupStuckJobs = async () => {
+    setCleanupLoading(true)
+    try {
+      const result = await jobsApiService.cleanupStuckJobs()
+      setCleanupResult(result)
+      // Refresh data after cleanup
+      await loadData()
+      // Clear result after 5 seconds
+      setTimeout(() => setCleanupResult(null), 5000)
+    } catch (e) {
+      console.error('Failed to cleanup stuck jobs:', e)
+      setCleanupResult({
+        eod_scans: 0,
+        job_executions: 0,
+        message: 'Failed to cleanup stuck jobs'
+      })
+      setTimeout(() => setCleanupResult(null), 5000)
+    } finally {
+      setCleanupLoading(false)
+    }
+  }
+
+  const toggleSection = (sectionName: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }))
+  }
+
+  const refreshErrors = async (scanId: number) => {
+    setRefreshingErrors(prev => ({ ...prev, [scanId]: true }))
+    try {
+      const res = await fetch(`http://localhost:8004/api/eod/scan/errors/${scanId}`)
+      if (res.ok) {
+        const errors = await res.json()
+        setScanErrors(prev => ({ ...prev, [scanId]: errors }))
+      }
+    } catch (e) {
+      console.error('Failed to refresh errors:', e)
+    } finally {
+      setRefreshingErrors(prev => ({ ...prev, [scanId]: false }))
+    }
+  }
+
+  const hasRunningJobs = (sectionName: string) => {
+    switch (sectionName) {
+      case 'eod':
+        return eodScans.some(scan => scan.status === 'running')
+      case 'tech':
+        return techJobs.some(job => job.status === 'running')
+      case 'universe':
+        return universeJobs.some(job => job.status === 'running')
+      case 'ttl':
+        return ttlCleanupJobs.some(job => job.status === 'running')
+      case 'import':
+        return importJobs.some(job => job.status === 'running')
+      default:
+        return false
+    }
+  }
+
+  const getSectionHeaderClass = (sectionName: string) => {
+    const baseClass = "flex items-center gap-2 cursor-pointer"
+    if (hasRunningJobs(sectionName)) {
+      return `${baseClass} text-blue-600 font-semibold`
+    }
+    return baseClass
+  }
+
+  const getSectionCardClass = (sectionName: string) => {
+    const baseClass = "relative overflow-hidden border border-slate-200 bg-white/95 shadow-sm backdrop-blur-sm transition-shadow hover:shadow-md"
+    if (hasRunningJobs(sectionName)) {
+      return `${baseClass} border-blue-300 shadow-blue-100 ring-1 ring-blue-200`
+    }
+    return baseClass
+  }
+
   const pct = (fetched: number, total: number) => {
     if (!total) return 0
     return Math.min(100, Math.round((fetched / total) * 100))
+  }
+
+  const progressPct = (fetched: number, errors: number, total: number) => {
+    if (!total) return 0
+    const attempted = fetched + errors
+    return Math.min(100, Math.round((attempted / total) * 100))
   }
 
   const fmt = (n: number) => n.toLocaleString()
@@ -203,33 +257,63 @@ const JobStatus: React.FC = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>EOD Scan</CardTitle>
-          <div className="flex flex-wrap gap-2 items-center">
-            <div className="flex gap-2 items-center">
-              <label className="text-sm text-gray-700">Start</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+      {/* Cleanup Controls */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Job Status</h1>
+          <p className="text-sm text-gray-600">Monitor and manage running jobs</p>
+        </div>
+        <div className="flex items-center gap-4">
+          {cleanupResult && (
+            <div className={`text-sm px-3 py-1 rounded ${
+              cleanupResult.message.includes('Failed')
+                ? 'bg-red-100 text-red-700'
+                : 'bg-green-100 text-green-700'
+            }`}>
+              Cleaned: {cleanupResult.eod_scans} EOD scans, {cleanupResult.job_executions} job executions
             </div>
-            <div className="flex gap-2 items-center">
-              <label className="text-sm text-gray-700">End</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+          )}
+          <Button
+            onClick={handleCleanupStuckJobs}
+            disabled={cleanupLoading}
+            variant="outline"
+            size="sm"
+          >
+            {cleanupLoading ? 'Cleaning...' : 'Cleanup Stuck Jobs'}
+          </Button>
+        </div>
+      </div>
+
+      <Card className={getSectionCardClass('eod')}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('eod')} onClick={() => toggleSection('eod')}>
+              {collapsedSections['eod'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>EOD Scan</CardTitle>
+              {hasRunningJobs('eod') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
             </div>
-            <Button onClick={startEod} disabled={starting}>
-              {starting ? 'Starting…' : 'Start EOD Scan'}
-            </Button>
-            <Button variant="destructive" onClick={truncatePricesDaily}>
-              Truncate prices_daily
-            </Button>
           </div>
+          {!collapsedSections['eod'] && (
+            <p className="text-sm text-slate-600">Latest EOD price scans with progression and error visibility.</p>
+          )}
         </CardHeader>
+        {!collapsedSections['eod'] && (
         <CardContent>
           {eodScans.length === 0 ? (
             <div className="text-gray-500">No scans yet.</div>
           ) : (
             <div className="space-y-3">
               {eodScans.map((s) => (
-                <div key={s.id} className="border rounded p-3">
+                <div key={s.id} className={`border rounded p-3 ${s.status === 'running' ? 'border-blue-300 bg-blue-50' : ''}`}>
                   <div className="flex justify-between text-sm">
                     <div>
                       <span className="font-medium">Scan #{s.id}</span> · {s.scan_date}
@@ -242,7 +326,7 @@ const JobStatus: React.FC = () => {
                     <div>Requested: {fmt(s.symbols_requested)}</div>
                     <div>Fetched: {fmt(s.symbols_fetched)}</div>
                     <div>Errors: {fmt(s.error_count)}</div>
-                    <div>Progress: {pct(s.symbols_fetched, s.symbols_requested)}%</div>
+                    <div>Progress: {progressPct(s.symbols_fetched, s.error_count, s.symbols_requested)}%</div>
                     <div>
                       {(() => {
                         const re = rateAndEta(s)
@@ -263,15 +347,17 @@ const JobStatus: React.FC = () => {
                     <Button variant="outline" size="sm" onClick={() => toggleErrors(s.id)}>
                       {expandedScanId === s.id ? 'Hide Errors' : 'View Errors'}
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={async () => { await fetch(`/api/eod/scan/retry/${s.id}`, { method: 'POST' }); loadData(); }}
-                      disabled={s.error_count === 0 || s.status === 'running'}
-                      title={s.error_count === 0 ? 'No errors to retry' : s.status === 'running' ? 'Scan in progress' : 'Retry failed symbols'}
-                    >
-                      Retry Failed
-                    </Button>
+                    {expandedScanId === s.id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refreshErrors(s.id)}
+                        disabled={refreshingErrors[s.id]}
+                      >
+                        <ArrowPathIcon className={`h-4 w-4 ${refreshingErrors[s.id] ? 'animate-spin' : ''}`} />
+                        {refreshingErrors[s.id] ? 'Refreshing...' : 'Refresh'}
+                      </Button>
+                    )}
                   </div>
                   {expandedScanId === s.id && (
                     <div className="mt-3 border-t pt-3">
@@ -298,12 +384,29 @@ const JobStatus: React.FC = () => {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
 
-      <Card>
+      <Card className={getSectionCardClass('tech')}>
         <CardHeader>
-          <CardTitle>Technical Compute</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('tech')} onClick={() => toggleSection('tech')}>
+              {collapsedSections['tech'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>Technical Compute</CardTitle>
+              {hasRunningJobs('tech') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
         </CardHeader>
+        {!collapsedSections['tech'] && (
         <CardContent>
           {techJobs.length === 0 ? (
             <div className="text-gray-500 text-sm">No runs yet.</div>
@@ -410,23 +513,212 @@ const JobStatus: React.FC = () => {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
 
       {/* Background Jobs moved to Job Settings page */}
 
-      <Card>
+      <Card className={getSectionCardClass('universe')}>
         <CardHeader>
-          <CardTitle>Historical Import Jobs</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('universe')} onClick={() => toggleSection('universe')}>
+              {collapsedSections['universe'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>Universe Refresh Jobs</CardTitle>
+              {hasRunningJobs('universe') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!collapsedSections['universe'] && (
+            <p className="text-sm text-slate-600">NASDAQ universe refresh job history and status.</p>
+          )}
         </CardHeader>
+        {!collapsedSections['universe'] && (
+        <CardContent>
+          {universeJobs.length === 0 ? (
+            <div className="text-gray-500">No universe refresh jobs found.</div>
+          ) : (
+            <div className="space-y-3">
+              {universeJobs.map((job) => (
+                <div key={job.id} className={`border rounded p-3 ${job.status === 'running' ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : ''}`}>
+                  <div className="flex justify-between items-start text-sm">
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        Universe Refresh #{job.id}
+                        {job.status === 'running' && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-gray-600 mt-1">
+                        Started: {job.started_at ? new Date(job.started_at).toLocaleString() : 'N/A'}
+                      </div>
+                      {job.completed_at && (
+                        <div className="text-gray-600">
+                          Completed: {new Date(job.completed_at).toLocaleString()}
+                        </div>
+                      )}
+                      {job.records_processed && (
+                        <div className="text-gray-600">
+                          Records processed: {job.records_processed.toLocaleString()}
+                        </div>
+                      )}
+                      {job.duration_seconds && (
+                        <div className="text-gray-600">
+                          Duration: {job.duration_seconds}s
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge
+                        variant={
+                          job.status === 'completed' ? 'default' :
+                          job.status === 'running' ? 'secondary' :
+                          job.status === 'failed' ? 'destructive' : 'outline'
+                        }
+                      >
+                        {job.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                  {job.error_message && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                      {job.error_message}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        )}
+      </Card>
+
+      <Card className={getSectionCardClass('ttl')}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('ttl')} onClick={() => toggleSection('ttl')}>
+              {collapsedSections['ttl'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>TTL Cleanup Jobs</CardTitle>
+              {hasRunningJobs('ttl') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!collapsedSections['ttl'] && (
+            <p className="text-sm text-slate-600">TTL cleanup job history - keeps latest 5 records for all job types.</p>
+          )}
+        </CardHeader>
+        {!collapsedSections['ttl'] && (
+        <CardContent>
+          {ttlCleanupJobs.length === 0 ? (
+            <div className="text-gray-500">No TTL cleanup jobs found.</div>
+          ) : (
+            <div className="space-y-3">
+              {ttlCleanupJobs.map((job) => (
+                <div key={job.id} className={`border rounded p-3 ${job.status === 'running' ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : ''}`}>
+                  <div className="flex justify-between items-start text-sm">
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        TTL Cleanup #{job.id}
+                        {job.status === 'running' && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-gray-600 mt-1">
+                        Started: {job.started_at ? new Date(job.started_at).toLocaleString() : 'N/A'}
+                      </div>
+                      {job.completed_at && (
+                        <div className="text-gray-600">
+                          Completed: {new Date(job.completed_at).toLocaleString()}
+                        </div>
+                      )}
+                      {job.records_processed && (
+                        <div className="text-gray-600">
+                          Records cleaned up: {job.records_processed.toLocaleString()}
+                        </div>
+                      )}
+                      {job.duration_seconds !== null && (
+                        <div className="text-gray-600">
+                          Duration: {job.duration_seconds}s
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'secondary'}>
+                        {job.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                  {job.error_message && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                      {job.error_message}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        )}
+      </Card>
+
+      <Card className={getSectionCardClass('import')}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('import')} onClick={() => toggleSection('import')}>
+              {collapsedSections['import'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>Historical Import Jobs</CardTitle>
+              {hasRunningJobs('import') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        {!collapsedSections['import'] && (
         <CardContent>
           {importJobs.length === 0 ? (
             <div className="text-gray-500">No import jobs found.</div>
           ) : (
             <div className="space-y-2">
               {importJobs.map((j) => (
-                <div key={j.id} className="border rounded p-3 text-sm">
+                <div key={j.id} className={`border rounded p-3 text-sm ${j.status === 'running' ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : ''}`}>
                   <div className="flex justify-between">
-                    <div className="font-medium">Job #{j.id}</div>
+                    <div className="font-medium flex items-center gap-2">
+                      Job #{j.id}
+                      {j.status === 'running' && (
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                          <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                        </div>
+                      )}
+                    </div>
                     <div className={j.status === 'completed' ? 'text-green-600' : j.status === 'running' ? 'text-blue-600' : 'text-red-600'}>
                       {j.status.toUpperCase()}
                     </div>
@@ -441,6 +733,7 @@ const JobStatus: React.FC = () => {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
     </div>
   )
