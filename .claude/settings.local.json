@@ -51,7 +51,9 @@
       "Bash(docker ps:*)",
       "Bash(npm run build:*)",
       "Bash(npx tsc:*)",
-      "Bash(time curl:*)"
+      "Bash(time curl:*)",
+      "Bash(git rebase:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
