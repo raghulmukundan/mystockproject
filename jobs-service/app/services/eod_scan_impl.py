@@ -206,7 +206,7 @@ async def run_eod_scan_all_symbols(
             # Continue; treat as processed but with no insert
             return sym, {"inserted": 0, "updated": 0, "skipped": 0}
 
-        counts = upsert_daily(sym, bars, source="schwab", update_if_changed=False)
+        counts = upsert_daily(sym, bars, source="schwab", update_if_changed=True)
         return sym, counts
 
     # Process in batches
