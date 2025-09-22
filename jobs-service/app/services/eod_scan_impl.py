@@ -96,7 +96,7 @@ async def run_eod_scan_all_symbols(
     - Returns summary counts
     """
     # Allow dedicated EOD sleep override
-    sleep_ms = sleep_ms if sleep_ms is not None else int(os.getenv("EOD_REQ_SLEEP_MS", "250"))
+    sleep_ms = sleep_ms if sleep_ms is not None else int(os.getenv("EOD_REQ_SLEEP_MS", "0"))
 
     if start_date and end_date:
         start, end = start_date, end_date
@@ -105,8 +105,8 @@ async def run_eod_scan_all_symbols(
     logger.info(f"EOD scan starting for {start}..{end}")
 
     # Rate limiting and concurrency
-    max_workers = int(os.getenv("EOD_WORKERS", "5"))
-    max_rps = float(os.getenv("EOD_MAX_RPS", "3"))  # overall target requests/sec
+    max_workers = int(os.getenv("EOD_WORKERS", "15"))
+    max_rps = float(os.getenv("EOD_MAX_RPS", "8"))  # target 8 RPS for 1-hour completion (~9700 symbols)
 
     limiter = RateLimiter(max_rps)
     total_inserted = total_updated = total_skipped = total_errors = 0
@@ -216,7 +216,8 @@ async def run_eod_scan_all_symbols(
         # Create tasks for async processing
         tasks = [worker(sym) for sym in batch]
 
-        # Process batch
+        # Process batch and collect results
+        batch_success_count = 0
         for task in asyncio.as_completed(tasks):
             try:
                 sym, counts = await task
@@ -224,15 +225,7 @@ async def run_eod_scan_all_symbols(
                 total_inserted += counts["inserted"]
                 total_updated += counts["updated"]
                 total_skipped += counts["skipped"]
-                # Increment fetched count
-                db2 = SessionLocal()
-                try:
-                    scan2 = db2.query(EodScan).filter(EodScan.id == eod_scan_id).first()
-                    if scan2:
-                        scan2.symbols_fetched = (scan2.symbols_fetched or 0) + 1
-                        db2.commit()
-                finally:
-                    db2.close()
+                batch_success_count += 1
             except ProviderError as e:
                 total_errors += 1
                 logger.warning(f"EOD upsert failed for symbol in batch: {e.message}")
@@ -271,6 +264,17 @@ async def run_eod_scan_all_symbols(
                     db3.commit()
                 finally:
                     db3.close()
+
+        # Update progress after each batch (much more efficient than per-symbol updates)
+        if batch_success_count > 0:
+            db_batch = SessionLocal()
+            try:
+                scan_batch = db_batch.query(EodScan).filter(EodScan.id == eod_scan_id).first()
+                if scan_batch:
+                    scan_batch.symbols_fetched = (scan_batch.symbols_fetched or 0) + batch_success_count
+                    db_batch.commit()
+            finally:
+                db_batch.close()
 
         elapsed = max(0.001, time.time() - started_t)
         rate = calls_made / elapsed

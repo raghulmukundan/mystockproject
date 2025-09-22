@@ -178,12 +178,24 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
       const res = await jobsApiService.runMarketDataRefresh();
       return res.message;
     },
+    universe_refresh: async () => {
+      const res = await jobsApiService.runUniverseRefresh();
+      return res.message;
+    },
     refresh_universe: async () => {
       const res = await jobsApiService.runUniverseRefresh();
       return res.message;
     },
     nasdaq_universe_refresh: async () => {
       const res = await jobsApiService.runUniverseRefresh();
+      return res.message;
+    },
+    eod_scan: async () => {
+      // Use date parameters if provided, otherwise run without dates
+      const res = await jobsApiService.runEodScan(
+        eodDates.start || undefined,
+        eodDates.end || undefined
+      );
       return res.message;
     },
     eod_price_scan: async () => {

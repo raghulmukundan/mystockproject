@@ -226,22 +226,40 @@ async def run_market_data_now(background_tasks: BackgroundTasks):
 def _run_eod_scan_thread(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Run EOD scan in a separate thread"""
     import logging
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history
     logger = logging.getLogger(__name__)
+
+    # Always record job status for manual runs
+    job_name = "eod_price_scan"
+    job_id = None
+
     try:
+        job_id = begin_job(job_name)
+
         # Create new event loop for this thread
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         if start_date or end_date:
             from app.services.eod_scan_impl import run_eod_scan_all_symbols
-            loop.run_until_complete(run_eod_scan_all_symbols(start_date=start_date, end_date=end_date))
+            result = loop.run_until_complete(run_eod_scan_all_symbols(start_date=start_date, end_date=end_date))
         else:
-            loop.run_until_complete(_run_eod_scan_job())
+            from app.services.eod_scan_impl import run_eod_scan_all_symbols
+            result = loop.run_until_complete(run_eod_scan_all_symbols())
 
         loop.close()
+
+        # Record completion with results
+        symbols_requested = result.get('symbols_requested', 0)
+        complete_job(job_id, records_processed=symbols_requested)
+        prune_history(job_name, keep=5)
+
         logger.info("Background EOD scan completed successfully")
     except Exception as e:
         logger.error(f"Background EOD scan failed: {str(e)}")
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
     finally:
         try:
             loop.close()

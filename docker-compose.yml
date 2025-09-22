@@ -55,6 +55,10 @@ services:
       - TTL_CLEANUP_DAYS=30
       - MARKET_OPEN_HOUR=9
       - MARKET_CLOSE_HOUR=16
+      # EOD Scan Performance Settings
+      - EOD_WORKERS=20
+      - EOD_MAX_RPS=15
+      - EOD_REQ_SLEEP_MS=0
     volumes:
       - ./jobs-service:/app
     networks:

@@ -823,7 +823,6 @@ CARY|Angel Oak Income ETF|Q|G|N|N|100|N|Y
 CARZ|First Trust S-Network Future Vehicles & Technology ETF|Q|G|N|N|100|N|Y
 CASH|Pathward Financial, Inc. - Common Stock|Q|Q|N|N|100|N|N
 CASI|CASI Pharmaceuticals, Inc. - Ordinary Shares|Q|S|N|D|100|N|N
-CASK|Heritage Distilling Holding Company, Inc. - Common Stock|Q|S|N|D|100|N|N
 CASS|Cass Information Systems, Inc - Common Stock|Q|Q|N|N|100|N|N
 CASY|Caseys General Stores, Inc. - Common Stock|Q|Q|N|N|100|N|N
 CATH|Global X S&P 500 Catholic Values ETF|Q|G|N|N|100|N|Y
@@ -2059,7 +2058,9 @@ HCAT|Health Catalyst, Inc - Common stock|Q|Q|N|N|100|N|N
 HCHL|Happy City Holdings Limited - Class A Ordinary shares|Q|S|N|N|100|N|N
 HCKT|The Hackett Group, Inc. - Common Stock|Q|Q|N|N|100|N|N
 HCM|HUTCHMED (China) Limited - American Depositary Shares|Q|Q|N|N|100|N|N
+HCMA|HCM III Acquisition Corp. - Class A Ordinary Share|Q|G|N|N|100|N|N
 HCMAU|HCM III Acquisition Corp. - Units|Q|G|N|N|100|N|N
+HCMAW|HCM III Acquisition Corp. - Warrants|Q|G|N|N|100|N|N
 HCOW|Amplify COWS Covered Call ETF|Q|G|N|N|100|N|Y
 HCSG|Healthcare Services Group, Inc. - Common Stock|Q|Q|N|N|100|N|N
 HCTI|Healthcare Triangle, Inc. - Common Stock|Q|S|N|N|100|N|N
@@ -2374,6 +2375,7 @@ IPOD|Dune Acquisition Corporation II - Class A ordinary shares|Q|G|N|N|100|N|N
 IPODU|Dune Acquisition Corporation II - Units|Q|G|N|N|100|N|N
 IPODW|Dune Acquisition Corporation II - Warrants|Q|G|N|N|100|N|N
 IPSC|Century Therapeutics, Inc. - Common Stock|Q|S|N|D|100|N|N
+IPST|Heritage Distilling Holding Company, Inc. - Common Stock|Q|S|N|D|100|N|N
 IPW|iPower Inc. - Common Stock|Q|S|N|D|100|N|N
 IPWR|Ideal Power Inc. - Common Stock|Q|S|N|N|100|N|N
 IPX|IperionX Limited - American Depositary Share|Q|S|N|N|100|N|N
@@ -2728,9 +2730,7 @@ LRHC|La Rosa Holdings Corp. - Common Stock|Q|S|N|N|100|N|N
 LRMR|Larimar Therapeutics, Inc. - Common Stock|Q|G|N|N|100|N|N
 LRND|NYLI U.S. Large Cap R&D Leaders ETF|Q|G|N|N|100|N|Y
 LSAK|Lesaka Technologies, Inc. - Common Stock|Q|Q|N|N|100|N|N
-LSB|LakeShore Biopharma Co., Ltd - Ordinary Shares|Q|S|N|N|100|N|N
 LSBK|Lake Shore Bancorp, Inc. - Common Stock|Q|G|N|N|100|N|N
-LSBPW|LakeShore Biopharma Co., Ltd - Warrants|Q|S|N|N|100|N|N
 LSCC|Lattice Semiconductor Corporation - Common Stock|Q|Q|N|N|100|N|N
 LSE|Leishen Energy Holding Co., Ltd. - Ordinary Shares|Q|S|N|N|100|N|N
 LSH|Lakeside Holding Limited - Common Stock|Q|S|N|D|100|N|N
@@ -2993,7 +2993,7 @@ MTC|MMTec, Inc. - Common Shares|Q|S|N|N|100|N|N
 MTCH|Match Group, Inc. - Common Stock|Q|Q|N|N|100|N|N
 MTEK|Maris-Tech Ltd. - ordinary shares|Q|S|N|N|100|N|N
 MTEKW|Maris-Tech Ltd. - Warrants|Q|S|N|N|100|N|N
-MTEN|Mingteng International Corporation Inc. - Ordinary Shares|Q|S|N|N|100|N|N
+MTEN|Mingteng International Corporation Inc. - Class A Ordinary Shares|Q|S|N|N|100|N|N
 MTEX|Mannatech, Incorporated - Common Stock|Q|S|N|N|100|N|N
 MTLS|Materialise NV - American Depositary Shares|Q|Q|N|N|100|N|N
 MTRX|Matrix Service Company - Common Stock|Q|Q|N|N|100|N|N
@@ -3245,7 +3245,6 @@ NWTG|Newton Golf Company, Inc. - Common Stock|Q|S|N|N|100|N|N
 NXGL|NexGel, Inc - Common Stock|Q|S|N|N|100|N|N
 NXGLW|NexGel, Inc - Warrant|Q|S|N|N|100|N|N
 NXL|Nexalin Technology, Inc. - Common Stock|Q|S|N|N|100|N|N
-NXLIW|Nexalin Technology, Inc. - Warrant|Q|S|N|N|100|N|N
 NXPI|NXP Semiconductors N.V. - Common Stock|Q|Q|N|N|100|N|N
 NXPL|NextPlat Corp - Common Stock|Q|S|N|D|100|N|N
 NXPLW|NextPlat Corp - Warrants|Q|S|N|N|100|N|N
@@ -5013,7 +5012,7 @@ XRPI|Volatility Shares Trust XRP ETF|Q|G|N|N|100|N|Y
 XRPT|Volatility Shares Trust XRP 2X ETF|Q|G|N|N|100|N|Y
 XRTX|XORTX Therapeutics Inc. - Common Stock|Q|S|N|D|100|N|N
 XRX|Xerox Holdings Corporation - Common Stock|Q|Q|N|N|100|N|N
-XT|iShares Exponential Technologies ETF|Q|G|N|N|100|N|Y
+XT|iShares Future Exponential Technologies ETF|Q|G|N|N|100|N|Y
 XTIA|XTI Aerospace, Inc. Common Stock  - Common Stock|Q|S|N|N|100|N|N
 XTKG|X3 Holdings Co., Ltd. - Ordinary Shares|Q|S|N|N|100|N|N
 XTLB|XTL Biopharmaceuticals Ltd. - American Depositary Shares|Q|S|N|N|100|N|N
@@ -6639,6 +6638,7 @@ DK|Delek US Holdings, Inc. Common Stock|N| |N| |100|N|N
 DKL|Delek Logistics Partners, L.P. Common Units representing Limited Partner Interests|N| |N| |100|N|N
 DKS|Dick's Sporting Goods Inc Common Stock|N| |N| |100|N|N
 DKUP|ETF Opportunities Trust T-REX 2X Long DKNG Daily Target ETF|Z| |N| |100|Y|N
+DLAG|First Trust Exchange-Traded Fund VIII FT Vest U.S. Equity Dual Directional Buffer ETF - August|Z| |N| |100|Y|N
 DLB|Dolby Laboratories Common Stock|N| |N| |100|N|N
 DLN|WisdomTree U.S. LargeCap Dividend Fund|P| |N| |100|Y|N
 DLNG|Dynagas LNG Partners LP Common Units|N| |N| |100|N|N
@@ -6722,6 +6722,7 @@ DTEC|ALPS ETF Trust ALPS Disruptive Technologies ETF|P| |N| |100|Y|N
 DTF|DTF Tax-Free Income 2028 Term Fund Inc. Common Stock|N| |N| |100|N|N
 DTG|DTE Energy Company 2021 Series E 4.375% Junior Subordinated Debentures|N| |N| |100|N|N
 DTH|WisdomTree International High Dividend Fund|P| |N| |100|Y|N
+DTK|DTE Energy Company 2025 Series H 6.25% Junior Subordinated Debentures due 2085|N| |N| |100|N|N
 DTM|DT Midstream, Inc. Common Stock|N| |N| |100|N|N
 DTRE|First Trust Alerian Disruptive Technology Real Estate ETF|P| |N| |100|Y|N
 DTW|DTE Energy Company 2017 Series E 5.25% Junior Subordinated Debentures due 2077|N| |N| |100|N|N
@@ -8455,7 +8456,6 @@ JPAN|Matthews International Funds Matthews Japan Active ETF|P| |N| |100|Y|N
 JPC|Nuveen Preferred & Income Opportunities Fund|N| |N| |100|N|N
 JPEM|JPMorgan Diversified Return Emerging Markets Equity ETF|P| |N| |100|Y|N
 JPHY|J.P. Morgan Exchange-Traded Fund Trust JPMorgan Active High Yield ETF|Z| |N| |100|Y|N
-JPI|Nuveen Preferred Securities & Income Opportunities Fund Common Shares|N| |N| |100|N|N
 JPIB|J.P. Morgan Exchange-Traded Fund Trust JPMorgan International Bond Opportunities ETF|Z| |N| |100|Y|N
 JPIE|JPMorgan Income ETF|P| |N| |100|Y|N
 JPIN|JPMorgan Diversified Return International Equity ETF|P| |N| |100|Y|N
@@ -8932,7 +8932,6 @@ MGR|Affiliated Managers Group, Inc. 5.875% Junior Subordinated Notes due 2059|N|
 MGRB|Affiliated Managers Group, Inc. 4.750% Junior Subordinated Notes due 2060|N| |N| |100|N|N
 MGRD|Affiliated Managers Group, Inc. 4.200% Junior Subordinated Notes due 2061|N| |N| |100|N|N
 MGRE|Affiliated Managers Group, Inc. 6.750% Junior Subordinated Notes due 2064|N| |N| |100|N|N
-MGRO|VanEck ETF Trust VanEck Morningstar Wide Moat Growth ETF|Z| |N| |100|Y|N
 MGV|Vanguard Mega Cap Value ETF|P| |N| |100|Y|N
 MGY|Magnolia Oil & Gas Corporation Class A Common Stock|N| |N| |100|N|N
 MH|McGraw Hill, Inc. Common Stock|N| |N| |100|N|N
@@ -9020,7 +9019,6 @@ MOH|Molina Healthcare Inc Common Stock|N| |N| |100|N|N
 MOO|VanEck Agribusiness ETF|P| |N| |100|Y|N
 MORT|VanEck Mortgage REIT Income ETF|P| |N| |100|Y|N
 MOS|Mosaic Company (The) Common Stock|N| |N| |100|N|N
-MOTE|VanEck Morningstar ESG Moat ETF|Z| |N| |100|Y|N
 MOTG|VanEck Morningstar Global Wide Moat ETF|Z| |N| |100|Y|N
 MOTI|VanEck Morningstar International Moat ETF|Z| |N| |100|Y|N
 MOTO|SmartETFs Smart Transportation & Technology ETF|P| |N| |100|Y|N
@@ -11778,4 +11776,4 @@ ZVOL|Volatility Premium Plus ETF|Z| |N| |100|Y|N
 ZVV|NYSE ARCA test stock|P| |Y| |100|N|N
 ZWS|Zurn Elkay Water Solutions Corporation Common Stock|N| |N| |100|N|N
 ZXIET|IEX Test Company Test Symbol Three for IEX|V| |Y| |100|N|N
-File Creation Time: 0921202522:53|||||||
+File Creation Time: 0922202510:14|||||||
