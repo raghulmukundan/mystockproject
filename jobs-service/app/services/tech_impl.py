@@ -48,15 +48,15 @@ def compute_indicators_tail(df: pd.DataFrame) -> pd.DataFrame:
     data_length = len(df)
 
     # Adaptive periods based on available data
-    sma20_period = min(20, max(5, data_length // 2))
-    sma50_period = min(50, max(10, data_length // 1.5))
-    sma200_period = min(200, max(20, data_length))
+    sma20_period = min(20, max(5, int(data_length // 2)))
+    sma50_period = min(50, max(10, int(data_length // 1.5)))
+    sma200_period = min(200, max(20, int(data_length)))
 
-    atr_period = min(14, max(3, data_length // 3))
-    rsi_period = min(14, max(3, data_length // 3))
-    adx_period = min(14, max(3, data_length // 3))
+    atr_period = min(14, max(3, int(data_length // 3)))
+    rsi_period = min(14, max(3, int(data_length // 3)))
+    adx_period = min(14, max(3, int(data_length // 3)))
 
-    donch_period = min(20, max(5, data_length // 2))
+    donch_period = min(20, max(5, int(data_length // 2)))
     vol_period = min(20, max(5, data_length // 2))
     high_period = min(252, max(20, data_length))
 
