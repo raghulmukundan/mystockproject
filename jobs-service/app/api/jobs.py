@@ -130,7 +130,7 @@ def get_jobs_summary(db: Session = Depends(get_db)):
         'update_market_data': 'update_market_data',
         'nasdaq_universe_refresh': 'refresh_universe',
         'eod_price_scan': 'eod_price_scan',
-        'technical_compute': 'technical_compute_fallback',  # Technical compute runs via fallback scheduler
+        'technical_compute': 'eod_price_scan',  # Technical compute runs via EOD scan
         'job_ttl_cleanup': 'job_ttl_cleanup'
     }
 

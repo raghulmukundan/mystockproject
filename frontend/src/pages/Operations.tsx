@@ -7,6 +7,7 @@ import {
   CheckCircleIcon,
   Cog6ToothIcon,
   GlobeAmericasIcon,
+  CommandLineIcon,
 } from '@heroicons/react/24/outline';
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -15,6 +16,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { HistoryLoader } from '../components/HistoryLoader';
 import { PricesBrowser as PricesBrowserComponent } from '../components/PricesBrowser';
+import APITester from '../components/APITester';
 import JobStatus from './JobStatus';
 import { JobSettings } from './JobSettings';
 import jobsApi, { jobsApiService, JobSummaryResponse } from '../services/jobsApi';
@@ -39,6 +41,7 @@ type SectionId =
   | 'run-jobs'
   | 'job-settings'
   | 'job-status'
+  | 'api-tester'
   | 'history-import'
   | 'prices-browser'
   | 'universe';
@@ -53,6 +56,7 @@ const sectionMeta: SectionMeta[] = [
   { id: 'run-jobs', label: 'Run Jobs', icon: BoltIcon },
   { id: 'job-status', label: 'Job Status', icon: CheckCircleIcon },
   { id: 'job-settings', label: 'Job Settings', icon: Cog6ToothIcon },
+  { id: 'api-tester', label: 'API Tester', icon: CommandLineIcon },
   { id: 'history-import', label: 'History Import', icon: ArrowDownTrayIcon },
   { id: 'prices-browser', label: 'Prices Browser', icon: ChartBarIcon },
   { id: 'universe', label: 'Universe Explorer', icon: GlobeAmericasIcon },
@@ -64,6 +68,7 @@ const sectionAccent: Record<SectionId, string> = {
   'prices-browser': 'from-sky-500 via-blue-500 to-sky-500',
   'job-settings': 'from-amber-500 via-orange-500 to-amber-500',
   'job-status': 'from-rose-500 via-red-500 to-rose-500',
+  'api-tester': 'from-violet-500 via-purple-500 to-violet-500',
   universe: 'from-slate-500 via-blue-600 to-slate-500',
 };
 
@@ -73,6 +78,7 @@ const sectionBadge: Record<SectionId, string> = {
   'prices-browser': 'Pricing Tools',
   'job-settings': 'Configuration',
   'job-status': 'Monitoring',
+  'api-tester': 'API Testing',
   universe: 'Universe Data',
 };
 
@@ -472,6 +478,17 @@ const Operations: React.FC = () => {
             className="bg-gradient-to-br from-white via-white to-rose-50/60"
           >
             <JobStatus />
+          </SectionCard>
+        );
+      case 'api-tester':
+        return (
+          <SectionCard
+            id="api-tester"
+            title="API Tester"
+            description="Test and debug endpoints across all services with pre-filled examples and response inspection."
+            className="bg-gradient-to-br from-white via-white to-violet-50/60"
+          >
+            <APITester />
           </SectionCard>
         );
       case 'history-import':
