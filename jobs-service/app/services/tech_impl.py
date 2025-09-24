@@ -279,6 +279,15 @@ def _to_float(x):
     except Exception:
         return None
 
+def _to_int(x):
+    """Convert value to int, handling NaN, None, and floats"""
+    try:
+        if pd.isna(x):
+            return 0  # Default volume to 0 if missing
+        return int(float(x))  # Convert to float first, then int to handle '29.0' -> 29
+    except Exception:
+        return 0
+
 
 def create_tech_job(db: Session, latest_trade_date: str, total_symbols: int) -> int:
     """Create a new tech job record and return its ID"""
@@ -440,7 +449,7 @@ async def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
                         "symbol": sym,
                         "date": str(last_row.name.date()),
                         "close": float(last_row["close"]),
-                        "volume": int(last_row["volume"]),
+                        "volume": _to_int(last_row["volume"]),
                         "sma20": _to_float(last_row.get("sma20")),
                         "sma50": _to_float(last_row.get("sma50")),
                         "sma200": _to_float(last_row.get("sma200")),
