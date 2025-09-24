@@ -177,13 +177,18 @@ async def get_prices_from_db(request: PriceFetchRequest, db: Session = Depends(g
             ).first()
 
             if current_price:
+                # Calculate open price from current price and change
+                change_amount = current_price.change_amount or 0.0
+                current_price_val = current_price.current_price
+                open_price = current_price_val - change_amount
+
                 results.append(PriceFromDBResponse(
                     symbol=current_price.symbol,
                     date=current_price.last_updated.strftime('%Y-%m-%d') if current_price.last_updated else "",
-                    open=current_price.current_price,  # Use current price for all OHLC since it's real-time
-                    high=current_price.current_price,
-                    low=current_price.current_price,
-                    close=current_price.current_price,
+                    open=open_price,  # Calculate open price from current price and change
+                    high=current_price_val,  # High is current price for real-time data
+                    low=current_price_val,   # Low is current price for real-time data
+                    close=current_price_val,  # Close is current price
                     volume=current_price.volume or 0,
                     source=current_price.source or "finnhub"
                 ))
@@ -210,13 +215,18 @@ async def get_latest_price_for_symbol(symbol: str, db: Session = Depends(get_db)
         if not current_price:
             return None
 
+        # Calculate open price from current price and change
+        change_amount = current_price.change_amount or 0.0
+        current_price_val = current_price.current_price
+        open_price = current_price_val - change_amount
+
         return PriceFromDBResponse(
             symbol=current_price.symbol,
             date=current_price.last_updated.strftime('%Y-%m-%d') if current_price.last_updated else "",
-            open=current_price.current_price,  # Use current price for all OHLC since it's real-time
-            high=current_price.current_price,
-            low=current_price.current_price,
-            close=current_price.current_price,
+            open=open_price,  # Calculate open price from current price and change
+            high=current_price_val,  # High is current price for real-time data
+            low=current_price_val,   # Low is current price for real-time data
+            close=current_price_val,  # Close is current price
             volume=current_price.volume or 0,
             source=current_price.source or "finnhub"
         )

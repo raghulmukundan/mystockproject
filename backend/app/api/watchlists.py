@@ -38,6 +38,7 @@ class WatchlistResponse(BaseModel):
 class WatchlistCreateRequest(BaseModel):
     name: str
     description: str | None = None
+    symbols: List[str] | None = None
 
 class WatchlistItemRequest(BaseModel):
     symbol: str
@@ -193,24 +194,78 @@ def get_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
     )
 
 @router.post("/watchlists", response_model=WatchlistResponse)
-def create_watchlist(request: WatchlistCreateRequest, db: Session = Depends(get_db)):
-    """Create a new watchlist"""
+async def create_watchlist(request: WatchlistCreateRequest, db: Session = Depends(get_db)):
+    """Create a new watchlist with optional symbols"""
     watchlist = Watchlist(
         name=request.name,
         description=request.description
     )
-    
+
     db.add(watchlist)
     db.commit()
     db.refresh(watchlist)
-    
+
+    # Add symbols if provided
+    items = []
+    if request.symbols:
+        new_symbols = []
+        for symbol in request.symbols:
+            symbol = symbol.upper().strip()
+            if symbol:
+                # Check if symbol already exists in this watchlist
+                existing_item = db.query(WatchlistItem).filter(
+                    WatchlistItem.watchlist_id == watchlist.id,
+                    WatchlistItem.symbol == symbol
+                ).first()
+
+                if not existing_item:
+                    item = WatchlistItem(
+                        watchlist_id=watchlist.id,
+                        symbol=symbol
+                    )
+                    db.add(item)
+                    new_symbols.append(symbol)
+
+        if new_symbols:
+            db.commit()
+
+            # Fetch and store prices for new symbols
+            logger.info(f"Fetching and storing prices for {len(new_symbols)} symbols in new watchlist")
+            asyncio.create_task(fetch_and_store_prices_for_symbols(new_symbols))
+
+            # Get the created items for response
+            items_query = db.query(WatchlistItem).filter(
+                WatchlistItem.watchlist_id == watchlist.id
+            ).all()
+
+            for item in items_query:
+                item_created_at = ""
+                if item.created_at:
+                    if hasattr(item.created_at, 'isoformat'):
+                        item_created_at = item.created_at.isoformat()
+                    else:
+                        item_created_at = str(item.created_at)
+
+                items.append(WatchlistItemResponse(
+                    id=item.id,
+                    symbol=item.symbol,
+                    company_name=item.company_name,
+                    sector=item.sector,
+                    industry=item.industry,
+                    market_cap=float(item.market_cap) if item.market_cap else None,
+                    entry_price=float(item.entry_price) if item.entry_price else None,
+                    target_price=float(item.target_price) if item.target_price else None,
+                    stop_loss=float(item.stop_loss) if item.stop_loss else None,
+                    created_at=item_created_at
+                ))
+
     return WatchlistResponse(
         id=watchlist.id,
         name=watchlist.name,
         description=watchlist.description,
         created_at=watchlist.created_at.isoformat() if watchlist.created_at else "",
         updated_at=watchlist.updated_at.isoformat() if watchlist.updated_at else None,
-        items=[]
+        items=items
     )
 
 @router.put("/watchlists/{watchlist_id}", response_model=WatchlistResponse)
