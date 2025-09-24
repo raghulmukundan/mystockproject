@@ -120,6 +120,49 @@ class EodScanError(Base):
     http_status = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TechJob(Base):
+    __tablename__ = 'tech_jobs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(String, nullable=False)
+    finished_at = Column(String, nullable=True)
+    status = Column(String, nullable=False)
+    latest_trade_date = Column(String, nullable=True)
+    total_symbols = Column(Integer, nullable=True)
+    updated_symbols = Column(Integer, nullable=True)
+    daily_rows_upserted = Column(Integer, nullable=True)
+    latest_rows_upserted = Column(Integer, nullable=True)
+    errors = Column(Integer, nullable=True)
+    message = Column(String, nullable=True)
+
+class TechJobError(Base):
+    __tablename__ = 'tech_job_errors'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tech_job_id = Column(Integer, ForeignKey('tech_jobs.id'), nullable=False)
+    occurred_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    symbol = Column(String, nullable=False)
+    error_message = Column(Text, nullable=True)
+
+class TechJobSkip(Base):
+    __tablename__ = 'tech_job_skips'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tech_job_id = Column(Integer, ForeignKey('tech_jobs.id'), nullable=False)
+    symbol = Column(String, nullable=False)
+    reason = Column(String, nullable=False)
+    detail = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+class TechJobSuccess(Base):
+    __tablename__ = 'tech_job_successes'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tech_job_id = Column(Integer, ForeignKey('tech_jobs.id'), nullable=False)
+    symbol = Column(String, nullable=False)
+    date = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
 # Indexes for performance
 Index('job_execution_status_job_name_idx', JobExecutionStatus.job_name)
 Index('job_execution_status_started_at_idx', JobExecutionStatus.started_at)
@@ -128,3 +171,7 @@ Index('symbols_symbol_idx', Symbol.symbol)
 Index('prices_daily_ohlc_symbol_date_idx', DailyOHLCPrice.symbol, DailyOHLCPrice.date)
 Index('eod_scans_started_at_idx', EodScan.started_at)
 Index('eod_scan_errors_scan_id_idx', EodScanError.eod_scan_id)
+Index('tech_jobs_started_at_idx', TechJob.started_at)
+Index('tech_job_errors_job_id_idx', TechJobError.tech_job_id)
+Index('tech_job_skips_job_id_idx', TechJobSkip.tech_job_id)
+Index('tech_job_successes_job_id_idx', TechJobSuccess.tech_job_id)

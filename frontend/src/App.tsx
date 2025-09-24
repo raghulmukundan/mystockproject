@@ -9,6 +9,7 @@ import HistoryImport from './pages/HistoryImport'
 import PricesBrowser from './pages/PricesBrowser'
 import JobStatus from './pages/JobStatus'
 import Operations from './pages/Operations'
+import OAuthCallback from './pages/OAuthCallback'
 
 import Watchlists from './pages/Watchlists'
 import WatchlistDetail from './pages/WatchlistDetail'
@@ -30,6 +31,7 @@ function App() {
         <Route path="/job-settings" element={<JobSettings />} />
         <Route path="/job-status" element={<JobStatus />} />
         <Route path="/operations" element={<Operations />} />
+        <Route path="/auth/callback" element={<OAuthCallback />} />
       </Routes>
     </Layout>
   )

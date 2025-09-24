@@ -44,6 +44,20 @@ class BackendAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def store_prices(self, prices_data: dict):
+        """Store prices in backend's prices_realtime_cache table"""
+        # Convert prices_data to the format expected by backend
+        symbols = list(prices_data.keys())
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(
+                f"{self.base_url}/api/prices/fetch-and-store",
+                json={"symbols": symbols}
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get('total_stored', 0)
+
 class ExternalAPIClient:
     """Client for calling external APIs service (Schwab, Finnhub)"""
     

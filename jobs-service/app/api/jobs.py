@@ -11,13 +11,17 @@ import asyncio
 import threading
 from app.db.models import JobConfiguration, JobExecutionStatus
 from app.core.scheduler import scheduler
-from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+from app.services.job_status import begin_job, complete_job, fail_job, prune_history, is_job_running
 from app.services.market_data_job import _update_market_data_job
 from app.services.eod_scan_job import _run_eod_scan_job
 from app.services.universe_job import _refresh_universe_job
 from app.services.tech_job import run_tech_job
 from app.services.ttl_cleanup_job import cleanup_old_job_records
+from app.services.token_validation_job import validate_schwab_token_job
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -78,6 +82,10 @@ class JobSummaryResponse(BaseModel):
     enabled: bool
     schedule_display: str
     last_run: Optional[JobStatusResponse] = None
+    next_run_at: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
 
 class NextMarketRefreshResponse(BaseModel):
     next_run_at: Optional[str]
@@ -116,6 +124,15 @@ def get_jobs_summary(db: Session = Depends(get_db)):
     """Get job summaries with last run status"""
     jobs = db.query(JobConfiguration).all()
     result = []
+
+    # Mapping from job names to scheduler IDs
+    scheduler_id_map = {
+        'update_market_data': 'update_market_data',
+        'nasdaq_universe_refresh': 'refresh_universe',
+        'eod_price_scan': 'eod_price_scan',
+        'technical_compute': 'technical_compute_fallback',  # Technical compute runs via fallback scheduler
+        'job_ttl_cleanup': 'job_ttl_cleanup'
+    }
 
     for job in jobs:
         # Skip deprecated job name (use nasdaq_universe_refresh instead)
@@ -158,12 +175,27 @@ def get_jobs_summary(db: Session = Depends(get_db)):
                 next_run_at=_iso_utc(last_status.next_run_at)
             )
         
+        # Get next run time from scheduler
+        next_run_at = None
+        scheduler_id = scheduler_id_map.get(job.job_name)
+        if scheduler_id:
+            try:
+                scheduler_job = scheduler.get_job(scheduler_id)
+                if scheduler_job and scheduler_job.next_run_time:
+                    next_run_at = scheduler_job.next_run_time.isoformat()
+                    logger.info(f"Found next_run_at for {job.job_name}: {next_run_at}")
+                else:
+                    logger.info(f"No scheduler job or next_run_time for {job.job_name} (scheduler_id={scheduler_id})")
+            except Exception as e:
+                logger.error(f"Error getting next_run_at for {job.job_name}: {e}")
+
         result.append(JobSummaryResponse(
             job_name=job.job_name,
             description=job.description,
             enabled=job.enabled,
             schedule_display=schedule_display,
-            last_run=last_run_response
+            last_run=last_run_response,
+            next_run_at=next_run_at
         ))
     
     return result
@@ -226,7 +258,7 @@ async def run_market_data_now(background_tasks: BackgroundTasks):
 def _run_eod_scan_thread(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Run EOD scan in a separate thread"""
     import logging
-    from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history, is_job_running
     logger = logging.getLogger(__name__)
 
     # Always record job status for manual runs
@@ -299,6 +331,45 @@ async def _background_universe_refresh():
         logger = logging.getLogger(__name__)
         logger.error(f"Background universe refresh failed: {str(e)}")
 
+def _run_tech_analysis_thread():
+    """Run technical analysis in a separate thread"""
+    import logging
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history, is_job_running
+    logger = logging.getLogger(__name__)
+
+    # Always record job status for manual runs
+    job_name = "technical_compute"
+    job_id = None
+
+    try:
+        job_id = begin_job(job_name)
+
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        from app.services.tech_impl import run_technical_compute
+        result = loop.run_until_complete(run_technical_compute())
+
+        loop.close()
+
+        # Record completion with results
+        updated_symbols = result.get('updated_symbols', 0)
+        complete_job(job_id, records_processed=updated_symbols)
+        prune_history(job_name, keep=5)
+
+        logger.info("Background technical analysis completed successfully")
+    except Exception as e:
+        logger.error(f"Background technical analysis failed: {str(e)}")
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
+
 async def _background_tech_analysis():
     """Background task for technical analysis"""
     try:
@@ -318,11 +389,23 @@ async def run_universe_refresh_now(background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/jobs/tech/run")
-async def run_tech_analysis_now(background_tasks: BackgroundTasks):
+async def run_tech_analysis_now():
     """Manually trigger technical analysis"""
     try:
-        background_tasks.add_task(_background_tech_analysis)
+        # Check if technical analysis is already running
+        if is_job_running("technical_compute"):
+            raise HTTPException(status_code=409, detail="Technical analysis job is already running")
+
+        # Run technical analysis in a separate thread to avoid blocking the API
+        thread = threading.Thread(
+            target=_run_tech_analysis_thread,
+            daemon=True
+        )
+        thread.start()
+
         return {"message": "Technical analysis started successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -332,6 +415,15 @@ async def run_ttl_cleanup_now():
     try:
         cleanup_old_job_records()
         return {"message": "TTL cleanup completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/schwab_token_validation/run")
+async def run_token_validation_now():
+    """Manually trigger Schwab token validation job"""
+    try:
+        validate_schwab_token_job()
+        return {"message": "Schwab token validation completed successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -426,4 +518,151 @@ async def get_eod_scan_errors(scan_id: int, limit: int = 100, db: Session = Depe
             for error in errors
         ]
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Technical job status endpoints
+@router.get("/technical/job/list")
+async def get_technical_jobs(limit: int = 20, db: Session = Depends(get_db)):
+    """Get list of technical analysis jobs"""
+    from app.db.models import TechJob, TechJobError, TechJobSkip, TechJobSuccess
+    try:
+        jobs = db.query(TechJob).order_by(TechJob.started_at.desc()).limit(limit).all()
+        result = []
+
+        for job in jobs:
+            # Get counts for errors, skips, and successes
+            error_count = db.query(TechJobError).filter(TechJobError.tech_job_id == job.id).count()
+            skip_count = db.query(TechJobSkip).filter(TechJobSkip.tech_job_id == job.id).count()
+            success_count = db.query(TechJobSuccess).filter(TechJobSuccess.tech_job_id == job.id).count()
+
+            result.append({
+                "id": job.id,
+                "status": job.status,
+                "latest_trade_date": job.latest_trade_date,
+                "started_at": job.started_at,
+                "finished_at": job.finished_at,
+                "total_symbols": job.total_symbols or 0,
+                "updated_symbols": job.updated_symbols or 0,
+                "daily_rows_upserted": job.daily_rows_upserted or 0,
+                "latest_rows_upserted": job.latest_rows_upserted or 0,
+                "errors": job.errors or 0,
+                "error_count": error_count,
+                "skip_count": skip_count,
+                "success_count": success_count,
+                "message": job.message,
+            })
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/technical/job/errors/{job_id}")
+async def get_technical_job_errors(job_id: int, limit: int = 100, db: Session = Depends(get_db)):
+    """Get errors for a technical analysis job"""
+    from app.db.models import TechJobError
+    try:
+        errors = db.query(TechJobError).filter(
+            TechJobError.tech_job_id == job_id
+        ).order_by(TechJobError.occurred_at.desc()).limit(limit).all()
+
+        return [
+            {
+                "id": error.id,
+                "symbol": error.symbol,
+                "error_message": error.error_message,
+                "occurred_at": error.occurred_at.isoformat() if error.occurred_at else None,
+            }
+            for error in errors
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/technical/job/skips/{job_id}")
+async def get_technical_job_skips(job_id: int, limit: int = 100, db: Session = Depends(get_db)):
+    """Get skips for a technical analysis job"""
+    from app.db.models import TechJobSkip
+    try:
+        skips = db.query(TechJobSkip).filter(
+            TechJobSkip.tech_job_id == job_id
+        ).order_by(TechJobSkip.created_at.desc()).limit(limit).all()
+
+        return [
+            {
+                "id": skip.id,
+                "symbol": skip.symbol,
+                "reason": skip.reason,
+                "detail": skip.detail,
+                "created_at": skip.created_at.isoformat() if skip.created_at else None,
+            }
+            for skip in skips
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/technical/job/successes/{job_id}")
+async def get_technical_job_successes(job_id: int, limit: int = 100, db: Session = Depends(get_db)):
+    """Get successes for a technical analysis job"""
+    from app.db.models import TechJobSuccess
+    try:
+        successes = db.query(TechJobSuccess).filter(
+            TechJobSuccess.tech_job_id == job_id
+        ).order_by(TechJobSuccess.created_at.desc()).limit(limit).all()
+
+        return [
+            {
+                "id": success.id,
+                "symbol": success.symbol,
+                "date": success.date,
+                "created_at": success.created_at.isoformat() if success.created_at else None,
+            }
+            for success in successes
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/jobs/tech/status")
+async def get_tech_job_status(db: Session = Depends(get_db)):
+    """Get current technical analysis job status"""
+    from app.services.job_status import get_job_latest_status
+    try:
+        # Get the latest job execution status
+        latest_status = get_job_latest_status("technical_compute")
+
+        if not latest_status:
+            return []
+
+        return [
+            {
+                "id": latest_status.id,
+                "job_name": latest_status.job_name,
+                "status": latest_status.status,
+                "started_at": _iso_utc(latest_status.started_at),
+                "completed_at": _iso_utc(latest_status.completed_at),
+                "duration_seconds": latest_status.duration_seconds,
+                "records_processed": latest_status.records_processed,
+                "error_message": latest_status.error_message,
+                "next_run_at": _iso_utc(latest_status.next_run_at)
+            }
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/cleanup-duplicates")
+async def cleanup_duplicate_jobs(db: Session = Depends(get_db)):
+    """Remove duplicate/legacy job configurations"""
+    try:
+        # Remove the old tech_analysis job (replaced by technical_compute)
+        deleted_job = db.query(JobConfiguration).filter(
+            JobConfiguration.job_name == "tech_analysis"
+        ).first()
+
+        if deleted_job:
+            db.delete(deleted_job)
+            db.commit()
+            return {"message": f"Removed duplicate job: tech_analysis", "deleted": 1}
+        else:
+            return {"message": "No duplicate jobs found", "deleted": 0}
+
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

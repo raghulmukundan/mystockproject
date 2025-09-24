@@ -520,7 +520,7 @@ async def get_watchlist_prices(watchlist_id: int, db: Session = Depends(get_db))
         async with httpx.AsyncClient() as client:
             payload = {"symbols": symbols}
             response = await client.post(
-                "http://backend:8002/api/prices/get-from-db",
+                "http://backend:8000/api/prices/get-from-db",
                 json=payload,
                 timeout=30.0
             )

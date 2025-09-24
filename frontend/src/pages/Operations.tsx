@@ -18,6 +18,7 @@ import { PricesBrowser as PricesBrowserComponent } from '../components/PricesBro
 import JobStatus from './JobStatus';
 import { JobSettings } from './JobSettings';
 import jobsApi, { jobsApiService, JobSummaryResponse } from '../services/jobsApi';
+import { formatChicago } from '../utils/dateUtils';
 
 const jobNameOverrides: Record<string, string> = {
   update_market_data: 'Market Data Refresh',
@@ -50,8 +51,8 @@ interface SectionMeta {
 
 const sectionMeta: SectionMeta[] = [
   { id: 'run-jobs', label: 'Run Jobs', icon: BoltIcon },
-  { id: 'job-settings', label: 'Job Settings', icon: Cog6ToothIcon },
   { id: 'job-status', label: 'Job Status', icon: CheckCircleIcon },
+  { id: 'job-settings', label: 'Job Settings', icon: Cog6ToothIcon },
   { id: 'history-import', label: 'History Import', icon: ArrowDownTrayIcon },
   { id: 'prices-browser', label: 'Prices Browser', icon: ChartBarIcon },
   { id: 'universe', label: 'Universe Explorer', icon: GlobeAmericasIcon },
@@ -121,19 +122,7 @@ const formatJobName = (jobName: string): string => {
 
 const formatDateTime = (value?: string | null): string => {
   if (!value) return 'Not yet run';
-  try {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch (error) {
-    return value;
-  }
+  return formatChicago(value) || value;
 };
 
 const statusVariant = (status?: string): ButtonVariant => {
@@ -167,6 +156,13 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
 
   useEffect(() => {
     loadJobs();
+
+    // Auto-refresh job status every 30 seconds
+    const refreshInterval = setInterval(() => {
+      loadJobs();
+    }, 30000);
+
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const runHandlers: Record<string, () => Promise<string | null>> = {
@@ -218,6 +214,10 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
       const response = await jobsApi.post('/jobs/job_ttl_cleanup/run');
       return response.data.message;
     },
+    schwab_token_validation: async () => {
+      const res = await jobsApiService.runTokenValidation();
+      return res.message;
+    },
   };
 
   const runJob = async (job: JobSummaryResponse) => {
@@ -240,6 +240,11 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
         setEodDates({ start: '', end: '' });
       }
       await loadJobs();
+
+      // Auto-navigate to job status after successfully starting a job
+      setTimeout(() => {
+        onNavigateToStatus();
+      }, 1500); // Wait 1.5 seconds to let user see the success message
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to start the selected job.';
       setFeedback({ type: 'error', message });

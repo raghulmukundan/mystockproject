@@ -15,7 +15,7 @@ def update_market_data_job():
 
 async def _update_market_data_job():
     """Update market data from external APIs"""
-    job_name = "market_data_refresh"
+    job_name = "update_market_data"
     job_id = None
     try:
         logger.info("Starting market data refresh job")
@@ -37,9 +37,9 @@ async def _update_market_data_job():
         prices_data = await external_client.get_finnhub_prices(symbols)
         logger.info(f"Retrieved price data for {len(prices_data)} symbols")
         
-        # Step 3: Store prices in jobs service database
-        logger.info("Storing prices in local cache")
-        records_processed = await price_storage.store_prices(prices_data)
+        # Step 3: Store prices in backend's prices_realtime_cache table
+        logger.info("Storing prices in backend's prices_realtime_cache")
+        records_processed = await backend_client.store_prices(prices_data)
         
         complete_job(job_id, records_processed=records_processed)
         prune_history(job_name, keep=5)

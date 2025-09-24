@@ -4,6 +4,7 @@ Schwab API endpoints
 import time
 import os
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 from ..clients.schwab.client import SchwabHTTPClient
@@ -19,6 +20,15 @@ class OAuthStatus(BaseModel):
     authenticated: bool
     client_id: str
     scope: Optional[str] = "readonly"
+
+class TokenStatus(BaseModel):
+    valid: bool
+    stale: bool
+    obtained_at: Optional[float] = None
+    age_seconds: Optional[float] = None
+    expires_in: Optional[int] = None
+    credentials_available: bool
+    message: Optional[str] = None
 
 class SymbolResult(BaseModel):
     symbol: str
@@ -110,6 +120,175 @@ async def exchange_oauth_code(authorization_code: str):
         return tokens
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/oauth/callback")
+@router.post("/oauth/callback")
+async def oauth_callback(code: str = Query(...), state: Optional[str] = None):
+    """Handle OAuth callback from Schwab"""
+    if oauth_service is None:
+        raise HTTPException(status_code=503, detail="OAuth service not configured")
+
+    try:
+        print(f"🔍 DEBUG: Received authorization code: {code[:10]}...")
+        tokens = oauth_service.exchange_code_for_tokens(code)
+        print(f"🔍 DEBUG: Full tokens response: {tokens}")
+        refresh_token = tokens.get('refresh_token', 'No refresh token returned')
+        print(f"🔍 DEBUG: Extracted refresh token: {refresh_token[:20]}...{refresh_token[-10:] if len(refresh_token) > 30 else refresh_token}")
+        access_token = tokens.get('access_token', 'No access token returned')
+        print(f"🔍 DEBUG: Extracted access token: {access_token[:20]}...{access_token[-10:] if len(access_token) > 30 else access_token}")
+
+        # Return HTML page with the token
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Schwab OAuth Success</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                .success {{ color: green; }}
+                .token {{ background: #f5f5f5; padding: 20px; border-radius: 5px; word-break: break-all; }}
+                .instructions {{ background: #e7f3ff; padding: 15px; border-radius: 5px; margin-top: 20px; }}
+            </style>
+        </head>
+        <body>
+            <h1 class="success">✅ Schwab OAuth Success!</h1>
+            <p>Your new refresh token is:</p>
+            <div class="token">{refresh_token}</div>
+
+            <div style="background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0; font-size: 12px;">
+                <strong>Debug Info:</strong><br>
+                Authorization Code: {code}<br>
+                Access Token: {access_token}<br>
+                Full Response Keys: {list(tokens.keys()) if tokens else 'None'}
+            </div>
+
+            <div class="instructions">
+                <h3>Next Steps:</h3>
+                <ol>
+                    <li>Copy the refresh token above</li>
+                    <li>Update your .env file: <code>SCHWAB_REFRESH_TOKEN=your_new_token</code></li>
+                    <li>Restart the external-apis service: <code>docker-compose restart external-apis</code></li>
+                </ol>
+                <p><strong>⚠️ Remember:</strong> Schwab refresh tokens expire after 7 days.</p>
+            </div>
+        </body>
+        </html>
+        """
+
+        return HTMLResponse(content=html_content, status_code=200)
+
+    except Exception as e:
+        error_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Schwab OAuth Error</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                .error {{ color: red; }}
+            </style>
+        </head>
+        <body>
+            <h1 class="error">❌ OAuth Error</h1>
+            <p>Failed to exchange authorization code: {str(e)}</p>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=error_html, status_code=500)
+
+@router.get("/token/status", response_model=TokenStatus)
+async def token_status():
+    """
+    Check Schwab access token status without making external API calls.
+    Returns token validity, staleness, age, and credential availability.
+    """
+    try:
+        # Import here to avoid circular imports
+        from ..clients.schwab.auth import SchwabTokenManager
+
+        token_manager = SchwabTokenManager()
+
+        # Check if credentials are available
+        if not token_manager.credentials_available:
+            return TokenStatus(
+                valid=False,
+                stale=True,
+                credentials_available=False,
+                message="Schwab credentials not configured (missing CLIENT_ID, CLIENT_SECRET, or REFRESH_TOKEN)"
+            )
+
+        # Check token staleness
+        is_stale = token_manager.is_token_stale()
+        has_token = token_manager._access_token is not None
+        obtained_at = token_manager._obtained_at
+
+        # Calculate age and expiry info
+        age_seconds = None
+        expires_in = None
+        if obtained_at:
+            age_seconds = time.time() - obtained_at
+            expires_in = max(0, int(token_manager.stale_token_seconds - age_seconds))
+
+        return TokenStatus(
+            valid=has_token and not is_stale,
+            stale=is_stale,
+            obtained_at=obtained_at,
+            age_seconds=age_seconds,
+            expires_in=expires_in,
+            credentials_available=token_manager.credentials_available,
+            message="Token valid and fresh" if (has_token and not is_stale) else
+                   "Token stale or missing - will refresh on next API call" if has_token else
+                   "No token cached - will obtain on next API call"
+        )
+    except Exception as e:
+        return TokenStatus(
+            valid=False,
+            stale=True,
+            credentials_available=False,
+            message=f"Error checking token status: {str(e)}"
+        )
+
+@router.post("/token/refresh")
+async def refresh_token():
+    """
+    Force refresh the Schwab access token using the stored refresh token.
+    Returns the new token info or error details.
+    """
+    try:
+        from ..clients.schwab.auth import SchwabTokenManager
+
+        token_manager = SchwabTokenManager()
+
+        if not token_manager.credentials_available:
+            raise HTTPException(
+                status_code=400,
+                detail="Missing credentials (CLIENT_ID, CLIENT_SECRET, or REFRESH_TOKEN)"
+            )
+
+        # Force refresh the token
+        new_token = token_manager.refresh_access_token()  # Direct call to refresh
+
+        if not new_token:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to refresh token - check credentials and refresh token validity"
+            )
+
+        # Get updated token info
+        obtained_at = token_manager._obtained_at
+        age_seconds = time.time() - obtained_at if obtained_at else 0
+        expires_in = max(0, int(token_manager.stale_token_seconds - age_seconds))
+
+        return {
+            "success": True,
+            "message": "Token refreshed successfully",
+            "expires_in": expires_in,
+            "obtained_at": obtained_at,
+            "new_access_token": new_token[:20] + "..." if new_token else None  # Show partial token for confirmation
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Token refresh failed: {str(e)}")
 
 @router.get("/quotes/{symbol}")
 async def get_quote(symbol: str):

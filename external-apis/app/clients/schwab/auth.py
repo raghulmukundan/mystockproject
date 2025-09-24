@@ -58,12 +58,19 @@ class SchwabTokenManager:
         
         # Use Basic Auth for client credentials (same as OAuth service)
         auth = (self.client_id, self.client_secret)
-        
+
+        print(f"🔍 DEBUG TOKEN REFRESH: URL={token_url}")
+        print(f"🔍 DEBUG TOKEN REFRESH: Client ID={self.client_id[:8]}...")
+        print(f"🔍 DEBUG TOKEN REFRESH: Refresh Token={self.refresh_token[:20]}...{self.refresh_token[-10:] if len(self.refresh_token) > 30 else self.refresh_token}")
+
         last_err: Optional[Exception] = None
         last_detail: Optional[str] = None
         for attempt in range(self.token_max_retries + 1):
             try:
+                print(f"🔍 DEBUG TOKEN REFRESH: Attempt {attempt + 1}/{self.token_max_retries + 1}")
                 response = requests.post(token_url, data=data, headers=headers, auth=auth, timeout=30)
+                print(f"🔍 DEBUG TOKEN REFRESH: Response status={response.status_code}")
+                print(f"🔍 DEBUG TOKEN REFRESH: Response text={response.text[:200]}...")
                 try:
                     response.raise_for_status()
                 except requests.HTTPError as he:

@@ -110,6 +110,36 @@ export const jobsApiService = {
     return response.data
   },
 
+  async runTokenValidation(): Promise<{ message: string }> {
+    const response = await jobsApi.post('/jobs/schwab_token_validation/run')
+    return response.data
+  },
+
+  // Technical job detailed endpoints
+  async getTechJobList(limit: number = 20): Promise<any[]> {
+    const response = await jobsApi.get(`/technical/job/list?limit=${limit}`)
+    return response.data
+  },
+
+  async getTechJobStatus(): Promise<JobStatusResponse[]> {
+    const response = await jobsApi.get('/jobs/tech/status')
+    return response.data
+  },
+
+  async getTechJobErrors(jobId: number, limit: number = 100): Promise<any[]> {
+    const response = await jobsApi.get(`/technical/job/errors/${jobId}?limit=${limit}`)
+    return response.data
+  },
+
+  async getTechJobSkips(jobId: number, limit: number = 100): Promise<any[]> {
+    const response = await jobsApi.get(`/technical/job/skips/${jobId}?limit=${limit}`)
+    return response.data
+  },
+
+  async getTechJobSuccesses(jobId: number, limit: number = 100): Promise<any[]> {
+    const response = await jobsApi.get(`/technical/job/successes/${jobId}?limit=${limit}`)
+    return response.data
+  },
 
   // Cleanup stuck jobs
   async cleanupStuckJobs(): Promise<CleanupResponse> {

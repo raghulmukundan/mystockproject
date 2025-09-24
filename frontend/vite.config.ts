@@ -11,7 +11,19 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
     strictPort: true,
+    allowedHosts: ['32496b8ijgqkk.tail349c6b.ts.net'],
     proxy: {
+      '/auth/callback': {
+        target: 'http://external-apis:8003',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/auth\/callback/, '/schwab/oauth/callback'),
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('🔄 OAuth callback proxying:', req.method, req.url, '→', options.target + req.url);
+          });
+        }
+      },
       '/api': {
         target: 'http://backend:8000',
         changeOrigin: true,

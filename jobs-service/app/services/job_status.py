@@ -45,6 +45,32 @@ def complete_job(job_id: int, records_processed: int = 0):
         db.close()
 
 
+def update_job_progress(job_id: int, records_processed: int):
+    """Update job progress with current record count"""
+    db = next(get_db())
+    try:
+        row = db.query(JobExecutionStatus).filter(JobExecutionStatus.id == job_id).first()
+        if not row:
+            return
+        row.records_processed = records_processed
+        db.commit()
+    finally:
+        db.close()
+
+
+def is_job_running(job_name: str) -> bool:
+    """Check if a job is currently running"""
+    db = next(get_db())
+    try:
+        running_job = db.query(JobExecutionStatus).filter(
+            JobExecutionStatus.job_name == job_name,
+            JobExecutionStatus.status == 'running'
+        ).first()
+        return running_job is not None
+    finally:
+        db.close()
+
+
 def fail_job(job_id: int, error_message: str):
     """Mark job as failed with error message"""
     db = next(get_db())

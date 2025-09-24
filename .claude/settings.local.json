@@ -54,7 +54,8 @@
       "Bash(time curl:*)",
       "Bash(git rebase:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []
