@@ -41,7 +41,7 @@ def init_db():
         
     try:
         # Import all models to ensure they're registered
-        from app.models import watchlist, watchlist_item, rule, symbol, price_daily, current_price
+        from app.models import watchlist, watchlist_item, rule, symbol, daily_ohlc_price, realtime_price_cache
         
         # Import src models for historical data
         try:

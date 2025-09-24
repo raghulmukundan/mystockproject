@@ -12,7 +12,7 @@ from src.db.models import EodScan, EodScanError
 from src.services.schwab.auth import SchwabTokenManager
 from src.services.prices.providers.schwab_history import ProviderError
 from src.services.prices.providers.schwab_history import SchwabHistoryProvider
-from app.services.job_status import prune_eod_scans
+# Job status tracking removed - now handled by separate jobs service
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def run_eod_scan_all_symbols(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> dict:
-    """Fetch today's daily OHLC for all symbols and upsert into prices_daily.
+    """Fetch today's daily OHLC for all symbols and upsert into prices_daily_ohlc.
 
     - Uses Schwab price history provider
     - Processes in batches to respect rate limits

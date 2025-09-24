@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: stockwatchlist
       POSTGRES_USER: stockuser
-      POSTGRES_PASSWORD: stockpass123
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-stockpass123}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -31,7 +31,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://stockuser:stockpass123@postgres:5432/stockwatchlist
+      - DATABASE_URL=postgresql://${DATABASE_USER:-stockuser}:${DATABASE_PASSWORD:-stockpass123}@postgres:${DATABASE_PORT:-5432}/${DATABASE_NAME:-stockwatchlist}
+      - DATABASE_HOST=postgres
       - ENVIRONMENT=production
     volumes:
       - C:\Users\raghu\Downloads:/downloads

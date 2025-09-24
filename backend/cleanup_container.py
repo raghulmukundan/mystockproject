@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 import sys
-import os
 
 # Add the current directory to path
 sys.path.append('/app/src')
 
+from backend.common.database import get_database_url
 from sqlalchemy import text, create_engine
 import logging
 
@@ -16,8 +16,8 @@ def cleanup_all_data():
     """Clean up all import and historical data"""
     logger.info("Cleaning up all import and historical data...")
     
-    # Use Docker container database URL
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://stockuser:StockPass2024!@postgres:5432/stockwatchlist")
+    # Use shared database configuration
+    DATABASE_URL = get_database_url()
     
     try:
         engine = create_engine(DATABASE_URL)

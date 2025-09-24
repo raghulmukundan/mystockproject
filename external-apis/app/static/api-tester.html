@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>External APIs Tester</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #4a6741 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab:hover {
+            background: #e9ecef;
+        }
+
+        .tab.active {
+            background: white;
+            border-bottom-color: #007bff;
+            color: #007bff;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 30px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .endpoint-section {
+            margin-bottom: 40px;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .endpoint-header:hover {
+            background: #e9ecef;
+        }
+
+        .endpoint-title {
+            font-weight: 600;
+            font-size: 1.2em;
+        }
+
+        .endpoint-method {
+            background: #28a745;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .endpoint-body {
+            padding: 25px;
+            background: white;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .test-btn {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+        }
+
+        .test-btn:active {
+            transform: translateY(0);
+        }
+
+        .test-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .response-section {
+            margin-top: 25px;
+        }
+
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .response-header h3 {
+            color: #495057;
+        }
+
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .response-time {
+            background: #e7f3ff;
+            color: #0066cc;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+
+        .response-body {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .collapsible {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .collapsible.active {
+            max-height: 2000px;
+        }
+
+        .expand-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .expand-icon.rotated {
+            transform: rotate(180deg);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 External APIs Tester</h1>
+            <p>Test Schwab and Finnhub endpoints with real-time data and intuitive interface</p>
+            <div style="margin-top: 15px;">
+                <a href="/docs" style="color: white; text-decoration: none; background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; margin-right: 10px; display: inline-block; transition: all 0.3s ease;">📚 API Docs</a>
+                <a href="/" style="color: white; text-decoration: none; background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; margin-right: 10px; display: inline-block; transition: all 0.3s ease;">🏠 Home</a>
+                <span style="color: rgba(255,255,255,0.8); font-size: 0.9em;">Status: Connected to localhost:8003</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('schwab')">
+                📈 Schwab API
+            </div>
+            <div class="tab" onclick="switchTab('finnhub')">
+                📊 Finnhub API
+            </div>
+        </div>
+
+        <!-- Schwab Tab -->
+        <div id="schwab" class="tab-content active">
+            <!-- Health Check -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('schwab-health')">
+                    <div class="endpoint-title">🏥 Health Check</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="schwab-health-icon">▼</span>
+                </div>
+                <div id="schwab-health-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Check if Schwab API service is healthy and credentials are configured.</p>
+                        <button class="test-btn" onclick="testEndpoint('schwab', '/schwab/health', 'GET')">
+                            Test Health Check
+                        </button>
+                        <div id="schwab-health-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="schwab-health-status" class="status-badge"></span>
+                                    <span id="schwab-health-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="schwab-health-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quote -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('schwab-quote')">
+                    <div class="endpoint-title">💰 Get Quote</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="schwab-quote-icon">▼</span>
+                </div>
+                <div id="schwab-quote-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get real-time stock quote from Schwab API.</p>
+                        <div class="form-group">
+                            <label for="schwab-quote-symbol">Stock Symbol</label>
+                            <input type="text" id="schwab-quote-symbol" value="AAPL" placeholder="e.g., AAPL, GOOGL, MSFT">
+                        </div>
+                        <button class="test-btn" onclick="testSchwabQuote()">
+                            Test Get Quote
+                        </button>
+                        <div id="schwab-quote-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="schwab-quote-status" class="status-badge"></span>
+                                    <span id="schwab-quote-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="schwab-quote-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Multiple Quotes -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('schwab-quotes')">
+                    <div class="endpoint-title">💰 Get Multiple Quotes</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="schwab-quotes-icon">▼</span>
+                </div>
+                <div id="schwab-quotes-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get multiple stock quotes in a single request.</p>
+                        <div class="form-group">
+                            <label for="schwab-quotes-symbols">Stock Symbols (comma-separated)</label>
+                            <input type="text" id="schwab-quotes-symbols" value="AAPL,GOOGL,MSFT" placeholder="e.g., AAPL,GOOGL,MSFT">
+                        </div>
+                        <button class="test-btn" onclick="testSchwabQuotes()">
+                            Test Get Multiple Quotes
+                        </button>
+                        <div id="schwab-quotes-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="schwab-quotes-status" class="status-badge"></span>
+                                    <span id="schwab-quotes-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="schwab-quotes-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Price History -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('schwab-history')">
+                    <div class="endpoint-title">📈 Price History</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="schwab-history-icon">▼</span>
+                </div>
+                <div id="schwab-history-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get historical price data (OHLCV) for a symbol.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="schwab-history-symbol">Stock Symbol</label>
+                                <input type="text" id="schwab-history-symbol" value="AAPL" placeholder="e.g., AAPL">
+                            </div>
+                            <div class="form-group">
+                                <label for="schwab-history-period">Period Type</label>
+                                <select id="schwab-history-period">
+                                    <option value="day">Day</option>
+                                    <option value="month">Month</option>
+                                    <option value="year" selected>Year</option>
+                                    <option value="ytd">YTD</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="schwab-history-periods">Number of Periods</label>
+                                <input type="number" id="schwab-history-periods" value="1" min="1" max="10">
+                            </div>
+                            <div class="form-group">
+                                <label for="schwab-history-frequency">Frequency</label>
+                                <select id="schwab-history-frequency">
+                                    <option value="daily" selected>Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                    <option value="monthly">Monthly</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="test-btn" onclick="testSchwabHistory()">
+                            Test Price History
+                        </button>
+                        <div id="schwab-history-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="schwab-history-status" class="status-badge"></span>
+                                    <span id="schwab-history-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="schwab-history-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily History -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('schwab-daily')">
+                    <div class="endpoint-title">📊 Daily History</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="schwab-daily-icon">▼</span>
+                </div>
+                <div id="schwab-daily-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get daily OHLCV bars for a specific date range.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="schwab-daily-symbol">Stock Symbol</label>
+                                <input type="text" id="schwab-daily-symbol" value="AAPL" placeholder="e.g., AAPL">
+                            </div>
+                            <div class="form-group">
+                                <label for="schwab-daily-start">Start Date</label>
+                                <input type="date" id="schwab-daily-start" value="">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="schwab-daily-end">End Date</label>
+                            <input type="date" id="schwab-daily-end" value="">
+                        </div>
+                        <button class="test-btn" onclick="testSchwabDaily()">
+                            Test Daily History
+                        </button>
+                        <div id="schwab-daily-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="schwab-daily-status" class="status-badge"></span>
+                                    <span id="schwab-daily-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="schwab-daily-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OAuth Status -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('schwab-oauth')">
+                    <div class="endpoint-title">🔐 OAuth Status</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="schwab-oauth-icon">▼</span>
+                </div>
+                <div id="schwab-oauth-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Check OAuth authentication status and configuration.</p>
+                        <button class="test-btn" onclick="testEndpoint('schwab', '/schwab/auth/status', 'GET')">
+                            Test OAuth Status
+                        </button>
+                        <div id="schwab-oauth-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="schwab-oauth-status" class="status-badge"></span>
+                                    <span id="schwab-oauth-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="schwab-oauth-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Finnhub Tab -->
+        <div id="finnhub" class="tab-content">
+            <!-- Health Check -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('finnhub-health')">
+                    <div class="endpoint-title">🏥 Health Check</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="finnhub-health-icon">▼</span>
+                </div>
+                <div id="finnhub-health-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Check if Finnhub API service is healthy and API key is configured.</p>
+                        <button class="test-btn" onclick="testEndpoint('finnhub', '/finnhub/health', 'GET')">
+                            Test Health Check
+                        </button>
+                        <div id="finnhub-health-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="finnhub-health-status" class="status-badge"></span>
+                                    <span id="finnhub-health-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="finnhub-health-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quote -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('finnhub-quote')">
+                    <div class="endpoint-title">💰 Get Quote</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="finnhub-quote-icon">▼</span>
+                </div>
+                <div id="finnhub-quote-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get real-time stock quote from Finnhub API.</p>
+                        <div class="form-group">
+                            <label for="finnhub-quote-symbol">Stock Symbol</label>
+                            <input type="text" id="finnhub-quote-symbol" value="AAPL" placeholder="e.g., AAPL, GOOGL, MSFT">
+                        </div>
+                        <button class="test-btn" onclick="testFinnhubQuote()">
+                            Test Get Quote
+                        </button>
+                        <div id="finnhub-quote-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="finnhub-quote-status" class="status-badge"></span>
+                                    <span id="finnhub-quote-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="finnhub-quote-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Company Profile -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('finnhub-company')">
+                    <div class="endpoint-title">🏢 Company Profile</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="finnhub-company-icon">▼</span>
+                </div>
+                <div id="finnhub-company-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get detailed company profile information.</p>
+                        <div class="form-group">
+                            <label for="finnhub-company-symbol">Stock Symbol</label>
+                            <input type="text" id="finnhub-company-symbol" value="AAPL" placeholder="e.g., AAPL, GOOGL, MSFT">
+                        </div>
+                        <button class="test-btn" onclick="testFinnhubCompany()">
+                            Test Company Profile
+                        </button>
+                        <div id="finnhub-company-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="finnhub-company-status" class="status-badge"></span>
+                                    <span id="finnhub-company-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="finnhub-company-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Metrics -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('finnhub-metrics')">
+                    <div class="endpoint-title">📊 Stock Metrics</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="finnhub-metrics-icon">▼</span>
+                </div>
+                <div id="finnhub-metrics-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get comprehensive stock metrics and financial data.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="finnhub-metrics-symbol">Stock Symbol</label>
+                                <input type="text" id="finnhub-metrics-symbol" value="AAPL" placeholder="e.g., AAPL">
+                            </div>
+                            <div class="form-group">
+                                <label for="finnhub-metrics-type">Metric Type</label>
+                                <select id="finnhub-metrics-type">
+                                    <option value="all" selected>All Metrics</option>
+                                    <option value="price">Price Metrics</option>
+                                    <option value="valuation">Valuation</option>
+                                    <option value="growth">Growth</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="test-btn" onclick="testFinnhubMetrics()">
+                            Test Stock Metrics
+                        </button>
+                        <div id="finnhub-metrics-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="finnhub-metrics-status" class="status-badge"></span>
+                                    <span id="finnhub-metrics-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="finnhub-metrics-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market News -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('finnhub-news')">
+                    <div class="endpoint-title">📰 Market News</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="finnhub-news-icon">▼</span>
+                </div>
+                <div id="finnhub-news-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get latest market news and financial updates.</p>
+                        <div class="form-group">
+                            <label for="finnhub-news-category">News Category</label>
+                            <select id="finnhub-news-category">
+                                <option value="general" selected>General</option>
+                                <option value="forex">Forex</option>
+                                <option value="crypto">Crypto</option>
+                                <option value="merger">Merger</option>
+                            </select>
+                        </div>
+                        <button class="test-btn" onclick="testFinnhubNews()">
+                            Test Market News
+                        </button>
+                        <div id="finnhub-news-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="finnhub-news-status" class="status-badge"></span>
+                                    <span id="finnhub-news-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="finnhub-news-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Company News -->
+            <div class="endpoint-section">
+                <div class="endpoint-header" onclick="toggleEndpoint('finnhub-company-news')">
+                    <div class="endpoint-title">📰 Company News</div>
+                    <div class="endpoint-method">GET</div>
+                    <span class="expand-icon" id="finnhub-company-news-icon">▼</span>
+                </div>
+                <div id="finnhub-company-news-body" class="collapsible">
+                    <div class="endpoint-body">
+                        <p style="margin-bottom: 20px; color: #6c757d;">Get company-specific news for a date range.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="finnhub-company-news-symbol">Stock Symbol</label>
+                                <input type="text" id="finnhub-company-news-symbol" value="AAPL" placeholder="e.g., AAPL">
+                            </div>
+                            <div class="form-group">
+                                <label for="finnhub-company-news-from">From Date</label>
+                                <input type="date" id="finnhub-company-news-from" value="">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="finnhub-company-news-to">To Date</label>
+                            <input type="date" id="finnhub-company-news-to" value="">
+                        </div>
+                        <button class="test-btn" onclick="testFinnhubCompanyNews()">
+                            Test Company News
+                        </button>
+                        <div id="finnhub-company-news-response" class="response-section" style="display: none;">
+                            <div class="response-header">
+                                <h3>Response</h3>
+                                <div>
+                                    <span id="finnhub-company-news-status" class="status-badge"></span>
+                                    <span id="finnhub-company-news-time" class="response-time"></span>
+                                </div>
+                            </div>
+                            <div id="finnhub-company-news-body-response" class="response-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set default dates
+        const today = new Date().toISOString().split('T')[0];
+        const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        
+        document.getElementById('schwab-daily-start').value = lastWeek;
+        document.getElementById('schwab-daily-end').value = today;
+        document.getElementById('finnhub-company-news-from').value = lastWeek;
+        document.getElementById('finnhub-company-news-to').value = today;
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active from all tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            
+            // Mark selected tab button as active
+            event.target.classList.add('active');
+        }
+
+        function toggleEndpoint(endpointId) {
+            const body = document.getElementById(endpointId + '-body');
+            const icon = document.getElementById(endpointId + '-icon');
+            
+            body.classList.toggle('active');
+            icon.classList.toggle('rotated');
+        }
+
+        async function testEndpoint(service, endpoint, method = 'GET', params = {}, customId = null) {
+            // Use custom ID if provided, otherwise extract from endpoint
+            let endpointId = customId;
+            if (!endpointId) {
+                const pathParts = endpoint.split('/').filter(part => part && !part.includes('{'));
+                endpointId = pathParts[pathParts.length - 1];
+                if (endpointId === 'status') endpointId = 'oauth';
+                if (endpointId === 'quotes' && endpoint.includes('?')) endpointId = 'quotes';
+            }
+            
+            const responseSection = document.getElementById(`${service}-${endpointId}-response`);
+            const statusBadge = document.getElementById(`${service}-${endpointId}-status`);
+            const timeSpan = document.getElementById(`${service}-${endpointId}-time`);
+            const responseBody = document.getElementById(`${service}-${endpointId}-body-response`);
+            
+            // Check if elements exist
+            if (!responseSection || !statusBadge || !timeSpan || !responseBody) {
+                console.error(`Missing elements for ${service}-${endpointId}`, {
+                    responseSection: !!responseSection,
+                    statusBadge: !!statusBadge,
+                    timeSpan: !!timeSpan,
+                    responseBody: !!responseBody
+                });
+                alert(`Error: UI elements not found for ${service}-${endpointId}. Check browser console.`);
+                return;
+            }
+            
+            // Show response section
+            responseSection.style.display = 'block';
+            
+            // Show loading
+            statusBadge.className = 'status-badge';
+            statusBadge.innerHTML = '<span class="loading"></span>Loading...';
+            timeSpan.textContent = '';
+            responseBody.textContent = 'Making request...';
+            
+            const startTime = Date.now();
+            
+            try {
+                let url = `http://localhost:8003${endpoint}`;
+                
+                // Add query parameters
+                if (Object.keys(params).length > 0) {
+                    url += '?' + new URLSearchParams(params).toString();
+                }
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const endTime = Date.now();
+                const responseTime = endTime - startTime;
+                
+                const data = await response.json();
+                
+                // Update status
+                if (response.ok) {
+                    statusBadge.className = 'status-badge status-success';
+                    statusBadge.textContent = `${response.status} ${response.statusText}`;
+                } else {
+                    statusBadge.className = 'status-badge status-error';
+                    statusBadge.textContent = `${response.status} ${response.statusText}`;
+                }
+                
+                // Update response time
+                timeSpan.textContent = `${responseTime}ms`;
+                
+                // Update response body
+                responseBody.textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                const endTime = Date.now();
+                const responseTime = endTime - startTime;
+                
+                statusBadge.className = 'status-badge status-error';
+                statusBadge.textContent = 'Network Error';
+                timeSpan.textContent = `${responseTime}ms`;
+                responseBody.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Schwab specific test functions
+        function testSchwabQuote() {
+            const symbol = document.getElementById('schwab-quote-symbol').value;
+            testEndpoint('schwab', `/schwab/quotes/${symbol}`, 'GET', {}, 'quote');
+        }
+
+        function testSchwabQuotes() {
+            const symbols = document.getElementById('schwab-quotes-symbols').value;
+            testEndpoint('schwab', '/schwab/quotes', 'GET', { symbols }, 'quotes');
+        }
+
+        function testSchwabHistory() {
+            const symbol = document.getElementById('schwab-history-symbol').value;
+            const periodType = document.getElementById('schwab-history-period').value;
+            const period = document.getElementById('schwab-history-periods').value;
+            const frequencyType = document.getElementById('schwab-history-frequency').value;
+            
+            testEndpoint('schwab', `/schwab/history/${symbol}`, 'GET', {
+                period_type: periodType,
+                period: period,
+                frequency_type: frequencyType,
+                frequency: 1
+            }, 'history');
+        }
+
+        function testSchwabDaily() {
+            const symbol = document.getElementById('schwab-daily-symbol').value;
+            const start = document.getElementById('schwab-daily-start').value;
+            const end = document.getElementById('schwab-daily-end').value;
+            
+            testEndpoint('schwab', `/schwab/history/${symbol}/daily`, 'GET', {
+                start: start,
+                end: end
+            }, 'daily');
+        }
+
+        // Finnhub specific test functions
+        function testFinnhubQuote() {
+            const symbol = document.getElementById('finnhub-quote-symbol').value;
+            testEndpoint('finnhub', `/finnhub/quote/${symbol}`, 'GET', {}, 'quote');
+        }
+
+        function testFinnhubCompany() {
+            const symbol = document.getElementById('finnhub-company-symbol').value;
+            testEndpoint('finnhub', `/finnhub/company/${symbol}`, 'GET', {}, 'company');
+        }
+
+        function testFinnhubMetrics() {
+            const symbol = document.getElementById('finnhub-metrics-symbol').value;
+            const metric = document.getElementById('finnhub-metrics-type').value;
+            testEndpoint('finnhub', `/finnhub/metrics/${symbol}`, 'GET', { metric }, 'metrics');
+        }
+
+        function testFinnhubNews() {
+            const category = document.getElementById('finnhub-news-category').value;
+            testEndpoint('finnhub', '/finnhub/news', 'GET', { category }, 'news');
+        }
+
+        function testFinnhubCompanyNews() {
+            const symbol = document.getElementById('finnhub-company-news-symbol').value;
+            const fromDate = document.getElementById('finnhub-company-news-from').value;
+            const toDate = document.getElementById('finnhub-company-news-to').value;
+            
+            testEndpoint('finnhub', `/finnhub/company-news/${symbol}`, 'GET', {
+                from_date: fromDate,
+                to_date: toDate
+            }, 'company-news');
+        }
+    </script>
+</body>
+</html>

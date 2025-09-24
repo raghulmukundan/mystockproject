@@ -1,0 +1,213 @@
+"""
+Job scheduler for the Jobs Service
+"""
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
+from app.core.config import TIMEZONE
+from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+from app.services.market_data_job import update_market_data_job
+from app.services.eod_scan_job import run_eod_scan_job
+from app.services.universe_job import refresh_universe_job
+from app.services.tech_job import run_tech_job_scheduled
+from app.services.ttl_cleanup_job import cleanup_old_job_records
+from app.services.token_validation_job import validate_schwab_token_job
+from app.core.database import SessionLocal
+from app.db.models import JobConfiguration
+import logging
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:
+    ZoneInfo = None
+
+logger = logging.getLogger(__name__)
+
+def _tech_fallback_job():
+    """Fallback technical analysis job - only runs if not done recently and EOD didn't fail"""
+    try:
+        from app.services.tech_job import run_tech_job_scheduled
+        from app.services.job_status import get_job_latest_status
+        from datetime import datetime, timezone, timedelta
+
+        # Check if technical analysis ran recently (within last 4 hours)
+        latest_tech_status = get_job_latest_status("technical_compute")
+        if latest_tech_status and latest_tech_status.started_at:
+            time_since_last = datetime.now(timezone.utc) - latest_tech_status.started_at
+            if time_since_last < timedelta(hours=4):
+                logger.info(f"Technical analysis already ran {time_since_last.total_seconds()/3600:.1f} hours ago. Skipping fallback.")
+                return
+
+        # Check if EOD scan failed recently (within last 4 hours) - don't run tech analysis on stale data
+        latest_eod_status = get_job_latest_status("eod_price_scan")
+        if latest_eod_status and latest_eod_status.started_at:
+            eod_time_since_last = datetime.now(timezone.utc) - latest_eod_status.started_at
+            if eod_time_since_last < timedelta(hours=4) and latest_eod_status.status == "failed":
+                logger.warning(f"EOD scan failed {eod_time_since_last.total_seconds()/3600:.1f} hours ago. Skipping technical analysis fallback to avoid working with stale data.")
+                return
+
+        logger.info("Running fallback technical analysis (EOD didn't trigger it or completed successfully)")
+        run_tech_job_scheduled()
+
+    except Exception as e:
+        logger.error(f"Technical analysis fallback failed: {str(e)}")
+
+# Configure scheduler with sensible defaults
+scheduler = BackgroundScheduler(
+    job_defaults={
+        "coalesce": True,              # If multiple runs were missed, coalesce into one
+        "misfire_grace_time": 300,     # Run if missed by <= 5 minutes
+        "max_instances": 1,            # Prevent overlapping runs
+    },
+    timezone=ZoneInfo(TIMEZONE) if ZoneInfo is not None else TIMEZONE,
+)
+
+def setup_job_configurations():
+    """Setup job configurations in database"""
+    db = SessionLocal()
+    try:
+        job_configs = [
+            {
+                "job_name": "update_market_data",
+                "description": "Update market data every 30 minutes",
+                "enabled": True,
+                "schedule_type": "interval",
+                "interval_value": 30,
+                "interval_unit": "minutes",
+                "only_market_hours": True,
+                "market_start_hour": 9,
+                "market_end_hour": 16
+            },
+            {
+                "job_name": "nasdaq_universe_refresh",
+                "description": "Refresh NASDAQ universe every Sunday at 8 AM",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "sun",
+                "cron_hour": 8,
+                "cron_minute": 0,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "eod_price_scan",
+                "description": "EOD price scan at 5:30 PM",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "mon-fri",
+                "cron_hour": 17,
+                "cron_minute": 30,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "technical_compute_fallback",
+                "description": "Technical analysis fallback (triggered by EOD completion or 7:30 PM)",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "mon-fri",
+                "cron_hour": 19,
+                "cron_minute": 30,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "job_ttl_cleanup",
+                "description": "Cleanup old job records",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": None,
+                "cron_hour": 3,
+                "cron_minute": 0,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "schwab_token_validation",
+                "description": "Validate Schwab token status every 12 hours",
+                "enabled": True,
+                "schedule_type": "interval",
+                "interval_value": 12,
+                "interval_unit": "hours",
+                "only_market_hours": False
+            }
+        ]
+
+        for config in job_configs:
+            existing = db.query(JobConfiguration).filter(
+                JobConfiguration.job_name == config["job_name"]
+            ).first()
+
+            if not existing:
+                job_config = JobConfiguration(**config)
+                db.add(job_config)
+                logger.info(f"Created job configuration: {config['job_name']}")
+
+        db.commit()
+        logger.info("Job configurations initialized successfully")
+    except Exception as e:
+        logger.error(f"Error setting up job configurations: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+def setup_jobs():
+    """Setup all scheduled jobs"""
+
+    # Initialize database job configurations first
+    setup_job_configurations()
+
+    # Market data updates every 30 minutes
+    scheduler.add_job(
+        func=update_market_data_job,
+        trigger=IntervalTrigger(minutes=30),
+        id="update_market_data",
+        name="Update market data every 30 minutes",
+        replace_existing=True,
+    )
+
+    # NASDAQ universe refresh every Sunday at 8 AM
+    scheduler.add_job(
+        func=refresh_universe_job,
+        trigger=CronTrigger(day_of_week='sun', hour=8, minute=0),
+        id="refresh_universe",
+        name="Refresh NASDAQ universe every Sunday at 8 AM",
+        replace_existing=True,
+    )
+
+    # EOD daily OHLC scan at 5:30 PM America/Chicago (Mon–Fri)
+    scheduler.add_job(
+        func=run_eod_scan_job,
+        trigger=CronTrigger(day_of_week='mon-fri', hour=17, minute=30),
+        id="eod_price_scan",
+        name="EOD price scan at 5:30 PM",
+        replace_existing=True,
+    )
+
+    # Technical analysis fallback at 7:30 PM (Mon-Fri) - only if EOD didn't trigger it
+    scheduler.add_job(
+        func=_tech_fallback_job,
+        trigger=CronTrigger(day_of_week='mon-fri', hour=19, minute=30),
+        id="technical_compute_fallback",
+        name="Technical analysis fallback (if EOD didn't trigger)",
+        replace_existing=True,
+    )
+
+    # TTL cleanup job daily at 3:00 AM
+    scheduler.add_job(
+        func=cleanup_old_job_records,
+        trigger=CronTrigger(hour=3, minute=0),
+        id="job_ttl_cleanup",
+        name="Cleanup old job records",
+        replace_existing=True,
+    )
+
+    # Schwab token validation job every 12 hours
+    scheduler.add_job(
+        func=validate_schwab_token_job,
+        trigger=IntervalTrigger(hours=12),
+        id="schwab_token_validation",
+        name="Validate Schwab token status every 12 hours",
+        replace_existing=True,
+    )
+
+    logger.info("All scheduled jobs configured successfully")
+
+# Setup jobs when module is imported
+setup_jobs()

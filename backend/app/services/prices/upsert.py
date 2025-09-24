@@ -5,13 +5,13 @@ from typing import List, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from app.models.price_daily import PriceDaily
+from app.models.daily_ohlc_price import DailyOHLCPrice
 from app.core.database import SessionLocal
 from src.services.prices.providers.schwab_history import Bar
 
 def upsert_daily(symbol: str, bars: List[Bar], source: str = "schwab", update_if_changed: bool = False) -> Dict[str, int]:
     """
-    Upsert bars into prices_daily (PK symbol+date).
+    Upsert bars into prices_daily_ohlc (PK symbol+date).
     Returns counts: {"inserted": n1, "updated": n2, "skipped": n3}
     
     Args:
@@ -33,10 +33,10 @@ def upsert_daily(symbol: str, bars: List[Bar], source: str = "schwab", update_if
     try:
         for bar in bars:
             # Check if record exists
-            existing_record = db.query(PriceDaily).filter(
+            existing_record = db.query(DailyOHLCPrice).filter(
                 and_(
-                    PriceDaily.symbol == symbol,
-                    PriceDaily.date == bar.date
+                    DailyOHLCPrice.symbol == symbol,
+                    DailyOHLCPrice.date == bar.date
                 )
             ).first()
             
@@ -66,7 +66,7 @@ def upsert_daily(symbol: str, bars: List[Bar], source: str = "schwab", update_if
                     skipped_count += 1
             else:
                 # Insert new record
-                new_record = PriceDaily(
+                new_record = DailyOHLCPrice(
                     symbol=symbol,
                     date=bar.date,
                     open=bar.open,
@@ -108,11 +108,11 @@ def get_price_data_stats(symbol: str, start: str, end: str) -> Dict[str, any]:
     db = SessionLocal()
     try:
         # Query for records in date range
-        query = db.query(PriceDaily).filter(
+        query = db.query(DailyOHLCPrice).filter(
             and_(
-                PriceDaily.symbol == symbol,
-                PriceDaily.date >= start,
-                PriceDaily.date <= end
+                DailyOHLCPrice.symbol == symbol,
+                DailyOHLCPrice.date >= start,
+                DailyOHLCPrice.date <= end
             )
         )
         

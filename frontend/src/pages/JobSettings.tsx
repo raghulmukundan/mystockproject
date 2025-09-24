@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
+import { jobsApiService } from '../services/jobsApi';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -51,7 +52,6 @@ export const JobSettings: React.FC = () => {
   const [histories, setHistories] = useState<Record<string, any[]>>({});
   const [techLatest, setTechLatest] = useState<any | null>(null);
   const techPollRef = useRef<number | null>(null);
-  const [oauthStatus, setOauthStatus] = useState<{authenticated: boolean; client_id: string} | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -60,11 +60,20 @@ export const JobSettings: React.FC = () => {
 
   const loadJobs = async () => {
     try {
-      const response = await fetch('/api/jobs');
-      if (response.ok) {
-        const data: JobConfiguration[] = await response.json();
-        setJobs(data);
-      }
+      // Note: JobConfiguration interface matches the response from jobs service
+      const data = await jobsApiService.getJobsSummary();
+      // Convert JobSummaryResponse to JobConfiguration format for compatibility
+      const jobConfigs: JobConfiguration[] = data.map(job => ({
+        id: 0, // Not provided in summary
+        job_name: job.job_name,
+        description: job.description,
+        enabled: job.enabled,
+        schedule_type: 'interval', // Default values for missing fields
+        only_market_hours: false,
+        created_at: '',
+        updated_at: ''
+      }));
+      setJobs(jobConfigs);
     } catch (error) {
       console.error('Error loading jobs:', error);
     }
@@ -74,11 +83,8 @@ export const JobSettings: React.FC = () => {
 
   const loadJobsSummary = async () => {
     try {
-      const response = await fetch('/api/jobs/summary');
-      if (response.ok) {
-        const data: JobSummary[] = await response.json();
-        setJobsSummary(data);
-      }
+      const data = await jobsApiService.getJobsSummary();
+      setJobsSummary(data);
     } catch (error) {
       console.error('Error loading jobs summary:', error);
     }
@@ -108,19 +114,6 @@ export const JobSettings: React.FC = () => {
     return () => { if (techPollRef.current) clearInterval(techPollRef.current); };
   }, []);
 
-  const loadOauthStatus = async () => {
-    try {
-      const res = await fetch('/api/auth/status');
-      if (res.ok) {
-        const data = await res.json();
-        setOauthStatus({ authenticated: !!data.authenticated, client_id: data.client_id });
-      }
-    } catch {}
-  };
-
-  useEffect(() => {
-    loadOauthStatus();
-  }, []);
 
   const updateJob = async (jobName: string, updates: Partial<JobConfiguration>) => {
     setLoading(true);
@@ -155,81 +148,10 @@ export const JobSettings: React.FC = () => {
     setHistoryOpen({ ...historyOpen, [jobName]: open });
     if (open) {
       try {
-        const res = await fetch(`/api/jobs/${jobName}/status?limit=5`);
-        if (res.ok) {
-          const data = await res.json();
-          setHistories({ ...histories, [jobName]: data });
-        }
+        const data = await jobsApiService.getJobStatus(jobName, 5);
+        setHistories({ ...histories, [jobName]: data });
       } catch {}
     }
-  };
-
-  const runUniverseRefreshNow = async () => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await fetch('/api/universe/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ download: true }) });
-      if (!res.ok) {
-        const err = await res.json();
-        setMessage(`Error: ${err.detail || 'Failed to refresh'}`);
-      } else {
-        setMessage('Universe refresh started');
-      }
-      await loadJobsSummary();
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
-
-  const truncateSymbolsTable = async () => {
-    if (!confirm('This will TRUNCATE symbols. Are you sure?')) return;
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await fetch('/api/universe/clear', { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
-        setMessage(data.message || 'Symbols table truncated');
-      } else {
-        const err = await res.json();
-        setMessage(`Error: ${err.detail || 'Failed to truncate symbols'}`);
-      }
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
-
-  const runTechNow = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tech/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-      if (res.ok) {
-        const data = await res.json();
-        setMessage(`Technical compute started (job #${data.job_id || '?'} for ${data.latest_trade_date || ''})`);
-        await loadJobsSummary();
-        // kick off immediate status poll
-        loadTechLatest();
-      } else {
-        let detail = '';
-        try { const err = await res.json(); detail = err.detail || JSON.stringify(err); } catch {}
-        setMessage(`Failed to start technical compute${detail ? ': ' + detail : ''}`);
-      }
-    } catch (e) {
-      setMessage(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setLoading(false);
-  };
-
-  const runMarketDataNow = async () => {
-    setLoading(true);
-    try {
-      await fetch('/api/jobs/market-data/run', { method: 'POST' });
-      await loadJobsSummary();
-      setMessage('Market data refresh started');
-    } catch {}
-    setLoading(false);
   };
 
   const getStatusBadgeVariant = (status: string) => {
@@ -450,34 +372,6 @@ export const JobSettings: React.FC = () => {
   return (
     <div className="space-y-6 p-6">
       <Card>
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Schwab Authentication</CardTitle>
-            <p className="text-sm text-gray-600">Refresh tokens expire every 7 days. Use this to re‑authenticate and obtain a new refresh token.</p>
-            <p className="text-xs text-gray-500 mt-1">If accessing via Tailscale, run <span className="font-mono">tailscale serve --https=443 localhost:8000</span> before starting the login so the OAuth callback can reach your app.</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="default" onClick={() => window.open('/api/auth/login', '_blank')}>Open Schwab Login</Button>
-            <Button variant="outline" onClick={loadOauthStatus}>Check Status</Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {oauthStatus ? (
-            <div className="text-sm">
-              <div><span className="font-medium">Configured Client:</span> {oauthStatus.client_id}</div>
-              <div className={oauthStatus.authenticated ? 'text-green-700' : 'text-red-700'}>
-                {oauthStatus.authenticated ? 'Refresh token detected in backend environment.' : 'No refresh token configured in backend.'}
-              </div>
-              <div className="mt-2 text-gray-600">
-                After completing login, the callback page will display a new refresh token. Copy it into your .env as SCHWAB_REFRESH_TOKEN and restart the backend.
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-gray-500">Loading authentication status…</div>
-          )}
-        </CardContent>
-      </Card>
-      <Card>
         <CardHeader>
           <CardTitle>Background Job Settings</CardTitle>
           <p className="text-sm text-gray-600">
@@ -532,18 +426,6 @@ export const JobSettings: React.FC = () => {
                     <Button variant="outline" size="sm" onClick={() => toggleJobHistory(job.job_name)}>
                       {historyOpen[job.job_name] ? 'Hide History' : 'Show History'}
                     </Button>
-                    {job.job_name === 'nasdaq_universe_refresh' && (
-                      <>
-                        <Button size="sm" onClick={runUniverseRefreshNow} disabled={loading}>Run Now</Button>
-                        <Button size="sm" variant="destructive" onClick={truncateSymbolsTable} disabled={loading}>Truncate Symbols</Button>
-                      </>
-                    )}
-                    {job.job_name === 'technical_compute' && (
-                      <Button size="sm" onClick={runTechNow} disabled={loading}>Run Now</Button>
-                    )}
-                    {job.job_name === 'market_data_refresh' && (
-                      <Button size="sm" onClick={runMarketDataNow} disabled={loading}>Run Now</Button>
-                    )}
                   </div>
                 </div>
               </CardHeader>

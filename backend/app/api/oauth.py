@@ -185,23 +185,27 @@ async def refresh_token(request: RefreshTokenRequest):
 async def oauth_status():
     """
     Check OAuth configuration and authentication status.
+    Uses external APIs service ONLY - no fallback.
     """
-    service = get_oauth_service()
-    
-    if not service:
-        return OAuthStatus(
-            authenticated=False,
-            client_id="Not configured"
+    try:
+        from ..services.external_apis_client import external_apis_client
+        result = await external_apis_client.get_schwab_auth_status()
+        if result:
+            return OAuthStatus(
+                authenticated=result.get("authenticated", False),
+                client_id=result.get("client_id", "Not configured"),
+                scope=result.get("scope", "readonly")
+            )
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail="External APIs service unavailable - no fallback available"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"External APIs service required but unavailable: {str(e)}"
         )
-    
-    # Check if we have a refresh token configured
-    refresh_token = os.getenv("SCHWAB_REFRESH_TOKEN", "")
-    
-    return OAuthStatus(
-        authenticated=bool(refresh_token),
-        client_id=service.client_id[:8] + "..." if service.client_id else "Not configured",
-        scope="readonly"
-    )
 
 @router.post("/auth/revoke")
 async def revoke_token(token: str, token_type: str = "refresh_token"):

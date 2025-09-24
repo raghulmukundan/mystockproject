@@ -1,24 +1,6 @@
 {
-  "name": "mystockproject",
-  "version": "1.0.0",
-  "description": "Stock market analysis monorepo",
-  "private": true,
-  "workspaces": [
-    "backend",
-    "frontend"
-  ],
-  "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && make dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build": "npm run build:backend && npm run build:frontend",
-    "build:backend": "cd backend && make build",
-    "build:frontend": "cd frontend && npm run build",
-    "test": "npm run test:backend && npm run test:frontend",
-    "test:backend": "cd backend && make test",
-    "test:frontend": "cd frontend && npm run test"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
+  "dependencies": {
+    "node": "^24.8.0",
+    "nvm": "^0.0.4"
   }
 }

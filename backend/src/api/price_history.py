@@ -66,7 +66,7 @@ async def fetch_schwab_price_history(request: FetchRequest):
     For each symbol:
     - Map via to_schwab_symbol
     - Call get_daily_history(symbol, start, end)
-    - Upsert into prices_daily with source='schwab'
+    - Upsert into prices_daily_ohlc with source='schwab'
     - If replace_source=true, keep same upsert but always set source='schwab'
     """
     start_time = time.time()

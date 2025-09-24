@@ -26,6 +26,7 @@ import {
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice } from '../services/stockApi'
+import { jobsApiService } from '../services/jobsApi'
 import { Watchlist, WatchlistItem } from '../types'
 import EditWatchlistModal from '../components/EditWatchlistModal'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
@@ -104,9 +105,7 @@ const computeLocalNext = (): Date => {
 
 const getServerNextRefresh = async (): Promise<Date | null> => {
   try {
-    const res = await fetch('/api/jobs/next-market-refresh')
-    if (!res.ok) return null
-    const data = await res.json()
+    const data = await jobsApiService.getNextMarketRefresh()
     return data.next_run_at ? new Date(data.next_run_at) : computeLocalNext()
   } catch {
     return computeLocalNext()

@@ -13,9 +13,14 @@ const api: AxiosInstance = axios.create({
   responseType: 'json', // Ensure JSON parsing
 })
 
-// Clear any potential global defaults that might interfere
-delete (api.defaults as any).transformRequest
-delete (api.defaults as any).transformResponse
+// Ensure proper JSON serialization
+api.defaults.transformRequest = [(data, headers) => {
+  if (headers && data && typeof data === 'object') {
+    headers['Content-Type'] = 'application/json'
+    return JSON.stringify(data)
+  }
+  return data
+}]
 
 console.log('🔍 API instance created with baseURL:', api.defaults.baseURL);
 
@@ -24,7 +29,9 @@ api.interceptors.request.use(config => {
   console.log('🚀 Request config:', {
     url: config.url,
     baseURL: config.baseURL,
-    method: config.method
+    method: config.method,
+    data: config.data,
+    headers: config.headers
   });
   return config;
 });
@@ -39,7 +46,8 @@ api.interceptors.response.use(
       message: error.message,
       url: error.config?.url,
       baseURL: error.config?.baseURL,
-      status: error.response?.status
+      status: error.response?.status,
+      responseData: error.response?.data
     });
     return Promise.reject(error);
   }
@@ -55,7 +63,11 @@ export const watchlistsApi = {
 
   async getById(id: number): Promise<Watchlist> {
     const response = await api.get(`/watchlists/${id}`)
-    return response.data
+    console.log('🔍 Raw API response for getById:', response.data)
+    // Ensure JSON parsing if response is a string
+    const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+    console.log('📋 Parsed watchlist data:', data)
+    return data
   },
 
   async create(data: { name: string; description?: string }): Promise<Watchlist> {
@@ -94,6 +106,7 @@ export const watchlistsApi = {
   },
 
   async addItem(watchlistId: number, item: Omit<WatchlistItem, 'id' | 'created_at'>): Promise<WatchlistItem> {
+    console.log('🚀 Adding item to watchlist:', watchlistId, 'Data:', item)
     const response = await api.post(`/watchlists/${watchlistId}/items`, item)
     return response.data
   },
