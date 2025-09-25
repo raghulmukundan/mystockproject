@@ -1,16 +1,22 @@
 import { Link, useLocation } from 'react-router-dom'
-import { 
-  ChartBarIcon, 
-  DocumentArrowUpIcon, 
+import { useState, useEffect } from 'react'
+import {
+  ChartBarIcon,
+  DocumentArrowUpIcon,
   ViewColumnsIcon,
   HomeIcon,
   BellIcon,
   CloudArrowDownIcon,
   MagnifyingGlassIcon,
-  CogIcon
+  CogIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  ArrowPathIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import AlertBadge from './AlertBadge'
+import { isMarketOpen, getNextRefreshFromServer, getNextRefreshSlot, formatTimeUntil } from '../utils/marketTiming'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -26,6 +32,63 @@ const navigation = [
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
+  const [nextRefresh, setNextRefresh] = useState<Date | null>(null)
+  const [timeUntilRefresh, setTimeUntilRefresh] = useState('—')
+  const [marketOpenStatus, setMarketOpenStatus] = useState(isMarketOpen())
+
+
+  useEffect(() => {
+    let cancelled = false
+
+    const bootstrap = async () => {
+      const next = await getNextRefreshFromServer()
+      if (!cancelled) {
+        setNextRefresh(next)
+        setTimeUntilRefresh(formatTimeUntil(next))
+      }
+    }
+
+    bootstrap()
+    setMarketOpenStatus(isMarketOpen())
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const tick = async () => {
+      if (cancelled) return
+
+      setMarketOpenStatus(isMarketOpen())
+
+      if (!nextRefresh) return
+
+      const now = new Date()
+      if (nextRefresh.getTime() <= now.getTime()) {
+        const next = await getNextRefreshFromServer()
+        if (!cancelled) {
+          setNextRefresh(next)
+          setTimeUntilRefresh(formatTimeUntil(next))
+        }
+      } else {
+        setTimeUntilRefresh(formatTimeUntil(nextRefresh, now))
+      }
+    }
+
+    const interval = setInterval(() => {
+      tick()
+    }, 1000)
+
+    tick()
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [nextRefresh])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -60,7 +123,20 @@ export default function Layout({ children }: LayoutProps) {
                 })}
               </div>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center gap-4">
+              {/* Market Status */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2" title={`Market ${marketOpenStatus ? 'Open' : 'Closed'}`}>
+                  <div className={`w-3 h-3 rounded-full ${marketOpenStatus ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  <span className={`font-medium ${marketOpenStatus ? 'text-green-600' : 'text-red-600'}`}>
+                    Market {marketOpenStatus ? 'Open' : 'Closed'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-700" title={`Next refresh in ${timeUntilRefresh}`}>
+                  <ClockIcon className="h-4 w-4 text-gray-500" />
+                  <span className="font-medium">{timeUntilRefresh}</span>
+                </div>
+              </div>
               {/* Temporarily disabled AlertBadge due to fresh database */}
               {/* <AlertBadge /> */}
             </div>

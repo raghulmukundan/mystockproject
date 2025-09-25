@@ -8,9 +8,6 @@ import {
   ArrowTrendingDownIcon,
   ClockIcon,
   ArrowTopRightOnSquareIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ArrowPathIcon,
   ChevronDownIcon,
   ChevronUpIcon
 } from '@heroicons/react/24/outline'
@@ -21,7 +18,6 @@ import StockDetailView from '../components/StockDetailView'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice } from '../services/stockApi'
 import { universeApi } from '../lib/universeApi'
-import { isMarketOpen, getNextRefreshSlot, getNextRefreshFromServer, formatTimeUntil } from '../utils/marketTiming'
 
 // Major market indexes to track
 const MAJOR_INDEXES = ['SPY', 'QQQ', 'DIA']
@@ -83,57 +79,10 @@ export default function Dashboard() {
   
   // Index prices removed - now shown in TradingView widgets
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
-  const [nextRefresh, setNextRefresh] = useState<Date | null>(null)
-  const [timeUntilRefresh, setTimeUntilRefresh] = useState<string>('')
 
   useEffect(() => {
     loadWatchlists()
-    // Fetch initial next refresh from backend
-    ;(async () => {
-      const next = await getNextRefreshFromServer()
-      setNextRefresh(next)
-      setTimeUntilRefresh(formatTimeUntil(next))
-    })()
-    // Removed auto-refresh timer - let backend handle caching
   }, [])
-
-  // Keep countdown aligned with current nextRefresh (avoid stale closure)
-  useEffect(() => {
-    const timer = setInterval(() => { updateCountdown() }, 1000)
-    return () => clearInterval(timer)
-  }, [nextRefresh])
-
-  const updateCountdown = async () => {
-    if (!nextRefresh) return
-
-    const now = new Date()
-    const diff = nextRefresh.getTime() - now.getTime()
-
-    if (diff <= 0) {
-      const next = await getNextRefreshFromServer()
-      setNextRefresh(next)
-      setTimeUntilRefresh(formatTimeUntil(next))
-      setLastRefresh(new Date())
-      return
-    }
-
-    setTimeUntilRefresh(formatTimeUntil(nextRefresh, now))
-  }
-
-  const refreshAllData = async () => {
-    console.log('Manual refresh triggered...')
-    setLastRefresh(new Date())
-    const nextSlot = getNextRefreshSlot()
-    setNextRefresh(nextSlot)
-    setTimeUntilRefresh(formatTimeUntil(nextSlot))
-    
-    // Manually reload watchlist prices (bypasses cache)
-    if (watchlists.length > 0) {
-      loadPricesInBackground(watchlists)
-    }
-    
-    // Index prices now handled by TradingView widgets
-  }
 
   const loadWatchlists = async () => {
     try {
@@ -368,40 +317,6 @@ export default function Dashboard() {
       </div>
 
       {/* Market Status Bar with Refresh Controls */}
-      <div className="flex flex-wrap gap-3 mb-6">
-        <div className="bg-white shadow-sm rounded-md px-3 py-2 border border-gray-200 flex-grow sm:flex-grow-0">
-          <div className="flex items-center space-x-3 text-sm">
-            {/* Market Status */}
-            <div className="flex items-center space-x-1">
-              {isMarketOpen() ? (
-                <CheckCircleIcon className="h-4 w-4 text-green-600" />
-              ) : (
-                <XCircleIcon className="h-4 w-4 text-red-600" />
-              )}
-              <span className={isMarketOpen() ? 'text-green-600' : 'text-red-600'}>
-                Market {isMarketOpen() ? 'Open' : 'Closed'}
-              </span>
-            </div>
-            
-            <div className="h-4 w-px bg-gray-200"></div>
-            
-            {/* Next Refresh */}
-            <div className="flex items-center space-x-1 text-gray-500">
-              <ArrowPathIcon className="h-4 w-4" />
-              <span>Next: {timeUntilRefresh || '...'}</span>
-            </div>
-          </div>
-        </div>
-        
-        <button
-          onClick={refreshAllData}
-          disabled={pricesLoading}
-          className="flex items-center justify-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:bg-blue-400"
-        >
-          <ArrowPathIcon className={`h-4 w-4 ${pricesLoading ? 'animate-spin' : ''}`} />
-          <span>{pricesLoading ? 'Refreshing...' : 'Refresh Now'}</span>
-        </button>
-      </div>
 
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -528,7 +443,7 @@ export default function Dashboard() {
           {/* Activity item examples */}
           <div className="flex items-start">
             <div className="flex-shrink-0 bg-blue-100 rounded-full p-2">
-              <ArrowPathIcon className="h-5 w-5 text-blue-600" />
+              <ClockIcon className="h-5 w-5 text-blue-600" />
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-900">Data refreshed</p>

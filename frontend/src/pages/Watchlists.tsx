@@ -19,15 +19,11 @@ import {
   XMarkIcon,
   CalendarDaysIcon,
   ArrowTopRightOnSquareIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchlistsApi'
 import { WatchlistItem } from '../types'
 import AddItemModal from '../components/AddItemModal'
 import CreateWatchlistModal from '../components/CreateWatchlistModal'
-import { isMarketOpen, getNextRefreshFromServer, getNextRefreshSlot, formatTimeUntil } from '../utils/marketTiming'
 
 interface WatchlistWithPrices extends Watchlist {
   prices: StockPrice[]
@@ -50,9 +46,6 @@ const Watchlists: React.FC = () => {
   const [showAddItemModal, setShowAddItemModal] = useState(false)
   const [addItemLoading, setAddItemLoading] = useState(false)
   const [addItemTargetId, setAddItemTargetId] = useState<number | null>(null)
-  const [nextRefresh, setNextRefresh] = useState<Date | null>(null)
-  const [timeUntilRefresh, setTimeUntilRefresh] = useState('—')
-  const [marketOpenStatus, setMarketOpenStatus] = useState(isMarketOpen())
   const navigate = useNavigate()
   const detailContainerRef = useRef<HTMLDivElement | null>(null)
 
@@ -220,58 +213,6 @@ const Watchlists: React.FC = () => {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false
-
-    const bootstrap = async () => {
-      const next = await getNextRefreshFromServer()
-      if (!cancelled) {
-        setNextRefresh(next)
-        setTimeUntilRefresh(formatTimeUntil(next))
-      }
-    }
-
-    bootstrap()
-    setMarketOpenStatus(isMarketOpen())
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-
-    const tick = async () => {
-      if (cancelled) return
-
-      setMarketOpenStatus(isMarketOpen())
-
-      if (!nextRefresh) return
-
-      const now = new Date()
-      if (nextRefresh.getTime() <= now.getTime()) {
-        const next = await getNextRefreshFromServer()
-        if (!cancelled) {
-          setNextRefresh(next)
-          setTimeUntilRefresh(formatTimeUntil(next))
-        }
-      } else {
-        setTimeUntilRefresh(formatTimeUntil(nextRefresh, now))
-      }
-    }
-
-    const interval = setInterval(() => {
-      tick()
-    }, 1000)
-
-    tick()
-
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [nextRefresh])
 
   useEffect(() => {
     loadWatchlists()
@@ -311,17 +252,6 @@ const Watchlists: React.FC = () => {
     setDetailCollapsed(false)
     setAddItemTargetId(watchlistId)
     setShowAddItemModal(true)
-  }
-  const handleManualRefreshMeta = () => {
-
-    const next = getNextRefreshSlot()
-
-    setNextRefresh(next)
-
-    setTimeUntilRefresh(formatTimeUntil(next))
-
-    setMarketOpenStatus(isMarketOpen())
-
   }
 
 
@@ -532,55 +462,37 @@ const Watchlists: React.FC = () => {
 
     <main className="flex-1">
       <div className="flex-1 space-y-6 overflow-y-auto p-6 lg:p-8">
-        <section className="rounded-3xl border border-blue-100 bg-white/80 p-6 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <h1 className="text-3xl font-semibold text-gray-900">Watchlists</h1>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative w-full sm:w-64">
-                <MagnifyingGlassIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
+        <section className="rounded-2xl border border-gray-200/60 bg-white/90 backdrop-blur-sm shadow-sm">
+          <div className="flex items-center justify-between px-6 py-4">
+            {/* Left section - Title only */}
+            <div className="flex items-center">
+              <h1 className="text-2xl font-semibold text-gray-900">Watchlists</h1>
+            </div>
+
+            {/* Right section - Search and create */}
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   type="search"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Search lists or symbols..."
-                  className="w-full rounded-full border border-blue-100 bg-white py-2 pl-11 pr-4 text-sm text-gray-700 shadow-inner focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-700 transition-colors focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
                 />
               </div>
-              <Button
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
                 onClick={() => setShowCreateModal(true)}
-                className="gap-2 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+                title="Create watchlist"
               >
                 <PlusIcon className="h-4 w-4" />
-                Create watchlist
-              </Button>
+                New
+              </button>
             </div>
           </div>
         </section>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-          <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 shadow-sm">
-            {marketOpenStatus ? (
-              <CheckCircleIcon className="h-4 w-4 text-emerald-500" />
-            ) : (
-              <XCircleIcon className="h-4 w-4 text-red-500" />
-            )}
-            <span className={`font-medium ${marketOpenStatus ? 'text-emerald-600' : 'text-red-600'}`}>
-              Market {marketOpenStatus ? 'Open' : 'Closed'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 shadow-sm">
-            <ArrowPathIcon className="h-4 w-4 text-blue-500" />
-            <span>Next refresh in {timeUntilRefresh}</span>
-          </div>
-          <button
-            type="button"
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-blue-200 bg-white px-2.5 text-[11px] font-semibold text-blue-600 shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            onClick={handleManualRefreshMeta}
-          >
-            <ArrowPathIcon className="h-3.5 w-3.5" />
-            Sync
-          </button>
-        </div>
 
         {activeWatchlist && (
           <section
@@ -795,15 +707,21 @@ const Watchlists: React.FC = () => {
                           {watchlist.description && (
                             <p className="mt-1 text-sm text-gray-600 line-clamp-1">{watchlist.description}</p>
                           )}
-                          <div className="flex items-center gap-3 mt-2">
-                            <span className="text-xs font-medium text-gray-600">
-                              {watchlist.items.length} stocks
-                            </span>
-                            <span className={`text-xs font-semibold ${
-                              safePercent(watchlist.totalChangePercent) >= 0 ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {formatPercent(watchlist.totalChangePercent)}
-                            </span>
+                          <div className="flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-medium text-gray-600">
+                                {watchlist.items.length} stocks
+                              </span>
+                              <span className={`text-xs font-semibold ${
+                                safePercent(watchlist.totalChangePercent) >= 0 ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {formatPercent(watchlist.totalChangePercent)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-gray-400">
+                              <CalendarDaysIcon className="h-3 w-3" />
+                              <span>{formatDate(watchlist.created_at)}</span>
+                            </div>
                           </div>
                         </div>
                         <button
