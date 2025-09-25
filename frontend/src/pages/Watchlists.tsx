@@ -19,6 +19,7 @@ import {
   XMarkIcon,
   CalendarDaysIcon,
   ArrowTopRightOnSquareIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline'
 import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchlistsApi'
 import { WatchlistItem } from '../types'
@@ -46,6 +47,11 @@ const Watchlists: React.FC = () => {
   const [showAddItemModal, setShowAddItemModal] = useState(false)
   const [addItemLoading, setAddItemLoading] = useState(false)
   const [addItemTargetId, setAddItemTargetId] = useState<number | null>(null)
+  const [showInlineAdd, setShowInlineAdd] = useState(false)
+  const [inlineSearchQuery, setInlineSearchQuery] = useState('')
+  const [inlineSearchResults, setInlineSearchResults] = useState<any[]>([])
+  const [inlineSearchLoading, setInlineSearchLoading] = useState(false)
+  const [inlineError, setInlineError] = useState('')
   const navigate = useNavigate()
   const detailContainerRef = useRef<HTMLDivElement | null>(null)
 
@@ -250,8 +256,72 @@ const Watchlists: React.FC = () => {
   const handleOpenAddItemModal = (watchlistId: number) => {
     setActiveWatchlistId(watchlistId)
     setDetailCollapsed(false)
-    setAddItemTargetId(watchlistId)
-    setShowAddItemModal(true)
+    setShowInlineAdd(true)
+  }
+
+  const handleInlineSearch = async (query: string) => {
+    setInlineSearchQuery(query)
+    setInlineError('')
+    if (!query.trim() || query.length < 2) {
+      setInlineSearchResults([])
+      return
+    }
+
+    try {
+      setInlineSearchLoading(true)
+      const results = await watchlistsApiService.searchSymbols(query)
+      setInlineSearchResults(results.slice(0, 5)) // Limit to 5 suggestions
+    } catch (error) {
+      console.error('Error searching symbols:', error)
+      setInlineSearchResults([])
+    } finally {
+      setInlineSearchLoading(false)
+    }
+  }
+
+  const handleInlineAddStock = async (symbol?: string) => {
+    const stockSymbol = symbol || inlineSearchQuery.trim().toUpperCase()
+    if (!stockSymbol) {
+      setInlineError('Please enter a stock symbol')
+      return
+    }
+    if (!activeWatchlistId) return
+
+    try {
+      setAddItemLoading(true)
+      setInlineError('')
+      await watchlistsApiService.addItemToWatchlist(activeWatchlistId, {
+        symbol: stockSymbol
+      })
+
+      // Reset inline add state
+      setShowInlineAdd(false)
+      setInlineSearchQuery('')
+      setInlineSearchResults([])
+
+      // Refresh watchlists
+      await loadWatchlists()
+    } catch (error: any) {
+      console.error('Failed to add stock:', error)
+
+      // Extract error message from API response
+      if (error.response?.data?.detail) {
+        setInlineError(error.response.data.detail)
+      } else if (error.message) {
+        setInlineError(error.message)
+      } else {
+        setInlineError('Failed to add stock to watchlist')
+      }
+    } finally {
+      setAddItemLoading(false)
+    }
+  }
+
+  const handleCancelInlineAdd = () => {
+    setShowInlineAdd(false)
+    setInlineSearchQuery('')
+    setInlineSearchResults([])
+    setInlineError('')
   }
 
 
@@ -533,7 +603,7 @@ const Watchlists: React.FC = () => {
                   <button
                     type="button"
                     className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
-                    onClick={() => handleOpenAddItemModal(activeWatchlist.id)}
+                    onClick={() => setShowInlineAdd(true)}
                   >
                     Add stock
                   </button>
@@ -574,6 +644,79 @@ const Watchlists: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
+                          {showInlineAdd && (
+                            <tr className="bg-blue-50/30 border-2 border-blue-200 border-dashed">
+                              <td className="px-5 py-3" colSpan={8}>
+                                <div className="flex items-center gap-3">
+                                  <div className="relative flex-1 max-w-xs">
+                                    <input
+                                      type="text"
+                                      value={inlineSearchQuery}
+                                      onChange={(e) => handleInlineSearch(e.target.value)}
+                                      placeholder="Search stocks (e.g., AAPL, MSFT)"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                          setInlineSearchResults([])
+                                          handleInlineAddStock()
+                                        }
+                                      }}
+                                      autoFocus
+                                    />
+                                    {/* Search suggestions dropdown */}
+                                    {inlineSearchResults.length > 0 && (
+                                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
+                                        {inlineSearchResults.map((result) => (
+                                          <button
+                                            key={result.symbol}
+                                            onClick={() => {
+                                              setInlineSearchResults([])
+                                              handleInlineAddStock(result.symbol)
+                                            }}
+                                            className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 flex flex-col"
+                                          >
+                                            <span className="font-semibold text-gray-900">{result.symbol}</span>
+                                            <span className="text-xs text-gray-600 truncate">{result.security_name}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      setInlineSearchResults([])
+                                      handleInlineAddStock()
+                                    }}
+                                    disabled={addItemLoading || !inlineSearchQuery.trim()}
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                  >
+                                    {addItemLoading ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        Adding...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckIcon className="h-4 w-4" />
+                                        Save
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={handleCancelInlineAdd}
+                                    className="px-3 py-2 text-gray-600 hover:text-gray-800 rounded-lg text-sm"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                                {inlineError && (
+                                  <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                                    <p className="text-sm text-red-600">{inlineError}</p>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
                           {activeWatchlist.items.map(item => {
                             const stockPrice = activeWatchlist.prices.find(price => price.symbol === item.symbol)
                             const changeClass = stockPrice && stockPrice.change >= 0 ? 'text-green-600' : 'text-red-600'

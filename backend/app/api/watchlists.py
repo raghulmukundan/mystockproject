@@ -61,7 +61,7 @@ async def fetch_and_store_prices_for_symbols(symbols: List[str]):
         async with httpx.AsyncClient() as client:
             payload = {"symbols": symbols}
             response = await client.post(
-                "http://backend:8002/api/prices/fetch-and-store",
+                "http://localhost:8000/api/prices/fetch-and-store",
                 json=payload,
                 timeout=60.0
             )
@@ -460,12 +460,46 @@ async def add_item_to_watchlist(watchlist_id: int, item: WatchlistItemRequest, d
         logger.error(f"Error validating symbol {item.symbol.upper()}: {str(e)}")
         # Continue without validation on unexpected errors
 
+    # Basic sector mapping for common stocks
+    SECTOR_MAPPING = {
+        'AAPL': 'Information Technology', 'MSFT': 'Information Technology', 'GOOGL': 'Information Technology',
+        'GOOG': 'Information Technology', 'AMZN': 'Consumer Discretionary', 'NVDA': 'Information Technology',
+        'TSLA': 'Consumer Discretionary', 'META': 'Information Technology', 'TWLO': 'Information Technology',
+        'AMD': 'Information Technology', 'INTC': 'Information Technology', 'CRM': 'Information Technology',
+        'NFLX': 'Communication Services', 'JPM': 'Financials', 'BAC': 'Financials', 'V': 'Financials',
+        'MA': 'Financials', 'GS': 'Financials', 'WFC': 'Financials', 'MS': 'Financials',
+        'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'UNH': 'Healthcare', 'LLY': 'Healthcare', 'ABBV': 'Healthcare',
+        'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'SLB': 'Energy', 'OXY': 'Energy',
+        'CAT': 'Industrials', 'GE': 'Industrials', 'DE': 'Industrials', 'HWM': 'Industrials', 'EXP': 'Industrials',
+        'HD': 'Consumer Discretionary', 'COST': 'Consumer Discretionary', 'TPR': 'Consumer Discretionary'
+    }
+
+    # Enrich missing data from universe and basic mappings
+    company_name = item.company_name
+    sector = item.sector
+    symbol_upper = item.symbol.upper()
+
+    if not company_name:
+        try:
+            from app.models.symbol import Symbol
+            universe_symbol = db.query(Symbol).filter(
+                Symbol.symbol == symbol_upper
+            ).first()
+            if universe_symbol:
+                company_name = universe_symbol.security_name
+        except Exception as e:
+            logger.warning(f"Could not enrich company name for {symbol_upper}: {str(e)}")
+
+    # Add basic sector mapping if not provided
+    if not sector and symbol_upper in SECTOR_MAPPING:
+        sector = SECTOR_MAPPING[symbol_upper]
+
     # Create new watchlist item
     new_item = WatchlistItem(
         watchlist_id=watchlist_id,
-        symbol=item.symbol.upper(),
-        company_name=item.company_name,
-        sector=item.sector,
+        symbol=symbol_upper,
+        company_name=company_name,
+        sector=sector,
         industry=item.industry,
         market_cap=item.market_cap,
         entry_price=item.entry_price,
@@ -476,6 +510,10 @@ async def add_item_to_watchlist(watchlist_id: int, item: WatchlistItemRequest, d
     db.add(new_item)
     db.commit()
     db.refresh(new_item)
+
+    # Fetch and store price for the newly added symbol
+    logger.info(f"Fetching and storing price for newly added symbol: {symbol_upper}")
+    asyncio.create_task(fetch_and_store_prices_for_symbols([symbol_upper]))
 
     return WatchlistItemResponse(
         id=new_item.id,
