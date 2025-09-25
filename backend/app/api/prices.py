@@ -39,6 +39,9 @@ class PriceFetchAndStoreResponse(BaseModel):
     total_stored: int
     message: str
 
+class PriceDataRequest(BaseModel):
+    prices_data: Dict[str, Dict[str, Any]]
+
 class PriceFromDBResponse(BaseModel):
     symbol: str
     date: str
@@ -154,6 +157,84 @@ async def fetch_and_store_prices(request: PriceFetchRequest, db: Session = Depen
 
     except Exception as e:
         logger.error(f"Error in fetch_and_store_prices: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/store-prices", response_model=PriceFetchAndStoreResponse)
+async def store_prices_directly(request: PriceDataRequest, db: Session = Depends(get_db)):
+    """
+    Store prices directly from provided data without making API calls
+    Used by jobs service to avoid double API calls
+    """
+    try:
+        prices_data = request.prices_data
+        if not prices_data:
+            raise HTTPException(status_code=400, detail="No price data provided")
+
+        logger.info(f"Storing prices for {len(prices_data)} symbols directly from provided data")
+
+        # Store prices in prices_realtime_cache table
+        symbols_processed = []
+        symbols_failed = []
+
+        for symbol, price_info in prices_data.items():
+            try:
+                if not price_info or 'current_price' not in price_info:
+                    symbols_failed.append(symbol)
+                    continue
+
+                # Check if price already exists
+                existing_price = db.query(RealtimePriceCache).filter(
+                    RealtimePriceCache.symbol == symbol
+                ).first()
+
+                if existing_price:
+                    # Update existing record
+                    existing_price.current_price = price_info['current_price']
+                    existing_price.change_amount = price_info.get('change', 0.0)
+                    existing_price.change_percent = price_info.get('change_percent', 0.0)
+                    existing_price.volume = price_info.get('volume', 0)
+                    existing_price.market_cap = None  # Not available from Finnhub quotes
+                    existing_price.last_updated = datetime.now(timezone.utc)
+                    existing_price.source = "finnhub"
+                else:
+                    # Create new record
+                    current_price = RealtimePriceCache(
+                        symbol=symbol,
+                        current_price=price_info['current_price'],
+                        change_amount=price_info.get('change', 0.0),
+                        change_percent=price_info.get('change_percent', 0.0),
+                        volume=price_info.get('volume', 0),
+                        market_cap=None,  # Not available from Finnhub quotes
+                        last_updated=datetime.now(timezone.utc),
+                        source="finnhub"
+                    )
+                    db.add(current_price)
+
+                symbols_processed.append(symbol)
+                logger.debug(f"Stored price for {symbol}: ${price_info['current_price']}")
+
+            except Exception as symbol_error:
+                logger.error(f"Failed to store price for {symbol}: {symbol_error}")
+                symbols_failed.append(symbol)
+
+        # Commit all changes
+        db.commit()
+
+        message = f"Successfully stored prices for {len(symbols_processed)} symbols"
+        if symbols_failed:
+            message += f", {len(symbols_failed)} failed"
+
+        return PriceFetchAndStoreResponse(
+            success=len(symbols_processed) > 0,
+            symbols_processed=symbols_processed,
+            symbols_failed=symbols_failed,
+            total_stored=len(symbols_processed),
+            message=message
+        )
+
+    except Exception as e:
+        logger.error(f"Error in store_prices_directly: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
