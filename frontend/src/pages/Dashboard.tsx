@@ -18,10 +18,10 @@ import { Watchlist } from '../types'
 import TradingViewWidget from '../components/TradingViewWidget'
 import FinancialWidget from '../components/FinancialWidget'
 import StockDetailView from '../components/StockDetailView'
-import { jobsApiService } from '../services/jobsApi'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice } from '../services/stockApi'
 import { universeApi } from '../lib/universeApi'
+import { isMarketOpen, getNextRefreshSlot, getNextRefreshFromServer, formatTimeUntil } from '../utils/marketTiming'
 
 // Major market indexes to track
 const MAJOR_INDEXES = ['SPY', 'QQQ', 'DIA']
@@ -50,55 +50,6 @@ const calculateWatchlistPerformance = (watchlist: Watchlist, priceData: Record<s
     performance: avgPerformance,
     trend: avgPerformance >= 0 ? ('up' as const) : ('down' as const),
     hasData: true
-  }
-}
-
-// Utility functions for market hours (CST)
-const isMarketOpen = (): boolean => {
-  const now = new Date()
-  const cstTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Chicago"}))
-  const day = cstTime.getDay() // 0 = Sunday, 6 = Saturday
-  const hours = cstTime.getHours()
-  const minutes = cstTime.getMinutes()
-  const totalMinutes = hours * 60 + minutes
-  
-  // Market closed on weekends
-  if (day === 0 || day === 6) return false
-  
-  // Market hours: 8:30 AM - 3:00 PM CST
-  const marketOpen = 8 * 60 + 30  // 8:30 AM
-  const marketClose = 15 * 60     // 3:00 PM
-  
-  return totalMinutes >= marketOpen && totalMinutes < marketClose
-}
-
-const computeLocalNext = (): Date => {
-  // Fallback: compute next top-of-30-min slot in local time, or next market open
-  const isOpen = isMarketOpen()
-  const now = new Date()
-  if (isOpen) {
-    const next = new Date(now)
-    next.setMinutes(Math.ceil(now.getMinutes() / 30) * 30, 0, 0)
-    return next
-  }
-  const cstTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-  const nextOpen = new Date(cstTime)
-  nextOpen.setHours(8, 30, 0, 0)
-  if ((cstTime.getHours() > 8) || (cstTime.getHours() === 8 && cstTime.getMinutes() >= 30) || cstTime.getDay() === 0 || cstTime.getDay() === 6) {
-    nextOpen.setDate(nextOpen.getDate() + 1)
-  }
-  while (nextOpen.getDay() === 0 || nextOpen.getDay() === 6) {
-    nextOpen.setDate(nextOpen.getDate() + 1)
-  }
-  return nextOpen
-}
-
-const getServerNextRefresh = async (): Promise<Date | null> => {
-  try {
-    const data = await jobsApiService.getNextMarketRefresh()
-    return data.next_run_at ? new Date(data.next_run_at) : computeLocalNext()
-  } catch {
-    return computeLocalNext()
   }
 }
 
@@ -139,8 +90,9 @@ export default function Dashboard() {
     loadWatchlists()
     // Fetch initial next refresh from backend
     ;(async () => {
-      const next = await getServerNextRefresh()
-      if (next) setNextRefresh(next)
+      const next = await getNextRefreshFromServer()
+      setNextRefresh(next)
+      setTimeUntilRefresh(formatTimeUntil(next))
     })()
     // Removed auto-refresh timer - let backend handle caching
   }, [])
@@ -153,24 +105,27 @@ export default function Dashboard() {
 
   const updateCountdown = async () => {
     if (!nextRefresh) return
+
     const now = new Date()
     const diff = nextRefresh.getTime() - now.getTime()
-    
+
     if (diff <= 0) {
-      const next = await getServerNextRefresh()
-      if (next) setNextRefresh(next)
+      const next = await getNextRefreshFromServer()
+      setNextRefresh(next)
+      setTimeUntilRefresh(formatTimeUntil(next))
+      setLastRefresh(new Date())
       return
     }
-    
-    const minutes = Math.floor(diff / 60000)
-    const seconds = Math.floor((diff % 60000) / 1000)
-    setTimeUntilRefresh(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+
+    setTimeUntilRefresh(formatTimeUntil(nextRefresh, now))
   }
 
   const refreshAllData = async () => {
     console.log('Manual refresh triggered...')
     setLastRefresh(new Date())
-    setNextRefresh(getNextRefreshTime())
+    const nextSlot = getNextRefreshSlot()
+    setNextRefresh(nextSlot)
+    setTimeUntilRefresh(formatTimeUntil(nextSlot))
     
     // Manually reload watchlist prices (bypasses cache)
     if (watchlists.length > 0) {
