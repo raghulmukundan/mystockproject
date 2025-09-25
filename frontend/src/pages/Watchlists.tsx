@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -13,7 +12,10 @@ import {
   ArrowDownIcon,
   ArrowTrendingDownIcon,
   MagnifyingGlassIcon,
-  SparklesIcon
+  SparklesIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline'
 import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchlistsApi'
 import CreateWatchlistModal from '../components/CreateWatchlistModal'
@@ -34,8 +36,8 @@ const Watchlists: React.FC = () => {
   const [topPerformers, setTopPerformers] = useState<StockPrice[]>([])
   const [topDecliners, setTopDecliners] = useState<StockPrice[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const sortOption: 'recent' = 'recent'
-  const navigate = useNavigate()
+  const [activeWatchlistId, setActiveWatchlistId] = useState<number | null>(null)
+  const [detailCollapsed, setDetailCollapsed] = useState(false)
 
   const safePercent = (value: number | undefined | null) => {
     if (value === undefined || value === null) {
@@ -83,28 +85,18 @@ const Watchlists: React.FC = () => {
     }
 
     const sorted = watchlists.filter(matchesSearch)
-
-    sorted.sort((a, b) => {
-      switch (sortOption) {
-        case 'winners':
-          return safePercent(b.totalChangePercent) - safePercent(a.totalChangePercent)
-        case 'laggards':
-          return safePercent(a.totalChangePercent) - safePercent(b.totalChangePercent)
-        case 'size':
-          return b.items.length - a.items.length
-        case 'recent':
-        default:
-          return getChronoValue(b) - getChronoValue(a)
-      }
-    })
-
+    sorted.sort((a, b) => getChronoValue(b) - getChronoValue(a))
     return sorted
-  }, [watchlists, searchTerm, sortOption])
+  }, [watchlists, searchTerm])
 
   const watchlistsToShow = filteredWatchlists
 
   const hasWatchlists = watchlistsToShow.length > 0
   const hasMarketMovers = topPerformers.length > 0 || topDecliners.length > 0
+  const activeWatchlist = useMemo(
+    () => (activeWatchlistId !== null ? watchlists.find(w => w.id === activeWatchlistId) ?? null : null),
+    [watchlists, activeWatchlistId]
+  )
 
   const loadWatchlists = async () => {
     try {
@@ -185,6 +177,10 @@ const Watchlists: React.FC = () => {
       }
 
       setWatchlists(watchlistsWithPrices)
+      setActiveWatchlistId(prev => {
+        if (prev === null) return prev
+        return watchlistsWithPrices.some(w => w.id === prev) ? prev : null
+      })
     } catch (error) {
       console.error('Failed to load watchlists:', error)
     } finally {
@@ -209,12 +205,29 @@ const Watchlists: React.FC = () => {
   const handleDeleteWatchlist = async (id: number, name: string) => {
     if (window.confirm(`Are you sure you want to delete watchlist "${name}"?`)) {
       try {
+        if (activeWatchlistId === id) {
+          setActiveWatchlistId(null)
+        }
         await watchlistsApiService.deleteWatchlist(id)
         await loadWatchlists()
       } catch (error) {
         console.error('Failed to delete watchlist:', error)
       }
     }
+  }
+
+  const handleOpenWatchlist = (id: number) => {
+    setActiveWatchlistId(current => (current === id ? current : id))
+    setDetailCollapsed(false)
+  }
+
+  const handleCloseWatchlist = () => {
+    setActiveWatchlistId(null)
+    setDetailCollapsed(false)
+  }
+
+  const toggleDetailCollapsed = () => {
+    setDetailCollapsed(previous => !previous)
   }
 
   function formatCurrency(value: number | undefined | null) {
@@ -381,6 +394,107 @@ const Watchlists: React.FC = () => {
           </div>
         </section>
 
+        {activeWatchlist && (
+          <section className="rounded-3xl border border-blue-100 bg-white/85 shadow-sm backdrop-blur">
+            <div className="flex flex-col gap-4 p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-2xl font-semibold text-gray-900">{activeWatchlist.name}</h2>
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                      {activeWatchlist.items.length} symbols
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        safePercent(activeWatchlist.totalChangePercent) >= 0
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {formatPercent(activeWatchlist.totalChangePercent)}
+                    </span>
+                  </div>
+                  {activeWatchlist.description && (
+                    <p className="max-w-2xl text-sm text-gray-600">{activeWatchlist.description}</p>
+                  )}
+                  <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                    <span className="rounded-lg border border-blue-100 bg-white px-3 py-1 font-medium text-gray-700">
+                      Total value: {formatCurrency(activeWatchlist.totalValue)}
+                    </span>
+                    {activeWatchlist.topGainer && (
+                      <span className="inline-flex items-center gap-1 rounded-lg border border-green-100 bg-green-50 px-3 py-1 font-medium text-green-700">
+                        <ArrowTrendingUpIcon className="h-4 w-4" />
+                        {activeWatchlist.topGainer.symbol} {formatPercent(activeWatchlist.topGainer.change_percent)}
+                      </span>
+                    )}
+                    {activeWatchlist.topLoser && (
+                      <span className="inline-flex items-center gap-1 rounded-lg border border-red-100 bg-red-50 px-3 py-1 font-medium text-red-700">
+                        <ArrowTrendingDownIcon className="h-4 w-4" />
+                        {activeWatchlist.topLoser.symbol} {formatPercent(activeWatchlist.topLoser.change_percent)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleDetailCollapsed}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 transition hover:bg-blue-100"
+                    aria-label={detailCollapsed ? 'Expand watchlist details' : 'Collapse watchlist details'}
+                  >
+                    {detailCollapsed ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseWatchlist}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+                    aria-label="Close watchlist details"
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {!detailCollapsed && (
+                <div className="rounded-2xl border border-blue-100 bg-white shadow-inner">
+                  <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+                    {activeWatchlist.items.length > 0 ? (
+                      activeWatchlist.items.map(item => {
+                        const stockPrice = activeWatchlist.prices.find(price => price.symbol === item.symbol)
+                        const changeClass = stockPrice && stockPrice.change >= 0 ? 'text-green-600' : 'text-red-600'
+                        const symbolClass = stockPrice
+                          ? stockPrice.change >= 0
+                            ? 'text-green-600'
+                            : 'text-red-600'
+                          : 'text-gray-900'
+
+                        return (
+                          <div key={item.id} className="flex items-center justify-between gap-4 px-5 py-3">
+                            <div>
+                              <div className={`text-sm font-semibold ${symbolClass}`}>{item.symbol}</div>
+                              <div className="text-xs text-gray-500">{item.company_name ?? item.sector ?? '—'}</div>
+                            </div>
+                            {stockPrice ? (
+                              <div className="text-right">
+                                <div className="text-sm font-semibold text-gray-900">{formatCurrency(stockPrice.current_price)}</div>
+                                <div className={`text-xs font-medium ${changeClass}`}>{formatPercent(stockPrice.change_percent)}</div>
+                              </div>
+                            ) : (
+                              <div className="text-xs font-medium text-gray-400">No price</div>
+                            )}
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <div className="px-5 py-10 text-center text-sm text-gray-500">No stocks in this watchlist yet.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {hasMarketMovers && (
           <div className="grid gap-4 lg:hidden md:grid-cols-2">
             <div className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
@@ -429,7 +543,7 @@ const Watchlists: React.FC = () => {
                   <Card
                     key={watchlist.id}
                     className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/80 bg-white/80 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl"
-                    onClick={() => navigate(`/watchlists/${watchlist.id}`)}
+                    onClick={() => handleOpenWatchlist(watchlist.id)}
                   >
                     <span className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                     <CardHeader className="px-5 pb-0 pt-5">
@@ -547,7 +661,7 @@ const Watchlists: React.FC = () => {
                           className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50"
                           onClick={(event) => {
                             event.stopPropagation()
-                            navigate(`/watchlists/${watchlist.id}`)
+                            handleOpenWatchlist(watchlist.id)
                           }}
                         >
                           <EyeIcon className="h-4 w-4" />
