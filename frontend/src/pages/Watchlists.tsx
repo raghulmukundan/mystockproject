@@ -129,11 +129,7 @@ const Watchlists: React.FC = () => {
     [watchlists, activeWatchlistId]
   )
 
-  useEffect(() => {
-    if (activeWatchlistId !== null && detailContainerRef.current) {
-      detailContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [activeWatchlistId])
+  // Removed scrollIntoView to prevent header from disappearing
 
   const loadWatchlists = async () => {
     try {
@@ -484,6 +480,12 @@ const Watchlists: React.FC = () => {
     setDetailCollapsed(previous => !previous)
   }
 
+  const closeDetailView = () => {
+    setActiveWatchlistId(null)
+    setDetailCollapsed(false)
+    setShowInlineAdd(false)
+  }
+
   const handleCloseAddItemModal = () => {
     setShowAddItemModal(false)
     setAddItemTargetId(null)
@@ -539,14 +541,15 @@ const Watchlists: React.FC = () => {
   return (
   <>
   <div className="flex min-h-screen bg-gray-50">
-    <aside className="hidden lg:flex lg:w-60 xl:w-64 flex-col border-r border-gray-200 bg-white/80 backdrop-blur">
-        <div className="relative border-b border-gray-200 px-4 py-3">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-50 via-blue-100/60 to-purple-50 opacity-70" aria-hidden="true" />
-          <div className="relative">
-            <h2 className="text-xl font-semibold text-gray-900">Market Movers</h2>
-          </div>
+    {/* Left Sidebar - Always Market Movers, optionally slim when detail view is open */}
+    <aside className={`hidden lg:flex ${activeWatchlist ? 'lg:w-48 xl:w-52' : 'lg:w-60 xl:w-64'} flex-col border-r border-gray-200 bg-white/80 backdrop-blur transition-all duration-300`}>
+      <div className="relative border-b border-gray-200 px-4 py-3">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-50 via-blue-100/60 to-purple-50 opacity-70" aria-hidden="true" />
+        <div className="relative">
+          <h2 className={`${activeWatchlist ? 'text-lg' : 'text-xl'} font-semibold text-gray-900`}>Market Movers</h2>
         </div>
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      </div>
+      <div className={`flex-1 ${activeWatchlist ? 'space-y-2' : 'space-y-4'} overflow-y-auto ${activeWatchlist ? 'p-2' : 'p-4'}`}>
           <div className="rounded-2xl border border-green-100 bg-white/70 shadow-sm">
             <div className="flex items-center justify-between px-4 py-3 text-green-700">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
@@ -566,7 +569,7 @@ const Watchlists: React.FC = () => {
 
                   return (
                     <div
-                      key={stock.symbol}
+                      key={`top-performer-${stock.symbol}`}
                       className="rounded-xl border border-green-100 bg-green-50/70 px-3 py-2 text-sm transition-colors duration-200 hover:border-green-200 hover:bg-green-100/70"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -613,7 +616,7 @@ const Watchlists: React.FC = () => {
 
                   return (
                     <div
-                      key={stock.symbol}
+                      key={`top-decliner-${stock.symbol}`}
                       className="rounded-xl border border-red-100 bg-red-50/70 px-3 py-2 text-sm transition-colors duration-200 hover:border-red-200 hover:bg-red-100/70"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -639,40 +642,42 @@ const Watchlists: React.FC = () => {
                 No decliners yet
               </div>
             )}
+            </div>
           </div>
-        </div>
       </div>
     </aside>
 
-    <main className="flex-1">
-      <div className="flex-1 space-y-3 overflow-y-auto p-3 lg:p-4">
+    <main className={`flex-1 ${activeWatchlist ? 'flex' : ''}`}>
+      <div className={`${activeWatchlist ? 'flex-1' : ''} space-y-3 overflow-y-auto p-3 lg:p-4`}>
         {/* Watchlists Header */}
         <div className="border-b border-gray-200 pb-3 mb-3">
           <h1 className="text-2xl font-semibold text-gray-900">Watchlists</h1>
         </div>
 
-        {/* Search and Create Controls */}
-        <div className="flex items-center justify-between">
-          <div className="relative">
-            <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search lists or symbols..."
-              className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-700 transition-colors focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            />
+        {/* Search and Create Controls - Only show when not in detail view */}
+        {!activeWatchlist && (
+          <div className="flex items-center justify-between mb-6">
+            <div className="relative">
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search lists or symbols..."
+                className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-700 transition-colors focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+              onClick={() => setShowCreateInline(true)}
+              title="Create new watchlist"
+            >
+              <PlusIcon className="h-4 w-4" />
+              New Watchlist
+            </button>
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-            onClick={() => setShowCreateInline(true)}
-            title="Create watchlist"
-          >
-            <PlusIcon className="h-4 w-4" />
-            New
-          </button>
-        </div>
+        )}
 
         {activeWatchlist && (
           <section
@@ -719,17 +724,9 @@ const Watchlists: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={toggleDetailCollapsed}
+                    onClick={closeDetailView}
                     className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-                    title={detailCollapsed ? 'Expand details' : 'Collapse details'}
-                  >
-                    {detailCollapsed ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCloseWatchlist}
-                    className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                    title="Close"
+                    title="Close detail view"
                   >
                     <XMarkIcon className="h-4 w-4" />
                   </button>
@@ -1024,7 +1021,10 @@ const Watchlists: React.FC = () => {
         )}
 
           {/* Inline Create Watchlist Form */}
-          {showCreateInline && (
+        {/* Cards View - Only show when not in detail view */}
+        {!activeWatchlist && (
+          <>
+            {showCreateInline && (
             <div className="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-6">
               <div className="flex items-center gap-4">
                 <div className="flex-1 grid gap-4 md:grid-cols-2">
@@ -1097,11 +1097,12 @@ const Watchlists: React.FC = () => {
                 const itemsToShow = 3
 
                 return (
-                  <Card
+                  <div
                     key={watchlist.id}
                     className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/80 bg-white/80 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl"
                     onClick={() => handleOpenWatchlist(watchlist.id)}
                   >
+                    <Card className="h-full border-none bg-transparent shadow-none">
                     <span className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                     <CardHeader className="px-5 pb-3 pt-5">
                       <div className="flex items-start justify-between">
@@ -1134,10 +1135,11 @@ const Watchlists: React.FC = () => {
                           className="text-gray-400 hover:text-blue-600 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation()
-                            navigate(`/watchlists/${watchlist.id}`)
+                            handleOpenWatchlist(watchlist.id)
                           }}
+                          title="View details"
                         >
-                          <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                          <EyeIcon className="h-5 w-5" />
                         </button>
                       </div>
                     </CardHeader>
@@ -1226,6 +1228,7 @@ const Watchlists: React.FC = () => {
                       </div>
                   </CardContent>
                 </Card>
+                  </div>
               )
             })}
           </div>
@@ -1246,7 +1249,64 @@ const Watchlists: React.FC = () => {
             </CardContent>
           </Card>
         )}
+          </>
+        )}
       </div>
+
+      {/* Fixed Slide-out Watchlist Sidebar (only visible in detail view) */}
+      {activeWatchlist && (
+        <div className="fixed top-1/2 right-0 transform -translate-y-1/2 z-20 group">
+          {/* Hover trigger tab */}
+          <div className="bg-blue-600 text-white px-2 py-4 rounded-l-lg shadow-lg cursor-pointer group-hover:bg-blue-700 transition-colors duration-300">
+            <div className="transform -rotate-90 text-xs font-medium whitespace-nowrap">
+              Lists
+            </div>
+          </div>
+
+          {/* Slide-out panel */}
+          <div className="absolute right-full top-0 translate-x-2 opacity-0 invisible group-hover:translate-x-0 group-hover:opacity-100 group-hover:visible transition-all duration-300 ease-out">
+            <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-l-xl shadow-xl p-4 min-w-48 max-w-56">
+              <div className="text-xs font-medium text-gray-600 mb-3">Switch to:</div>
+              <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 pr-1">
+                {watchlists.filter(w => w.id !== activeWatchlistId).map((watchlist, index) => {
+                  const colors = [
+                    { bg: 'bg-blue-50 hover:bg-blue-100', border: 'border-blue-200', text: 'text-blue-700', tip: 'bg-blue-200' },
+                    { bg: 'bg-gray-50 hover:bg-gray-100', border: 'border-gray-200', text: 'text-gray-700', tip: 'bg-gray-200' },
+                    { bg: 'bg-indigo-50 hover:bg-indigo-100', border: 'border-indigo-200', text: 'text-indigo-700', tip: 'bg-indigo-200' },
+                    { bg: 'bg-purple-50 hover:bg-purple-100', border: 'border-purple-200', text: 'text-purple-700', tip: 'bg-purple-200' },
+                    { bg: 'bg-green-50 hover:bg-green-100', border: 'border-green-200', text: 'text-green-700', tip: 'bg-green-200' },
+                    { bg: 'bg-teal-50 hover:bg-teal-100', border: 'border-teal-200', text: 'text-teal-700', tip: 'bg-teal-200' }
+                  ]
+                  const colorScheme = colors[index % colors.length]
+
+                  return (
+                    <button
+                      key={watchlist.id}
+                      onClick={() => setActiveWatchlistId(watchlist.id)}
+                      className={`group/item relative w-full ${colorScheme.bg} ${colorScheme.border} border rounded-lg p-3 text-left transition-all duration-200 hover:shadow-md`}
+                      title={`Switch to ${watchlist.name}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className={`font-medium text-sm ${colorScheme.text} truncate`}>
+                            {watchlist.name}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            {watchlist.items.length} stocks
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Triangle tip (signpost style) */}
+                      <div className={`absolute -right-2 top-1/2 transform -translate-y-1/2 w-0 h-0 border-l-4 border-t-4 border-b-4 ${colorScheme.tip} border-r-0 border-t-transparent border-b-transparent`}></div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
     </div>
 

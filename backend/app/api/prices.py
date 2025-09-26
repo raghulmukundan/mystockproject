@@ -173,6 +173,15 @@ async def store_prices_directly(request: PriceDataRequest, db: Session = Depends
 
         logger.info(f"Storing prices for {len(prices_data)} symbols directly from provided data")
 
+        # Clear cache for symbols not in current watchlists to avoid stale data
+        current_symbols = set(prices_data.keys())
+        deleted_count = db.query(RealtimePriceCache).filter(
+            ~RealtimePriceCache.symbol.in_(current_symbols)
+        ).delete(synchronize_session=False)
+
+        if deleted_count > 0:
+            logger.info(f"Cleared {deleted_count} stale price cache entries")
+
         # Store prices in prices_realtime_cache table
         symbols_processed = []
         symbols_failed = []
