@@ -13,6 +13,11 @@
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",
+    "@syncfusion/ej2-base": "^31.1.20",
+    "@syncfusion/ej2-data": "^31.1.17",
+    "@syncfusion/ej2-react-base": "^31.1.17",
+    "@syncfusion/ej2-react-charts": "^31.1.21",
+    "@syncfusion/ej2-svg-base": "^31.1.17",
     "axios": "^1.6.0",
     "clsx": "^2.0.0",
     "lightweight-charts": "^4.1.3",

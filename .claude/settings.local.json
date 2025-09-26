@@ -55,7 +55,11 @@
       "Bash(git rebase:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(npm ls:*)"
     ],
     "deny": [],
     "ask": []

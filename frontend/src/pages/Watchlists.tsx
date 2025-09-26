@@ -28,6 +28,7 @@ import {
 import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchlistsApi'
 import { WatchlistItem } from '../types'
 import AddItemModal from '../components/AddItemModal'
+import ProfessionalStockChart from '../components/ProfessionalStockChart'
 
 interface WatchlistWithPrices extends Watchlist {
   prices: StockPrice[]
@@ -60,6 +61,8 @@ const Watchlists: React.FC = () => {
   const [inlineSearchQuery, setInlineSearchQuery] = useState('')
   const [inlineSearchResults, setInlineSearchResults] = useState<any[]>([])
   const [inlineSearchLoading, setInlineSearchLoading] = useState(false)
+  const [activeStockSymbol, setActiveStockSymbol] = useState<string | null>(null)
+  const [stockChartFullscreen, setStockChartFullscreen] = useState(false)
   const [inlineError, setInlineError] = useState('')
   const [sortColumn, setSortColumn] = useState<string>('symbol')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -494,6 +497,19 @@ const Watchlists: React.FC = () => {
     } catch (error) {
       console.error('Failed to remove symbol from watchlist:', error)
     }
+  }
+
+  const handleOpenStockChart = (symbol: string) => {
+    setActiveStockSymbol(symbol)
+  }
+
+  const handleCloseStockChart = () => {
+    setActiveStockSymbol(null)
+    setStockChartFullscreen(false)
+  }
+
+  const handleToggleStockChartFullscreen = () => {
+    setStockChartFullscreen(!stockChartFullscreen)
   }
 
   const handleCloseWatchlist = () => {
@@ -977,7 +993,12 @@ const Watchlists: React.FC = () => {
                             return (
                               <tr key={item.id} className="transition hover:bg-blue-50/40">
                                 <td className="px-5 py-3">
-                                  <div className={`font-semibold ${symbolClass}`}>{item.symbol}</div>
+                                  <div
+                                    className={`font-semibold ${symbolClass} cursor-pointer hover:text-blue-600 transition-colors`}
+                                    onClick={() => handleOpenStockChart(item.symbol)}
+                                  >
+                                    {item.symbol}
+                                  </div>
                                   <div className="text-xs text-gray-500">{item.sector ?? '—'}</div>
                                 </td>
                                 <td className="px-5 py-3 text-right text-gray-900">
@@ -1222,8 +1243,11 @@ const Watchlists: React.FC = () => {
                                   key={item.id}
                                   className="flex items-center justify-between rounded-lg border border-gray-100 bg-white/70 px-3 py-1.5 transition-colors duration-200 hover:border-blue-200 hover:bg-blue-50/60"
                                 >
-                                  <div>
-                                    <div className={`text-sm font-semibold ${symbolClass}`}>{item.symbol}</div>
+                                  <div
+                                    className="cursor-pointer"
+                                    onClick={() => handleOpenStockChart(item.symbol)}
+                                  >
+                                    <div className={`text-sm font-semibold ${symbolClass} hover:text-blue-600 transition-colors`}>{item.symbol}</div>
                                     <div className="text-xs text-gray-500">{item.sector ?? '—'}</div>
                                   </div>
                                   {stockPrice ? (
@@ -1377,6 +1401,18 @@ const Watchlists: React.FC = () => {
       onSave={handleAddItem}
       isLoading={addItemLoading}
     />
+
+    {/* Professional Stock Chart */}
+    {activeStockSymbol && (
+      <div className={`${stockChartFullscreen ? 'fixed inset-0 z-50 bg-white' : 'fixed inset-6 z-40 rounded-xl shadow-2xl overflow-hidden'}`}>
+        <ProfessionalStockChart
+          symbol={activeStockSymbol}
+          onClose={handleCloseStockChart}
+          isFullscreen={stockChartFullscreen}
+          onToggleFullscreen={handleToggleStockChartFullscreen}
+        />
+      </div>
+    )}
   </>
 )
 

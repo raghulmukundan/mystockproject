@@ -68,6 +68,31 @@ const API_ENDPOINTS: APIEndpoint[] = [
     category: 'Backend'
   },
   {
+    id: 'technical-data-batch',
+    name: 'Get Technical Data (Batch)',
+    method: 'POST',
+    url: 'http://localhost:8000/api/technical/latest',
+    description: 'Get latest technical indicators for multiple symbols',
+    defaultBody: JSON.stringify({ "symbols": ["AAPL", "MSFT", "GOOGL", "TSLA"] }, null, 2),
+    category: 'Backend'
+  },
+  {
+    id: 'technical-data-single',
+    name: 'Get Technical Data (Single)',
+    method: 'GET',
+    url: 'http://localhost:8000/api/technical/latest/AAPL',
+    description: 'Get latest technical indicators for a single symbol',
+    category: 'Backend'
+  },
+  {
+    id: 'technical-health',
+    name: 'Technical Data Health Check',
+    method: 'GET',
+    url: 'http://localhost:8000/api/technical/health',
+    description: 'Check technical data availability and statistics',
+    category: 'Backend'
+  },
+  {
     id: 'universe-refresh',
     name: 'Refresh Universe',
     method: 'POST',
