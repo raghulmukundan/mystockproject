@@ -78,6 +78,7 @@ services:
     environment:
       - TZ=America/Chicago
       - VITE_API_URL=http://backend:8000
+      - VITE_SYNCFUSION_LICENSE_KEY=${SYNCFUSION_LICENSE_KEY:-}
     volumes:
       - ./frontend:/app
       - /app/node_modules

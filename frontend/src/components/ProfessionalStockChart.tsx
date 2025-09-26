@@ -16,21 +16,20 @@ import {
   DataLabel,
   Zoom,
   Crosshair,
-  Selection
+  Selection,
+  ChartAnnotation
 } from '@syncfusion/ej2-react-charts'
+import type { IAxisLabelRenderEventArgs } from '@syncfusion/ej2-charts'
 import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Badge } from './ui/badge'
 import {
   XMarkIcon,
-  ArrowsPointingOutIcon,
-  ArrowsPointingInIcon,
   ChartBarIcon,
   CogIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon
 } from '@heroicons/react/24/outline'
-
 
 interface TechnicalData {
   symbol: string
@@ -70,8 +69,6 @@ interface ChartDataPoint {
 interface ProfessionalStockChartProps {
   symbol: string
   onClose: () => void
-  isFullscreen?: boolean
-  onToggleFullscreen?: () => void
 }
 
 type TimeframePeriod = '1D' | '7D' | '1M' | '3M' | '6M' | '1Y' | '2Y' | '5Y'
@@ -93,11 +90,72 @@ const TIMEFRAMES: Record<TimeframePeriod, TimeframeConfig> = {
   '5Y': { label: '5Y', days: 1825, interval: 'weekly' }
 }
 
+const palette = {
+  cardBgFrom: '#0f172a',
+  cardBgVia: '#111a2a',
+  cardBgTo: '#020617',
+  cardBorder: '#1e293b',
+  accent: '#3b82f6',
+  accentSoft: 'rgba(59,130,246,0.22)',
+  accentMuted: 'rgba(29,78,216,0.14)',
+  textPrimary: '#e2e8f0',
+  textSecondary: '#94a3b8',
+  textMuted: '#64748b',
+  bull: '#4ade80',
+  bear: '#f87171',
+  line: '#60a5fa',
+  areaFill: 'rgba(59,130,246,0.30)',
+  gridMajor: 'rgba(148, 163, 184, 0.18)',
+  gridMinor: 'rgba(148, 163, 184, 0.05)',
+  tooltipBg: '#1f2937',
+  tooltipText: '#e2e8f0',
+  volumeBull: 'rgba(74, 222, 128, 0.45)',
+  volumeBear: 'rgba(248, 113, 113, 0.45)'
+}
+
+const formatCurrency = (value?: number | null) => {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return '—'
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2
+  }).format(value)
+}
+
+const formatNumberShort = (value?: number | null) => {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return '—'
+  }
+
+  if (value >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(0)}B`
+  }
+
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(0)}M`
+  }
+
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(0)}K`
+  }
+
+  return value.toString()
+}
+
+const formatPercent = (value?: number | null) => {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return '—'
+  }
+
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+}
+
 const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
   symbol,
-  onClose,
-  isFullscreen = false,
-  onToggleFullscreen
+  onClose
 }) => {
   const [priceData, setPriceData] = useState<ChartDataPoint[]>([])
   const [technicalData, setTechnicalData] = useState<TechnicalData | null>(null)
@@ -112,7 +170,6 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
     try {
       const config = TIMEFRAMES[timeframe]
 
-      // Calculate date range for the timeframe
       const endDate = new Date()
       const startDate = new Date()
       startDate.setDate(endDate.getDate() - config.days)
@@ -120,13 +177,14 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
       const dateFrom = startDate.toISOString().split('T')[0]
       const dateTo = endDate.toISOString().split('T')[0]
 
+      const pageSize = config.days <= 7 ? 200 : config.days <= 180 ? 300 : 500
+
       const response = await fetch(
-        `http://localhost:8000/api/prices/browse?symbol=${symbol}&date_from=${dateFrom}&date_to=${dateTo}&page_size=1000&sort_by=date&sort_order=asc`
+        `http://localhost:8000/api/prices/browse?symbol=${symbol}&date_from=${dateFrom}&date_to=${dateTo}&page_size=${pageSize}&sort_by=date&sort_order=asc`
       )
 
       if (response.ok) {
         const responseData = await response.json()
-        // Transform data to Syncfusion format
         const transformedData: ChartDataPoint[] = responseData.prices.map((item: any) => ({
           x: new Date(item.date),
           open: item.open,
@@ -151,7 +209,6 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
         const data = await response.json()
         setTechnicalData(data)
 
-        // Add technical indicators to chart data
         if (data && priceData.length > 0) {
           const updatedData = priceData.map(point => ({
             ...point,
@@ -193,7 +250,7 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
     return priceData.map(item => ({
       x: item.x,
       y: item.volume,
-      fill: item.close >= item.open ? '#22c55e' : '#ef4444'
+      fill: item.close >= item.open ? palette.volumeBull : palette.volumeBear
     }))
   }
 
@@ -202,180 +259,184 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
   const priceChange = currentPrice - previousPrice
   const priceChangePercent = previousPrice !== 0 ? (priceChange / previousPrice) * 100 : 0
 
-  const containerClass = isFullscreen
-    ? "fixed inset-0 z-50 bg-white"
-    : "relative w-full h-full"
+const chartHeight = '320px'
 
-  const chartHeight = isFullscreen ? "calc(100vh - 200px)" : "600px"
+  const latestPoint = priceData.length > 0 ? priceData[priceData.length - 1] : null
+  const sessionHigh = priceData.length > 0 ? Math.max(...priceData.map(point => point.high)) : undefined
+  const sessionLow = priceData.length > 0 ? Math.min(...priceData.map(point => point.low)) : undefined
+  const volumeSummary = latestPoint?.volume
+  const averageVolume = technicalData?.avg_vol20
+  const rsi = technicalData?.rsi14
+  const fiftyTwoWeekHigh = technicalData?.high_252
+  const fiftyTwoWeekProgress = technicalData?.distance_to_52w_high !== undefined
+    ? Math.max(0, Math.min(100, (1 - technicalData.distance_to_52w_high) * 100))
+    : undefined
+
+  const volumeValues = priceData.map(d => d.volume)
+  const maxVolume = volumeValues.length > 0 ? Math.max(...volumeValues) : 0
+  const volumeInterval = (() => {
+    if (maxVolume <= 0) return undefined
+    const raw = maxVolume / 4
+    const magnitude = 10 ** Math.floor(Math.log10(raw))
+    const normalized = Math.ceil(raw / magnitude)
+    return normalized * magnitude
+  })()
 
   if (loading) {
     return (
-      <Card className={`${containerClass} ${!isFullscreen ? 'border-blue-100 bg-white/95 backdrop-blur' : ''}`}>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-xl font-bold">{symbol} Chart</CardTitle>
-          <Button variant="outline" size="sm" onClick={onClose}>
-            <XMarkIcon className="h-5 w-5" />
-          </Button>
-        </CardHeader>
-        <CardContent className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading chart data...</p>
+      <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/95 via-slate-800/90 to-slate-900/95 backdrop-blur-sm">
+        <div className="flex items-center justify-between border-b border-slate-700/40 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="text-base font-semibold text-slate-100">{symbol}</div>
+            <div className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
           </div>
-        </CardContent>
-      </Card>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-200 transition-colors">
+            <XMarkIcon className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex h-32 items-center justify-center">
+          <div className="flex items-center gap-3">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-600 border-t-blue-400" />
+            <span className="text-sm text-slate-300">Loading...</span>
+          </div>
+        </div>
+      </div>
     )
   }
 
-  return (
-    <Card className={`${containerClass} ${!isFullscreen ? 'border-blue-100 bg-white/95 backdrop-blur' : ''}`}>
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <div className="flex items-center gap-4">
-          <div>
-            <CardTitle className="text-2xl font-bold text-gray-900">{symbol}</CardTitle>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-2xl font-bold">
-                ${currentPrice.toFixed(2)}
-              </span>
-              <div className={`flex items-center gap-1 ${priceChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {priceChange >= 0 ?
-                  <ArrowTrendingUpIcon className="h-4 w-4" /> :
-                  <ArrowTrendingDownIcon className="h-4 w-4" />
-                }
-                <span className="font-medium">
-                  {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent.toFixed(2)}%)
-                </span>
-              </div>
-            </div>
-          </div>
+  const handleAxisLabelRender = (args: IAxisLabelRenderEventArgs) => {
+    if (args.axis.name === 'volumeAxis') {
+      const numeric = Number(args.value)
+      if (numeric <= 0) {
+        args.text = ''
+        return
+      }
+      args.text = formatNumberShort(numeric)
+    }
+  }
 
-          {technicalData && (
-            <div className="flex items-center gap-4 text-sm">
-              <div className="text-center">
-                <div className="text-gray-600">RSI</div>
-                <div className={`font-bold ${(technicalData.rsi14 || 0) > 70 ? 'text-red-600' : (technicalData.rsi14 || 0) < 30 ? 'text-green-600' : 'text-gray-900'}`}>
-                  {technicalData.rsi14?.toFixed(1) || 'N/A'}
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-gray-600">Volume</div>
-                <div className="font-bold text-gray-900">
-                  {((technicalData.volume || 0) / 1000000).toFixed(1)}M
-                </div>
-              </div>
+  const priceMarkerAnnotation: any[] = []
+
+  return (
+    <div className="relative w-full overflow-hidden rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/95 via-slate-800/90 to-slate-900/95 backdrop-blur-sm">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between border-b border-slate-700/40 px-4 py-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-slate-100">{symbol}</span>
+            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xl font-semibold text-slate-100">{formatCurrency(currentPrice)}</span>
+            <span className={`flex items-center gap-1 text-sm font-medium ${priceChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {priceChange >= 0 ? (
+                <ArrowTrendingUpIcon className="h-3 w-3" />
+              ) : (
+                <ArrowTrendingDownIcon className="h-3 w-3" />
+              )}
+              {formatPercent(priceChangePercent)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Compact controls */}
+          <div className="flex gap-1">
+            {Object.entries(TIMEFRAMES).slice(2, 6).map(([key, config]) => {
+              const isActive = selectedTimeframe === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => handleTimeframeChange(key as TimeframePeriod)}
+                  className={`px-2 py-1 text-xs font-medium rounded transition ${isActive
+                    ? 'bg-blue-500 text-white'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                  }`}
+                >
+                  {config.label}
+                </button>
+              )
+            })}
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-200 transition-colors">
+            <XMarkIcon className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Compact Stats Bar */}
+      <div className="flex items-center justify-between border-b border-slate-700/30 px-4 py-2 text-xs">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500">Vol:</span>
+            <span className="text-slate-300 font-medium">{formatNumberShort(volumeSummary)}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500">Range:</span>
+            <span className="text-slate-300 font-medium">{formatCurrency(sessionLow)} - {formatCurrency(sessionHigh)}</span>
+          </div>
+          {rsi !== undefined && (
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500">RSI:</span>
+              <span className={`font-medium ${rsi > 70 ? 'text-rose-400' : rsi < 30 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                {rsi.toFixed(1)}
+              </span>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          {onToggleFullscreen && (
-            <Button variant="outline" size="sm" onClick={onToggleFullscreen}>
-              {isFullscreen ?
-                <ArrowsPointingInIcon className="h-4 w-4" /> :
-                <ArrowsPointingOutIcon className="h-4 w-4" />
-              }
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onClose}>
-            <XMarkIcon className="h-5 w-5" />
-          </Button>
+          <button
+            type="button"
+            onClick={() => setChartType(chartType === 'candlestick' ? 'line' : 'candlestick')}
+            className="flex items-center gap-1 px-2 py-1 text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            <ChartBarIcon className="h-3 w-3" />
+            <span className="text-xs">{chartType === 'candlestick' ? 'Line' : 'Candles'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTechnicals(!showTechnicals)}
+            className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${showTechnicals
+              ? 'text-blue-400'
+              : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <CogIcon className="h-3 w-3" />
+            SMA
+          </button>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="space-y-4">
-        {/* Timeframe Selection */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {Object.entries(TIMEFRAMES).map(([key, config]) => (
-              <Button
-                key={key}
-                variant={selectedTimeframe === key ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleTimeframeChange(key as TimeframePeriod)}
-                className="text-xs px-3 py-1"
-              >
-                {config.label}
-              </Button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant={chartType === 'candlestick' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setChartType('candlestick')}
-              className="text-xs"
-            >
-              <ChartBarIcon className="h-3 w-3 mr-1" />
-              Candles
-            </Button>
-            <Button
-              variant={chartType === 'line' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setChartType('line')}
-              className="text-xs"
-            >
-              Line
-            </Button>
-            <Button
-              variant={chartType === 'area' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setChartType('area')}
-              className="text-xs"
-            >
-              Area
-            </Button>
-            <Button
-              variant={showTechnicals ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowTechnicals(!showTechnicals)}
-              className="text-xs"
-            >
-              <CogIcon className="h-3 w-3 mr-1" />
-              Indicators
-            </Button>
-          </div>
-        </div>
-
-        {/* Technical Indicators Panel */}
-        {showTechnicals && (
-          <Card className="p-3 bg-gray-50">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Technical Indicators:</span>
-              {['sma20', 'sma50', 'sma200'].map(indicator => (
-                <button
-                  key={indicator}
-                  onClick={() => toggleIndicator(indicator)}
-                  className="cursor-pointer text-xs"
-                >
-                  <Badge
-                    variant={enabledIndicators.includes(indicator) ? "default" : "outline"}
-                    className="text-xs hover:bg-blue-100 transition-colors"
-                  >
-                    {indicator.toUpperCase()}
-                  </Badge>
-                </button>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Main Chart */}
-        <div className="border rounded-lg bg-white" style={{ height: chartHeight }}>
+      {/* Chart Container */}
+      <div className="p-2">
+        <div
+          className="overflow-hidden rounded-lg border border-slate-700/40 bg-slate-900/50"
+          style={{ height: chartHeight }}
+        >
           <ChartComponent
             id="stock-chart"
+            annotations={priceMarkerAnnotation}
+            axisLabelRender={handleAxisLabelRender}
             primaryXAxis={{
               valueType: 'DateTime',
               labelFormat: selectedTimeframe === '1D' ? 'HH:mm' : 'MMM dd',
               majorGridLines: { width: 0 },
-              crosshairTooltip: { enable: true }
+              crosshairTooltip: { enable: true },
+              edgeLabelPlacement: 'Shift',
+              labelStyle: { color: palette.textSecondary, fontFamily: 'Inter' }
             }}
             primaryYAxis={{
               title: 'Price ($)',
               labelFormat: '${value}',
               opposedPosition: true,
-              majorGridLines: { width: 1, color: '#f0f0f0' },
-              crosshairTooltip: { enable: true }
+              majorGridLines: { width: 1, color: palette.gridMajor },
+              minorTicksPerInterval: 1,
+              minorGridLines: { width: 0.5, color: palette.gridMinor },
+              crosshairTooltip: { enable: true },
+              titleStyle: { size: '12px', color: palette.textSecondary, fontFamily: 'Inter' },
+              labelStyle: { color: palette.textSecondary, fontFamily: 'Inter' },
+              rowIndex: 0
             }}
             axes={[
               {
@@ -385,37 +446,63 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
                 title: 'Volume',
                 majorGridLines: { width: 0 },
                 labelFormat: '{value}',
-                maximum: Math.max(...priceData.map(d => d.volume)) * 4
+                minimum: 0,
+                maximum: maxVolume > 0 ? maxVolume * 1.2 : undefined,
+                interval: volumeInterval,
+                titleStyle: { size: '11px', color: palette.textMuted, fontFamily: 'Inter' },
+                labelStyle: { color: palette.textMuted, fontFamily: 'Inter', size: '10px' },
+                majorTickLines: { width: 0 },
+                rangePadding: 'None',
+                lineStyle: { width: 0 },
+                plotOffset: 0,
+                plotOffsetTop: 0,
+                plotOffsetBottom: 0
               }
             ]}
             rows={[
-              { height: '75%' },
-              { height: '25%' }
+              { height: '75%', border: { width: 0 } },
+              { height: '25%', border: { width: 0 } }
             ]}
             tooltip={{
               enable: true,
-              shared: true,
-              format: '<b>${point.x}</b><br/>Open: <b>${point.open}</b><br/>High: <b>${point.high}</b><br/>Low: <b>${point.low}</b><br/>Close: <b>${point.close}</b><br/>Volume: <b>${point.volume}</b>'
+              shared: false,
+              fill: palette.tooltipBg,
+              opacity: 0.9,
+              textStyle: { color: palette.tooltipText, fontFamily: 'Inter' }
             }}
-            crosshair={{ enable: true }}
+            crosshair={{ enable: true, line: { color: palette.accent, width: 1 } }}
+            chartArea={{ border: { width: 0 } }}
+            background="#050c1a"
             zoomSettings={{
               enableMouseWheelZooming: true,
               enablePinchZooming: true,
               enableSelectionZooming: true,
               mode: 'X'
             }}
-            legendSettings={{ visible: showTechnicals }}
+            legendSettings={{
+              visible: showTechnicals,
+              textStyle: { color: palette.textSecondary, fontFamily: 'Inter' }
+            }}
             height="100%"
-            background="transparent"
           >
             <Inject services={[
-              CandleSeries, LineSeries, AreaSeries, ColumnSeries,
-              Category, DateTime, Logarithmic, Legend, Tooltip,
-              DataLabel, Zoom, Crosshair, Selection
+              CandleSeries,
+              LineSeries,
+              AreaSeries,
+              ColumnSeries,
+              Category,
+              DateTime,
+              Logarithmic,
+              Legend,
+              Tooltip,
+              DataLabel,
+              Zoom,
+              Crosshair,
+              Selection,
+              ChartAnnotation
             ]} />
 
             <SeriesCollectionDirective>
-              {/* Main Price Series */}
               {chartType === 'candlestick' && (
                 <SeriesDirective
                   dataSource={priceData}
@@ -426,8 +513,10 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
                   low="low"
                   close="close"
                   name={symbol}
-                  bearFillColor="#ef4444"
-                  bullFillColor="#22c55e"
+                  bearFillColor={palette.bear}
+                  bullFillColor={palette.bull}
+                  width={1}
+                  columnWidth={0.3}
                 />
               )}
 
@@ -440,7 +529,7 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
                   name={symbol}
                   marker={{ visible: false }}
                   width={2}
-                  fill="#3b82f6"
+                  fill={palette.line}
                 />
               )}
 
@@ -451,12 +540,11 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
                   xName="x"
                   yName="close"
                   name={symbol}
-                  opacity={0.5}
-                  fill="#3b82f6"
+                  opacity={0.45}
+                  fill={palette.areaFill}
                 />
               )}
 
-              {/* Technical Indicators */}
               {showTechnicals && enabledIndicators.includes('sma20') && technicalData?.sma20 && (
                 <SeriesDirective
                   dataSource={priceData}
@@ -466,7 +554,7 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
                   name="SMA 20"
                   marker={{ visible: false }}
                   width={1}
-                  fill="#f97316"
+                  fill="#fbbf24"
                 />
               )}
 
@@ -479,7 +567,7 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
                   name="SMA 50"
                   marker={{ visible: false }}
                   width={1}
-                  fill="#06b6d4"
+                  fill="#38bdf8"
                 />
               )}
 
@@ -492,11 +580,10 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
                   name="SMA 200"
                   marker={{ visible: false }}
                   width={2}
-                  fill="#8b5cf6"
+                  fill="#a855f7"
                 />
               )}
 
-              {/* Volume Series */}
               <SeriesDirective
                 dataSource={getVolumeData()}
                 type="Column"
@@ -504,53 +591,47 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
                 yName="y"
                 name="Volume"
                 yAxisName="volumeAxis"
-                opacity={0.7}
+                opacity={0.85}
                 pointColorMapping="fill"
+                width={0.6}
               />
             </SeriesCollectionDirective>
           </ChartComponent>
         </div>
+      </div>
 
-        {/* Technical Data Summary */}
-        {technicalData && (
-          <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <div className="text-center">
-                <div className="text-xs text-gray-600">SMA 20</div>
-                <div className="font-bold text-sm">${technicalData.sma20?.toFixed(2) || 'N/A'}</div>
+      {/* Optional Technical Indicators Footer */}
+      {showTechnicals && technicalData && (
+        <div className="border-t border-slate-700/30 px-4 py-2">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <span className="text-slate-500">SMA20:</span>
+                <span className="text-amber-400 font-medium">{technicalData.sma20?.toFixed(2) ?? '—'}</span>
               </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-600">SMA 50</div>
-                <div className="font-bold text-sm">${technicalData.sma50?.toFixed(2) || 'N/A'}</div>
+              <div className="flex items-center gap-1">
+                <span className="text-slate-500">SMA50:</span>
+                <span className="text-sky-400 font-medium">{technicalData.sma50?.toFixed(2) ?? '—'}</span>
               </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-600">SMA 200</div>
-                <div className="font-bold text-sm">${technicalData.sma200?.toFixed(2) || 'N/A'}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-600">RSI (14)</div>
-                <div className={`font-bold text-sm ${(technicalData.rsi14 || 0) > 70 ? 'text-red-600' : (technicalData.rsi14 || 0) < 30 ? 'text-green-600' : 'text-gray-900'}`}>
-                  {technicalData.rsi14?.toFixed(1) || 'N/A'}
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-600">MACD</div>
-                <div className="font-bold text-sm">{technicalData.macd?.toFixed(3) || 'N/A'}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-600">52W High</div>
-                <div className="font-bold text-sm">
-                  {technicalData.distance_to_52w_high ?
-                    `${((1 - technicalData.distance_to_52w_high) * 100).toFixed(1)}%` :
-                    'N/A'
-                  }
-                </div>
+              <div className="flex items-center gap-1">
+                <span className="text-slate-500">SMA200:</span>
+                <span className="text-purple-400 font-medium">{technicalData.sma200?.toFixed(2) ?? '—'}</span>
               </div>
             </div>
-          </Card>
-        )}
-      </CardContent>
-    </Card>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <span className="text-slate-500">MACD:</span>
+                <span className="text-slate-300 font-medium">{technicalData.macd?.toFixed(3) ?? '—'}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-slate-500">ATR:</span>
+                <span className="text-slate-300 font-medium">{technicalData.atr14?.toFixed(2) ?? '—'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

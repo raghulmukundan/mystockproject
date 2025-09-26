@@ -62,7 +62,6 @@ const Watchlists: React.FC = () => {
   const [inlineSearchResults, setInlineSearchResults] = useState<any[]>([])
   const [inlineSearchLoading, setInlineSearchLoading] = useState(false)
   const [activeStockSymbol, setActiveStockSymbol] = useState<string | null>(null)
-  const [stockChartFullscreen, setStockChartFullscreen] = useState(false)
   const [inlineError, setInlineError] = useState('')
   const [sortColumn, setSortColumn] = useState<string>('symbol')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -501,15 +500,12 @@ const Watchlists: React.FC = () => {
 
   const handleOpenStockChart = (symbol: string) => {
     setActiveStockSymbol(symbol)
+    setDetailCollapsed(true)
   }
 
   const handleCloseStockChart = () => {
     setActiveStockSymbol(null)
-    setStockChartFullscreen(false)
-  }
-
-  const handleToggleStockChartFullscreen = () => {
-    setStockChartFullscreen(!stockChartFullscreen)
+    setDetailCollapsed(false)
   }
 
   const handleCloseWatchlist = () => {
@@ -792,12 +788,26 @@ const Watchlists: React.FC = () => {
                   >
                     Open full view
                   </button>
+                  {!detailCollapsed && (
+                    <button
+                      type="button"
+                      className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                      onClick={() => setShowInlineAdd(true)}
+                    >
+                      Add stock
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
-                    onClick={() => setShowInlineAdd(true)}
+                    onClick={toggleDetailCollapsed}
+                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                    title={detailCollapsed ? "Expand watchlist" : "Minimize watchlist"}
                   >
-                    Add stock
+                    {detailCollapsed ? (
+                      <ChevronDownIcon className="h-4 w-4" />
+                    ) : (
+                      <ChevronUpIcon className="h-4 w-4" />
+                    )}
                   </button>
                   <button
                     type="button"
@@ -1059,6 +1069,16 @@ const Watchlists: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Stock Chart - Always visible when a stock is selected */}
+              {activeStockSymbol && (
+                <div className="mt-4 border-t border-blue-100 bg-white/90 p-5">
+                  <ProfessionalStockChart
+                    symbol={activeStockSymbol}
+                    onClose={handleCloseStockChart}
+                  />
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -1245,7 +1265,11 @@ const Watchlists: React.FC = () => {
                                 >
                                   <div
                                     className="cursor-pointer"
-                                    onClick={() => handleOpenStockChart(item.symbol)}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleOpenWatchlist(watchlist.id)
+                                      handleOpenStockChart(item.symbol)
+                                    }}
                                   >
                                     <div className={`text-sm font-semibold ${symbolClass} hover:text-blue-600 transition-colors`}>{item.symbol}</div>
                                     <div className="text-xs text-gray-500">{item.sector ?? '—'}</div>
@@ -1402,17 +1426,6 @@ const Watchlists: React.FC = () => {
       isLoading={addItemLoading}
     />
 
-    {/* Professional Stock Chart */}
-    {activeStockSymbol && (
-      <div className={`${stockChartFullscreen ? 'fixed inset-0 z-50 bg-white' : 'fixed inset-6 z-40 rounded-xl shadow-2xl overflow-hidden'}`}>
-        <ProfessionalStockChart
-          symbol={activeStockSymbol}
-          onClose={handleCloseStockChart}
-          isFullscreen={stockChartFullscreen}
-          onToggleFullscreen={handleToggleStockChartFullscreen}
-        />
-      </div>
-    )}
   </>
 )
 

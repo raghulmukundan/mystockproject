@@ -32,7 +32,7 @@ validate: validate-configs
 validate-configs:
 	@echo "🔍 Validating proxy configurations..."
 	@echo ""
-	@cd frontend && npm test config-validator -- --run --reporter=verbose
+	@cd frontend && npm install --no-fund --no-audit && npm run test -- config-validator --run --reporter=verbose
 	@echo ""
 	@echo "✅ Configuration validation completed"
 
@@ -40,7 +40,7 @@ validate-configs:
 test-proxy-configs:
 	@echo "🧪 Running enhanced proxy configuration tests..."
 	@echo ""
-	@cd frontend && npm test -- --run --reporter=verbose
+	@cd frontend && npm install --no-fund --no-audit && npm run test -- --run --reporter=verbose
 	@echo ""
 
 # Validate and start Docker services
