@@ -45,14 +45,12 @@ class BackendAPIClient:
             return response.json()
 
     async def store_prices(self, prices_data: dict):
-        """Store prices in backend's prices_realtime_cache table"""
-        # Convert prices_data to the format expected by backend
-        symbols = list(prices_data.keys())
-
+        """Store prices in backend's prices_realtime_cache table using provided data"""
+        # Use the new direct store endpoint to avoid double API calls
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
-                f"{self.base_url}/api/prices/fetch-and-store",
-                json={"symbols": symbols}
+                f"{self.base_url}/api/prices/store-prices",
+                json={"prices_data": prices_data}
             )
             response.raise_for_status()
             result = response.json()

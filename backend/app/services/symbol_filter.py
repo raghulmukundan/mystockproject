@@ -2,12 +2,7 @@
 Shared symbol filtering rules used by Schwab calls and Universe refresh.
 
 Rules (exclude/ignore):
-- test_issue == 'Y'
-- Suffix 'U' or '.U' (SPAC Units)
-- Suffix 'W' or '.W' (Warrants)
-- Suffix 'R' or '.R' (Rights)
-- Contains '$' (Preferred/Hybrid)
-- Suffix '.A' '.B' '.C' (Class/Test/Syn variants)
+- test_issue == 'Y' (Only exclude actual test issues)
 """
 from typing import Optional
 
@@ -16,23 +11,8 @@ def is_excluded_symbol(symbol: Optional[str], test_issue: Optional[str] = None) 
     s = (symbol or '').strip().upper()
     if not s:
         return True
+    # Only exclude actual test issues
     if (test_issue or '').strip().upper() == 'Y':
-        return True
-
-    # SPAC Units
-    if s.endswith('U') or s.endswith('.U'):
-        return True
-    # Warrants
-    if s.endswith('W') or s.endswith('.W'):
-        return True
-    # Rights
-    if s.endswith('R') or s.endswith('.R'):
-        return True
-    # Preferred/Hybrid
-    if '$' in s:
-        return True
-    # Class/Test/Syn variants
-    if s.endswith('.A') or s.endswith('.B') or s.endswith('.C'):
         return True
 
     return False

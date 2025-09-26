@@ -35,10 +35,10 @@ export default function AddItemModal({
 
     const item = {
       symbol: symbol.trim().toUpperCase(),
-      company_name: companyName.trim() || null,
-      entry_price: entryPrice ? parseFloat(entryPrice) : null,
-      target_price: targetPrice ? parseFloat(targetPrice) : null,
-      stop_loss: stopLoss ? parseFloat(stopLoss) : null
+      company_name: companyName.trim() || undefined,
+      entry_price: entryPrice ? parseFloat(entryPrice) : undefined,
+      target_price: targetPrice ? parseFloat(targetPrice) : undefined,
+      stop_loss: stopLoss ? parseFloat(stopLoss) : undefined
     }
 
     await onSave(item)

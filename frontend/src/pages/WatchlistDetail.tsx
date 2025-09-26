@@ -692,30 +692,6 @@ export default function WatchlistDetail() {
           </div>
           
           <div className="flex items-center space-x-2">
-            {/* Market Status & Next Refresh */}
-            <div className="hidden sm:flex bg-white shadow-sm rounded-md px-3 py-2 border border-gray-200">
-              <div className="flex items-center space-x-3 text-sm">
-                {/* Market Status */}
-                <div className="flex items-center space-x-1">
-                  {isMarketOpen() ? (
-                    <CheckCircleIcon className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <XCircleIcon className="h-4 w-4 text-red-600" />
-                  )}
-                  <span className={isMarketOpen() ? 'text-green-600' : 'text-red-600'}>
-                    Market {isMarketOpen() ? 'Open' : 'Closed'}
-                  </span>
-                </div>
-                
-                <div className="h-4 w-px bg-gray-200"></div>
-                
-                {/* Next Refresh */}
-                <div className="flex items-center space-x-1 text-gray-500">
-                  <ArrowPathIcon className="h-4 w-4" />
-                  <span>Next: {timeUntilRefresh || '...'}</span>
-                </div>
-              </div>
-            </div>
 
             <button
               onClick={handleRefreshProfiles}

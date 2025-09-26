@@ -8,9 +8,6 @@ import {
   ArrowTrendingDownIcon,
   ClockIcon,
   ArrowTopRightOnSquareIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ArrowPathIcon,
   ChevronDownIcon,
   ChevronUpIcon
 } from '@heroicons/react/24/outline'
@@ -18,7 +15,6 @@ import { Watchlist } from '../types'
 import TradingViewWidget from '../components/TradingViewWidget'
 import FinancialWidget from '../components/FinancialWidget'
 import StockDetailView from '../components/StockDetailView'
-import { jobsApiService } from '../services/jobsApi'
 import { watchlistsApi } from '../services/api'
 import { stockApi, StockPrice } from '../services/stockApi'
 import { universeApi } from '../lib/universeApi'
@@ -53,55 +49,6 @@ const calculateWatchlistPerformance = (watchlist: Watchlist, priceData: Record<s
   }
 }
 
-// Utility functions for market hours (CST)
-const isMarketOpen = (): boolean => {
-  const now = new Date()
-  const cstTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Chicago"}))
-  const day = cstTime.getDay() // 0 = Sunday, 6 = Saturday
-  const hours = cstTime.getHours()
-  const minutes = cstTime.getMinutes()
-  const totalMinutes = hours * 60 + minutes
-  
-  // Market closed on weekends
-  if (day === 0 || day === 6) return false
-  
-  // Market hours: 8:30 AM - 3:00 PM CST
-  const marketOpen = 8 * 60 + 30  // 8:30 AM
-  const marketClose = 15 * 60     // 3:00 PM
-  
-  return totalMinutes >= marketOpen && totalMinutes < marketClose
-}
-
-const computeLocalNext = (): Date => {
-  // Fallback: compute next top-of-30-min slot in local time, or next market open
-  const isOpen = isMarketOpen()
-  const now = new Date()
-  if (isOpen) {
-    const next = new Date(now)
-    next.setMinutes(Math.ceil(now.getMinutes() / 30) * 30, 0, 0)
-    return next
-  }
-  const cstTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-  const nextOpen = new Date(cstTime)
-  nextOpen.setHours(8, 30, 0, 0)
-  if ((cstTime.getHours() > 8) || (cstTime.getHours() === 8 && cstTime.getMinutes() >= 30) || cstTime.getDay() === 0 || cstTime.getDay() === 6) {
-    nextOpen.setDate(nextOpen.getDate() + 1)
-  }
-  while (nextOpen.getDay() === 0 || nextOpen.getDay() === 6) {
-    nextOpen.setDate(nextOpen.getDate() + 1)
-  }
-  return nextOpen
-}
-
-const getServerNextRefresh = async (): Promise<Date | null> => {
-  try {
-    const data = await jobsApiService.getNextMarketRefresh()
-    return data.next_run_at ? new Date(data.next_run_at) : computeLocalNext()
-  } catch {
-    return computeLocalNext()
-  }
-}
-
 export default function Dashboard() {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([])
   const [loading, setLoading] = useState(true)
@@ -132,53 +79,10 @@ export default function Dashboard() {
   
   // Index prices removed - now shown in TradingView widgets
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
-  const [nextRefresh, setNextRefresh] = useState<Date | null>(null)
-  const [timeUntilRefresh, setTimeUntilRefresh] = useState<string>('')
 
   useEffect(() => {
     loadWatchlists()
-    // Fetch initial next refresh from backend
-    ;(async () => {
-      const next = await getServerNextRefresh()
-      if (next) setNextRefresh(next)
-    })()
-    // Removed auto-refresh timer - let backend handle caching
   }, [])
-
-  // Keep countdown aligned with current nextRefresh (avoid stale closure)
-  useEffect(() => {
-    const timer = setInterval(() => { updateCountdown() }, 1000)
-    return () => clearInterval(timer)
-  }, [nextRefresh])
-
-  const updateCountdown = async () => {
-    if (!nextRefresh) return
-    const now = new Date()
-    const diff = nextRefresh.getTime() - now.getTime()
-    
-    if (diff <= 0) {
-      const next = await getServerNextRefresh()
-      if (next) setNextRefresh(next)
-      return
-    }
-    
-    const minutes = Math.floor(diff / 60000)
-    const seconds = Math.floor((diff % 60000) / 1000)
-    setTimeUntilRefresh(`${minutes}:${seconds.toString().padStart(2, '0')}`)
-  }
-
-  const refreshAllData = async () => {
-    console.log('Manual refresh triggered...')
-    setLastRefresh(new Date())
-    setNextRefresh(getNextRefreshTime())
-    
-    // Manually reload watchlist prices (bypasses cache)
-    if (watchlists.length > 0) {
-      loadPricesInBackground(watchlists)
-    }
-    
-    // Index prices now handled by TradingView widgets
-  }
 
   const loadWatchlists = async () => {
     try {
@@ -413,40 +317,6 @@ export default function Dashboard() {
       </div>
 
       {/* Market Status Bar with Refresh Controls */}
-      <div className="flex flex-wrap gap-3 mb-6">
-        <div className="bg-white shadow-sm rounded-md px-3 py-2 border border-gray-200 flex-grow sm:flex-grow-0">
-          <div className="flex items-center space-x-3 text-sm">
-            {/* Market Status */}
-            <div className="flex items-center space-x-1">
-              {isMarketOpen() ? (
-                <CheckCircleIcon className="h-4 w-4 text-green-600" />
-              ) : (
-                <XCircleIcon className="h-4 w-4 text-red-600" />
-              )}
-              <span className={isMarketOpen() ? 'text-green-600' : 'text-red-600'}>
-                Market {isMarketOpen() ? 'Open' : 'Closed'}
-              </span>
-            </div>
-            
-            <div className="h-4 w-px bg-gray-200"></div>
-            
-            {/* Next Refresh */}
-            <div className="flex items-center space-x-1 text-gray-500">
-              <ArrowPathIcon className="h-4 w-4" />
-              <span>Next: {timeUntilRefresh || '...'}</span>
-            </div>
-          </div>
-        </div>
-        
-        <button
-          onClick={refreshAllData}
-          disabled={pricesLoading}
-          className="flex items-center justify-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:bg-blue-400"
-        >
-          <ArrowPathIcon className={`h-4 w-4 ${pricesLoading ? 'animate-spin' : ''}`} />
-          <span>{pricesLoading ? 'Refreshing...' : 'Refresh Now'}</span>
-        </button>
-      </div>
 
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -573,7 +443,7 @@ export default function Dashboard() {
           {/* Activity item examples */}
           <div className="flex items-start">
             <div className="flex-shrink-0 bg-blue-100 rounded-full p-2">
-              <ArrowPathIcon className="h-5 w-5 text-blue-600" />
+              <ClockIcon className="h-5 w-5 text-blue-600" />
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-900">Data refreshed</p>
