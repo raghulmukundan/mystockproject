@@ -21,7 +21,8 @@ SECTOR_MAPPING = {
     'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'UNH': 'Healthcare', 'LLY': 'Healthcare', 'ABBV': 'Healthcare',
     'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'SLB': 'Energy', 'OXY': 'Energy',
     'CAT': 'Industrials', 'GE': 'Industrials', 'DE': 'Industrials', 'HWM': 'Industrials', 'EXP': 'Industrials',
-    'HD': 'Consumer Discretionary', 'COST': 'Consumer Discretionary', 'TPR': 'Consumer Discretionary'
+    'HD': 'Consumer Discretionary', 'COST': 'Consumer Discretionary', 'TPR': 'Consumer Discretionary',
+    'LULU': 'Consumer Discretionary'
 }
 
 def update_missing_sectors():

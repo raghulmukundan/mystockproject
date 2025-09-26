@@ -20,11 +20,11 @@ import {
   CalendarDaysIcon,
   ArrowTopRightOnSquareIcon,
   CheckIcon,
+  ViewColumnsIcon,
 } from '@heroicons/react/24/outline'
 import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchlistsApi'
 import { WatchlistItem } from '../types'
 import AddItemModal from '../components/AddItemModal'
-import CreateWatchlistModal from '../components/CreateWatchlistModal'
 
 interface WatchlistWithPrices extends Watchlist {
   prices: StockPrice[]
@@ -38,7 +38,11 @@ interface WatchlistWithPrices extends Watchlist {
 const Watchlists: React.FC = () => {
   const [watchlists, setWatchlists] = useState<WatchlistWithPrices[]>([])
   const [loading, setLoading] = useState(true)
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCreateInline, setShowCreateInline] = useState(false)
+  const [createWatchlistName, setCreateWatchlistName] = useState('')
+  const [createWatchlistDescription, setCreateWatchlistDescription] = useState('')
+  const [createWatchlistError, setCreateWatchlistError] = useState('')
+  const [createWatchlistLoading, setCreateWatchlistLoading] = useState(false)
   const [topPerformers, setTopPerformers] = useState<StockPrice[]>([])
   const [topDecliners, setTopDecliners] = useState<StockPrice[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -52,6 +56,8 @@ const Watchlists: React.FC = () => {
   const [inlineSearchResults, setInlineSearchResults] = useState<any[]>([])
   const [inlineSearchLoading, setInlineSearchLoading] = useState(false)
   const [inlineError, setInlineError] = useState('')
+  const [sortColumn, setSortColumn] = useState<string>('symbol')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const navigate = useNavigate()
   const detailContainerRef = useRef<HTMLDivElement | null>(null)
 
@@ -224,14 +230,117 @@ const Watchlists: React.FC = () => {
     loadWatchlists()
   }, [])
 
-  const handleCreateWatchlist = async (data: { name: string; description?: string }) => {
-    try {
-      await watchlistsApiService.createWatchlist(data)
-      setShowCreateModal(false)
-      await loadWatchlists()
-    } catch (error) {
-      console.error('Failed to create watchlist:', error)
+  // Auto-show search form for empty watchlists
+  useEffect(() => {
+    if (activeWatchlistId) {
+      const activeWatchlist = watchlists.find(w => w.id === activeWatchlistId)
+      if (activeWatchlist && activeWatchlist.items.length === 0) {
+        setShowInlineAdd(true)
+      }
     }
+  }, [activeWatchlistId, watchlists])
+
+  const handleCreateInlineWatchlist = async () => {
+    if (!createWatchlistName.trim()) {
+      setCreateWatchlistError('Please enter a watchlist name')
+      return
+    }
+
+    try {
+      setCreateWatchlistLoading(true)
+      setCreateWatchlistError('')
+      await watchlistsApiService.createWatchlist({
+        name: createWatchlistName.trim(),
+        description: createWatchlistDescription.trim() || undefined
+      })
+
+      // Reset inline form
+      setShowCreateInline(false)
+      setCreateWatchlistName('')
+      setCreateWatchlistDescription('')
+
+      await loadWatchlists()
+    } catch (error: any) {
+      console.error('Failed to create watchlist:', error)
+      if (error.response?.data?.detail) {
+        setCreateWatchlistError(error.response.data.detail)
+      } else {
+        setCreateWatchlistError('Failed to create watchlist')
+      }
+    } finally {
+      setCreateWatchlistLoading(false)
+    }
+  }
+
+  const handleCancelCreateInline = () => {
+    setShowCreateInline(false)
+    setCreateWatchlistName('')
+    setCreateWatchlistDescription('')
+    setCreateWatchlistError('')
+  }
+
+  const handleCreateInlineSearch = (query: string) => {
+    setCreateWatchlistName(query)
+    setCreateWatchlistError('')
+  }
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  const getSortedItems = (items: any[], prices: any[]) => {
+    return [...items].sort((a, b) => {
+      let aValue, bValue
+
+      switch (sortColumn) {
+        case 'symbol':
+          aValue = a.symbol
+          bValue = b.symbol
+          break
+        case 'price':
+          const aPriceData = prices.find(p => p.symbol === a.symbol)
+          const bPriceData = prices.find(p => p.symbol === b.symbol)
+          aValue = aPriceData?.current_price || 0
+          bValue = bPriceData?.current_price || 0
+          break
+        case 'change':
+          const aChangeData = prices.find(p => p.symbol === a.symbol)
+          const bChangeData = prices.find(p => p.symbol === b.symbol)
+          aValue = aChangeData?.change_percent || 0
+          bValue = bChangeData?.change_percent || 0
+          break
+        case 'entry':
+          aValue = a.entry_price || 0
+          bValue = b.entry_price || 0
+          break
+        case 'pnl':
+          const aPnlData = prices.find(p => p.symbol === a.symbol)
+          const bPnlData = prices.find(p => p.symbol === b.symbol)
+          const aPnl = aPnlData && a.entry_price ? aPnlData.current_price - a.entry_price : 0
+          const bPnl = bPnlData && b.entry_price ? bPnlData.current_price - b.entry_price : 0
+          aValue = aPnl
+          bValue = bPnl
+          break
+        default:
+          aValue = a.symbol
+          bValue = b.symbol
+      }
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortDirection === 'asc'
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      } else {
+        return sortDirection === 'asc'
+          ? (aValue || 0) - (bValue || 0)
+          : (bValue || 0) - (aValue || 0)
+      }
+    })
   }
 
   const handleDeleteWatchlist = async (id: number, name: string) => {
@@ -322,6 +431,10 @@ const Watchlists: React.FC = () => {
     setInlineSearchQuery('')
     setInlineSearchResults([])
     setInlineError('')
+    // If watchlist is empty, also close the detail view
+    if (activeWatchlist && activeWatchlist.items.length === 0) {
+      setActiveWatchlistId(null)
+    }
   }
 
 
@@ -424,12 +537,13 @@ const Watchlists: React.FC = () => {
   }
 
   return (
+  <>
   <div className="flex min-h-screen bg-gray-50">
     <aside className="hidden lg:flex lg:w-60 xl:w-64 flex-col border-r border-gray-200 bg-white/80 backdrop-blur">
-        <div className="relative border-b border-gray-200 px-6 py-6">
+        <div className="relative border-b border-gray-200 px-4 py-3">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-50 via-blue-100/60 to-purple-50 opacity-70" aria-hidden="true" />
           <div className="relative">
-            <h2 className="text-2xl font-semibold text-gray-900">Market Movers</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Market Movers</h2>
           </div>
         </div>
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -531,38 +645,34 @@ const Watchlists: React.FC = () => {
     </aside>
 
     <main className="flex-1">
-      <div className="flex-1 space-y-6 overflow-y-auto p-6 lg:p-8">
-        <section className="rounded-2xl border border-gray-200/60 bg-white/90 backdrop-blur-sm shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4">
-            {/* Left section - Title only */}
-            <div className="flex items-center">
-              <h1 className="text-2xl font-semibold text-gray-900">Watchlists</h1>
-            </div>
+      <div className="flex-1 space-y-3 overflow-y-auto p-3 lg:p-4">
+        {/* Watchlists Header */}
+        <div className="border-b border-gray-200 pb-3 mb-3">
+          <h1 className="text-2xl font-semibold text-gray-900">Watchlists</h1>
+        </div>
 
-            {/* Right section - Search and create */}
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="search"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search lists or symbols..."
-                  className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-700 transition-colors focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                onClick={() => setShowCreateModal(true)}
-                title="Create watchlist"
-              >
-                <PlusIcon className="h-4 w-4" />
-                New
-              </button>
-            </div>
+        {/* Search and Create Controls */}
+        <div className="flex items-center justify-between">
+          <div className="relative">
+            <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search lists or symbols..."
+              className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-700 transition-colors focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
           </div>
-        </section>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+            onClick={() => setShowCreateInline(true)}
+            title="Create watchlist"
+          >
+            <PlusIcon className="h-4 w-4" />
+            New
+          </button>
+        </div>
 
         {activeWatchlist && (
           <section
@@ -628,96 +738,171 @@ const Watchlists: React.FC = () => {
 
               {!detailCollapsed && (
                 <div className="rounded-2xl border border-blue-100 bg-white shadow-inner">
-                  <div className="max-h-80 overflow-y-auto">
+                  {/* Inline Add Form - At top for better dropdown visibility */}
+                  {showInlineAdd && (
+                    <div className="border-b border-gray-100 bg-blue-50/30 p-5">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 max-w-md">
+                          <div className="relative">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <input
+                              type="text"
+                              value={inlineSearchQuery}
+                              onChange={(e) => handleInlineSearch(e.target.value)}
+                              placeholder="Search stocks (e.g., AAPL, MSFT)"
+                              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  setInlineSearchResults([])
+                                  handleInlineAddStock()
+                                }
+                              }}
+                              autoFocus
+                            />
+                            {/* Search Suggestions Dropdown */}
+                            {inlineSearchResults.length > 0 && (
+                              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto">
+                                {inlineSearchResults.map((result) => (
+                                  <button
+                                    key={result.symbol}
+                                    onClick={() => {
+                                      setInlineSearchResults([])
+                                      handleInlineAddStock(result.symbol)
+                                    }}
+                                    className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 flex flex-col"
+                                  >
+                                    <span className="font-semibold text-gray-900">{result.symbol}</span>
+                                    <span className="text-xs text-gray-600 truncate">{result.security_name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setInlineSearchResults([])
+                              handleInlineAddStock()
+                            }}
+                            disabled={addItemLoading || !inlineSearchQuery.trim()}
+                            className="px-4 py-3 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {addItemLoading ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                Adding...
+                              </>
+                            ) : (
+                              <>
+                                <CheckIcon className="h-4 w-4" />
+                                Save
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={handleCancelInlineAdd}
+                            className="px-3 py-3 text-gray-600 hover:text-gray-800 rounded-lg text-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                      {inlineError && (
+                        <div className="mt-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-sm text-red-600">{inlineError}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="max-h-96 overflow-y-auto">
                     {activeWatchlist.items.length > 0 ? (
                       <table className="min-w-full divide-y divide-gray-100 text-sm">
                         <thead className="sticky top-0 bg-white/95 backdrop-blur">
                           <tr className="text-xs uppercase tracking-wide text-gray-500">
-                            <th className="px-5 py-3 text-left font-semibold">Symbol ↑</th>
-                            <th className="px-5 py-3 text-right font-semibold">Current Price</th>
-                            <th className="px-5 py-3 text-right font-semibold">Daily Change</th>
+                            <th className="px-5 py-3 text-left font-semibold">
+                              <button
+                                onClick={() => handleSort('symbol')}
+                                className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                              >
+                                Symbol
+                                {sortColumn === 'symbol' && (
+                                  sortDirection === 'asc' ? (
+                                    <ChevronUpIcon className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronDownIcon className="h-3 w-3" />
+                                  )
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-5 py-3 text-right font-semibold">
+                              <button
+                                onClick={() => handleSort('price')}
+                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
+                              >
+                                Current Price
+                                {sortColumn === 'price' && (
+                                  sortDirection === 'asc' ? (
+                                    <ChevronUpIcon className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronDownIcon className="h-3 w-3" />
+                                  )
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-5 py-3 text-right font-semibold">
+                              <button
+                                onClick={() => handleSort('change')}
+                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
+                              >
+                                Daily Change
+                                {sortColumn === 'change' && (
+                                  sortDirection === 'asc' ? (
+                                    <ChevronUpIcon className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronDownIcon className="h-3 w-3" />
+                                  )
+                                )}
+                              </button>
+                            </th>
                             <th className="px-5 py-3 text-right font-semibold">52W Range</th>
-                            <th className="px-5 py-3 text-right font-semibold">Entry</th>
-                            <th className="px-5 py-3 text-right font-semibold">P&amp;L</th>
+                            <th className="px-5 py-3 text-right font-semibold">
+                              <button
+                                onClick={() => handleSort('entry')}
+                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
+                              >
+                                Entry
+                                {sortColumn === 'entry' && (
+                                  sortDirection === 'asc' ? (
+                                    <ChevronUpIcon className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronDownIcon className="h-3 w-3" />
+                                  )
+                                )}
+                              </button>
+                            </th>
+                            <th className="px-5 py-3 text-right font-semibold">
+                              <button
+                                onClick={() => handleSort('pnl')}
+                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
+                              >
+                                P&L
+                                {sortColumn === 'pnl' && (
+                                  sortDirection === 'asc' ? (
+                                    <ChevronUpIcon className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronDownIcon className="h-3 w-3" />
+                                  )
+                                )}
+                              </button>
+                            </th>
                             <th className="px-5 py-3 text-right font-semibold">Target / Stop</th>
                             <th className="px-5 py-3 text-right font-semibold">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {showInlineAdd && (
-                            <tr className="bg-blue-50/30 border-2 border-blue-200 border-dashed">
-                              <td className="px-5 py-3" colSpan={8}>
-                                <div className="flex items-center gap-3">
-                                  <div className="relative flex-1 max-w-xs">
-                                    <input
-                                      type="text"
-                                      value={inlineSearchQuery}
-                                      onChange={(e) => handleInlineSearch(e.target.value)}
-                                      placeholder="Search stocks (e.g., AAPL, MSFT)"
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                      onKeyPress={(e) => {
-                                        if (e.key === 'Enter') {
-                                          setInlineSearchResults([])
-                                          handleInlineAddStock()
-                                        }
-                                      }}
-                                      autoFocus
-                                    />
-                                    {/* Search suggestions dropdown */}
-                                    {inlineSearchResults.length > 0 && (
-                                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
-                                        {inlineSearchResults.map((result) => (
-                                          <button
-                                            key={result.symbol}
-                                            onClick={() => {
-                                              setInlineSearchResults([])
-                                              handleInlineAddStock(result.symbol)
-                                            }}
-                                            className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 flex flex-col"
-                                          >
-                                            <span className="font-semibold text-gray-900">{result.symbol}</span>
-                                            <span className="text-xs text-gray-600 truncate">{result.security_name}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      setInlineSearchResults([])
-                                      handleInlineAddStock()
-                                    }}
-                                    disabled={addItemLoading || !inlineSearchQuery.trim()}
-                                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                  >
-                                    {addItemLoading ? (
-                                      <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                        Adding...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CheckIcon className="h-4 w-4" />
-                                        Save
-                                      </>
-                                    )}
-                                  </button>
-                                  <button
-                                    onClick={handleCancelInlineAdd}
-                                    className="px-3 py-2 text-gray-600 hover:text-gray-800 rounded-lg text-sm"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                                {inlineError && (
-                                  <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-                                    <p className="text-sm text-red-600">{inlineError}</p>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                          {activeWatchlist.items.map(item => {
+                          {getSortedItems(activeWatchlist.items, activeWatchlist.prices).map(item => {
                             const stockPrice = activeWatchlist.prices.find(price => price.symbol === item.symbol)
                             const changeClass = stockPrice && stockPrice.change >= 0 ? 'text-green-600' : 'text-red-600'
                             const symbolClass = stockPrice
@@ -735,7 +920,7 @@ const Watchlists: React.FC = () => {
                               <tr key={item.id} className="transition hover:bg-blue-50/40">
                                 <td className="px-5 py-3">
                                   <div className={`font-semibold ${symbolClass}`}>{item.symbol}</div>
-                                  <div className="text-xs text-gray-500">{item.company_name ?? item.sector ?? '—'}</div>
+                                  <div className="text-xs text-gray-500">{item.sector ?? '—'}</div>
                                 </td>
                                 <td className="px-5 py-3 text-right text-gray-900">
                                   {stockPrice ? formatCurrency(stockPrice.current_price) : '—'}
@@ -781,8 +966,17 @@ const Watchlists: React.FC = () => {
                         </tbody>
                       </table>
                     ) : (
-                      <div className="px-5 py-10 text-center text-sm text-gray-500">No stocks in this watchlist yet.</div>
+                      <div className="px-5 py-10 text-center">
+                        <ViewColumnsIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                          No stocks in this watchlist
+                        </h3>
+                        <p className="text-gray-600 mb-6">
+                          Add your first stock to get started
+                        </p>
+                      </div>
                     )}
+
                   </div>
                 </div>
               )}
@@ -828,6 +1022,74 @@ const Watchlists: React.FC = () => {
             </div>
           </div>
         )}
+
+          {/* Inline Create Watchlist Form */}
+          {showCreateInline && (
+            <div className="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-6">
+              <div className="flex items-center gap-4">
+                <div className="flex-1 grid gap-4 md:grid-cols-2">
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={createWatchlistName}
+                      onChange={(e) => handleCreateInlineSearch(e.target.value)}
+                      placeholder="Watchlist name (e.g., Tech Stocks, Growth Plays)"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleCreateInlineWatchlist()
+                        }
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={createWatchlistDescription}
+                    onChange={(e) => setCreateWatchlistDescription(e.target.value)}
+                    placeholder="Description (optional)"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleCreateInlineWatchlist()
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleCreateInlineWatchlist()}
+                    disabled={createWatchlistLoading || !createWatchlistName.trim()}
+                    className="px-4 py-3 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {createWatchlistLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <CheckIcon className="h-4 w-4" />
+                        Create
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleCancelCreateInline}
+                    className="px-3 py-3 text-gray-600 hover:text-gray-800 rounded-lg text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+              {createWatchlistError && (
+                <div className="mt-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{createWatchlistError}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {hasWatchlists ? (
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
@@ -899,7 +1161,7 @@ const Watchlists: React.FC = () => {
                                 >
                                   <div>
                                     <div className={`text-sm font-semibold ${symbolClass}`}>{item.symbol}</div>
-                                    <div className="text-xs text-gray-500">{item.company_name ?? item.sector ?? '—'}</div>
+                                    <div className="text-xs text-gray-500">{item.sector ?? '—'}</div>
                                   </div>
                                   {stockPrice ? (
                                     <div className="text-right">
@@ -975,7 +1237,7 @@ const Watchlists: React.FC = () => {
                 Create your first watchlist to start tracking performance and discovering market signals.
               </p>
               <Button
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => setShowCreateInline(true)}
                 className="gap-2 bg-blue-600 text-white shadow-md shadow-blue-200 hover:bg-blue-700"
               >
                 <PlusIcon className="h-4 w-4" />
@@ -986,13 +1248,7 @@ const Watchlists: React.FC = () => {
         )}
       </div>
     </main>
-
-    {showCreateModal && (
-      <CreateWatchlistModal
-        onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreateWatchlist}
-      />
-    )}
+    </div>
 
     <AddItemModal
       isOpen={showAddItemModal}
@@ -1000,7 +1256,7 @@ const Watchlists: React.FC = () => {
       onSave={handleAddItem}
       isLoading={addItemLoading}
     />
-  </div>
+  </>
 )
 
 }

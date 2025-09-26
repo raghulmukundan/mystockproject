@@ -201,17 +201,46 @@ def get_jobs_summary(db: Session = Depends(get_db)):
     return result
 
 @router.get("/jobs/next-market-refresh", response_model=NextMarketRefreshResponse)
-def get_next_market_refresh():
+def get_next_market_refresh(db: Session = Depends(get_db)):
     """Return the next effective market data refresh time considering market hours."""
     try:
         job = scheduler.get_job("update_market_data")
         if not job or not job.next_run_time:
             return NextMarketRefreshResponse(next_run_at=None)
-        
+
+        # Get job configuration to check market hours restriction
+        job_config = db.query(JobConfiguration).filter(
+            JobConfiguration.job_name == "update_market_data"
+        ).first()
+
+        if not job_config:
+            return NextMarketRefreshResponse(next_run_at=None)
+
         # Next scheduled run time from APScheduler (tz-aware)
         dt_local = job.next_run_time
+
+        # If job is configured for market hours only, validate the next run time
+        if job_config.only_market_hours:
+            # Convert to local time for market hours check
+            from datetime import timezone
+            import pytz
+
+            # Convert to CST (market timezone)
+            cst = pytz.timezone('America/Chicago')
+            dt_cst = dt_local.astimezone(cst)
+
+            # Check if it's a weekday (Monday=0, Sunday=6)
+            if dt_cst.weekday() >= 5:  # Saturday or Sunday
+                return NextMarketRefreshResponse(next_run_at=None)
+
+            # Check if it's within market hours (9 AM to 4 PM CST)
+            hour = dt_cst.hour
+            if hour < (job_config.market_start_hour or 9) or hour >= (job_config.market_end_hour or 16):
+                return NextMarketRefreshResponse(next_run_at=None)
+
         return NextMarketRefreshResponse(next_run_at=dt_local.isoformat())
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error getting next market refresh: {str(e)}")
         return NextMarketRefreshResponse(next_run_at=None)
 
 @router.get("/jobs/{job_name}/status", response_model=List[JobStatusResponse])
