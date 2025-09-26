@@ -21,6 +21,9 @@ import {
   ArrowTopRightOnSquareIcon,
   CheckIcon,
   ViewColumnsIcon,
+  Bars3BottomLeftIcon,
+  ClockIcon,
+  HashtagIcon,
 } from '@heroicons/react/24/outline'
 import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchlistsApi'
 import { WatchlistItem } from '../types'
@@ -47,6 +50,8 @@ const Watchlists: React.FC = () => {
   const [topDecliners, setTopDecliners] = useState<StockPrice[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeWatchlistId, setActiveWatchlistId] = useState<number | null>(null)
+  const [sortBy, setSortBy] = useState<'created' | 'stocks' | 'performance'>('created')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [detailCollapsed, setDetailCollapsed] = useState(false)
   const [showAddItemModal, setShowAddItemModal] = useState(false)
   const [addItemLoading, setAddItemLoading] = useState(false)
@@ -115,10 +120,27 @@ const Watchlists: React.FC = () => {
       })
     }
 
-    const sorted = watchlists.filter(matchesSearch)
-    sorted.sort((a, b) => getChronoValue(b) - getChronoValue(a))
-    return sorted
-  }, [watchlists, searchTerm])
+    const getSortValue = (watchlist: WatchlistWithPrices) => {
+      switch (sortBy) {
+        case 'created':
+          return getChronoValue(watchlist)
+        case 'stocks':
+          return watchlist.items.length
+        case 'performance':
+          return watchlist.totalChangePercent || 0
+        default:
+          return 0
+      }
+    }
+
+    const filtered = watchlists.filter(matchesSearch)
+    filtered.sort((a, b) => {
+      const aVal = getSortValue(a)
+      const bVal = getSortValue(b)
+      return sortOrder === 'desc' ? bVal - aVal : aVal - bVal
+    })
+    return filtered
+  }, [watchlists, searchTerm, sortBy, sortOrder])
 
   const watchlistsToShow = filteredWatchlists
 
@@ -245,7 +267,7 @@ const Watchlists: React.FC = () => {
     try {
       setCreateWatchlistLoading(true)
       setCreateWatchlistError('')
-      await watchlistsApiService.createWatchlist({
+      const newWatchlist = await watchlistsApiService.createWatchlist({
         name: createWatchlistName.trim(),
         description: createWatchlistDescription.trim() || undefined
       })
@@ -256,6 +278,9 @@ const Watchlists: React.FC = () => {
       setCreateWatchlistDescription('')
 
       await loadWatchlists()
+
+      // Automatically open the newly created watchlist
+      setActiveWatchlistId(newWatchlist.id)
     } catch (error: any) {
       console.error('Failed to create watchlist:', error)
       if (error.response?.data?.detail) {
@@ -667,15 +692,51 @@ const Watchlists: React.FC = () => {
                 className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-700 transition-colors focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-              onClick={() => setShowCreateInline(true)}
-              title="Create new watchlist"
-            >
-              <PlusIcon className="h-4 w-4" />
-              New Watchlist
-            </button>
+
+            {/* Sorting Controls */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Bars3BottomLeftIcon className="h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'created' | 'stocks' | 'performance')}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="created">
+                    📅 Created
+                  </option>
+                  <option value="stocks">
+                    🔢 Stock Count
+                  </option>
+                  <option value="performance">
+                    📈 Performance
+                  </option>
+                </select>
+
+                <button
+                  onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+                  title={`Sort ${sortOrder === 'desc' ? 'ascending' : 'descending'}`}
+                >
+                  {sortOrder === 'desc' ?
+                    <ArrowDownIcon className="h-3 w-3" /> :
+                    <ArrowUpIcon className="h-3 w-3" />
+                  }
+                  {sortOrder === 'desc' ? 'High→Low' : 'Low→High'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                onClick={() => setShowCreateInline(true)}
+                title="Create new watchlist"
+              >
+                <PlusIcon className="h-4 w-4" />
+                New Watchlist
+              </button>
+            </div>
           </div>
         )}
 
