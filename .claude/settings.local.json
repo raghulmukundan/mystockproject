@@ -59,7 +59,9 @@
       "Bash(npm uninstall:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(where psql)",
+      "Bash(del \"C:\\Users\\raghu\\OneDrive\\Documents\\mystockproject\\backend\\app\\api\\eod_scan-32496B8IJGQKK.py\")"
     ],
     "deny": [],
     "ask": []

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   ChartComponent,
   SeriesCollectionDirective,
@@ -164,28 +164,134 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
   const [showTechnicals, setShowTechnicals] = useState(false)
   const [chartType, setChartType] = useState<'candlestick' | 'line' | 'area'>('candlestick')
   const [enabledIndicators, setEnabledIndicators] = useState<string[]>(['sma20'])
+  const [cachedData, setCachedData] = useState<Record<string, ChartDataPoint[]>>({})
+  const cachedDataRef = useRef<Record<string, ChartDataPoint[]>>({})
+  const [realtimePrice, setRealtimePrice] = useState<{price: number, change: number, changePercent: number} | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
-  const fetchPriceData = useCallback(async (timeframe: TimeframePeriod) => {
-    setLoading(true)
+  // Keep ref in sync with state
+  useEffect(() => {
+    cachedDataRef.current = cachedData
+  }, [cachedData])
+
+  // Fetch real-time current price with conservative approach
+  const fetchRealtimePrice = useCallback(async () => {
     try {
-      const config = TIMEFRAMES[timeframe]
+      // Add timeout and smaller request
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 2000) // 2 second timeout for faster fallback
 
+      const response = await fetch(`http://localhost:8000/api/stocks/prices?symbols=${symbol}`, {
+        signal: controller.signal
+      })
+
+      clearTimeout(timeoutId)
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.length > 0) {
+          const priceData = data[0]
+          setRealtimePrice({
+            price: priceData.current_price,
+            change: priceData.change,
+            changePercent: priceData.change_percent
+          })
+        }
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Realtime price request timed out')
+      } else {
+        console.error('Error fetching realtime price:', error)
+      }
+
+      // Fallback: use chart data if realtime fails
+      if (priceData.length > 1) {
+        const currentClose = priceData[priceData.length - 1].close
+        const previousClose = priceData[priceData.length - 2].close
+        const change = currentClose - previousClose
+        const changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0
+
+        setRealtimePrice({
+          price: currentClose,
+          change: change,
+          changePercent: changePercent
+        })
+      }
+    }
+  }, [symbol, priceData])
+
+  // Filter 1Y data for specific timeframe
+  const filterDataForTimeframe = useCallback((yearData: ChartDataPoint[], timeframe: TimeframePeriod): ChartDataPoint[] => {
+    if (!yearData || yearData.length === 0) return []
+
+    const config = TIMEFRAMES[timeframe]
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - config.days)
+
+    return yearData.filter(point => point.x >= cutoffDate)
+  }, [])
+
+
+  // Fetch price data with minimal resource usage
+  const fetchPriceData = useCallback(async (timeframe: TimeframePeriod, forceRefresh = false, retryCount = 0) => {
+    // Cancel any ongoing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController()
+    const { signal } = abortControllerRef.current
+
+    setLoading(true)
+
+    try {
+      // Check if we have cached data for this timeframe using ref (no dependency issues)
+      const cacheKey = `${symbol}-${timeframe}` // Include symbol in cache key!
+      if (!forceRefresh && cachedDataRef.current[cacheKey] && cachedDataRef.current[cacheKey].length > 0) {
+        setPriceData(cachedDataRef.current[cacheKey])
+        setLoading(false)
+        return
+      }
+
+      // Very conservative data request to avoid resource exhaustion
+      const config = TIMEFRAMES[timeframe]
       const endDate = new Date()
       const startDate = new Date()
-      startDate.setDate(endDate.getDate() - config.days)
+
+      // Use smaller page sizes for faster loading
+      let adjustedDays = config.days
+      let maxPageSize = 50 // Reduced from 100 for faster response
+
+      if (retryCount === 0) {
+        adjustedDays = Math.min(config.days, 365) // Cap at 1 year for initial load
+        maxPageSize = 50
+      } else if (retryCount === 1) {
+        adjustedDays = Math.floor(config.days * 0.5) // More aggressive reduction
+        maxPageSize = 30
+      } else {
+        adjustedDays = Math.floor(config.days * 0.3) // Even smaller for last retry
+        maxPageSize = 20
+      }
+
+      startDate.setDate(endDate.getDate() - adjustedDays)
 
       const dateFrom = startDate.toISOString().split('T')[0]
       const dateTo = endDate.toISOString().split('T')[0]
 
-      const pageSize = config.days <= 7 ? 200 : config.days <= 180 ? 300 : 500
+      // Small delay only on retries
+      if (retryCount > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
 
-      const response = await fetch(
-        `http://localhost:8000/api/prices/browse?symbol=${symbol}&date_from=${dateFrom}&date_to=${dateTo}&page_size=${pageSize}&sort_by=date&sort_order=asc`
-      )
+      const url = `http://localhost:8000/api/prices/browse?symbol=${symbol}&date_from=${dateFrom}&date_to=${dateTo}&page_size=${maxPageSize}&sort_by=date&sort_order=asc`
+
+      const response = await fetch(url, { signal })
 
       if (response.ok) {
         const responseData = await response.json()
-        const transformedData: ChartDataPoint[] = responseData.prices.map((item: any) => ({
+        let allData: ChartDataPoint[] = responseData.prices.map((item: any) => ({
           x: new Date(item.date),
           open: item.open,
           high: item.high,
@@ -193,10 +299,42 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
           close: item.close,
           volume: item.volume || 0
         }))
-        setPriceData(transformedData)
+
+        // Skip additional page fetching for faster loading
+        // Single page should be sufficient for chart display
+
+        // Cache the data with symbol-specific key
+        const cacheKey = `${symbol}-${timeframe}`
+        const newCachedData = {
+          ...cachedDataRef.current,
+          [cacheKey]: allData
+        }
+        setCachedData(newCachedData)
+        cachedDataRef.current = newCachedData // Keep ref in sync immediately
+
+        setPriceData(allData)
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
     } catch (error) {
+      // Ignore abort errors (normal when switching timeframes quickly)
+      if (error instanceof Error && error.name === 'AbortError') {
+        return
+      }
       console.error('Error fetching price data:', error)
+
+      // Retry with even smaller data set if this was not the last attempt
+      if (retryCount < 2) {
+        console.log(`Retrying with smaller dataset... (attempt ${retryCount + 2}/3)`)
+        setTimeout(() => {
+          fetchPriceData(timeframe, forceRefresh, retryCount + 1)
+        }, 3000 + (retryCount * 2000)) // Progressive delay
+        return
+      } else {
+        // All retry attempts failed - show error state instead of mock data
+        console.error('All retry attempts failed, unable to load data')
+        setPriceData([])
+      }
     } finally {
       setLoading(false)
     }
@@ -224,9 +362,29 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
     }
   }, [symbol, priceData])
 
+
+  // Reset cache and data when symbol changes
   useEffect(() => {
-    fetchPriceData(selectedTimeframe)
-  }, [selectedTimeframe, fetchPriceData])
+    setCachedData({})
+    cachedDataRef.current = {} // Also clear the ref
+    setTechnicalData(null)
+    setPriceData([])
+    setRealtimePrice(null)
+    fetchPriceData(selectedTimeframe, true) // Force refresh for new symbol
+    fetchRealtimePrice() // Get current real-time price
+  }, [symbol])
+
+  // Handle timeframe changes for same symbol
+  useEffect(() => {
+    // Check if we have cached data for this specific symbol+timeframe
+    const cacheKey = `${symbol}-${selectedTimeframe}`
+    if (cachedDataRef.current[cacheKey] && cachedDataRef.current[cacheKey].length > 0) {
+      setPriceData(cachedDataRef.current[cacheKey])
+    } else {
+      // Fetch new data for this timeframe
+      fetchPriceData(selectedTimeframe)
+    }
+  }, [selectedTimeframe, symbol])
 
   useEffect(() => {
     if (priceData.length > 0 && !technicalData) {
@@ -234,8 +392,27 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
     }
   }, [priceData, technicalData, fetchTechnicalData])
 
+  // Auto-refresh real-time price every 2 minutes (conservative)
+  useEffect(() => {
+    if (!symbol || !realtimePrice) return // Only refresh if we already have initial price
+
+    const interval = setInterval(() => {
+      fetchRealtimePrice()
+    }, 120000) // 2 minutes
+
+    return () => clearInterval(interval)
+  }, [symbol, fetchRealtimePrice, realtimePrice])
+
+
   const handleTimeframeChange = (timeframe: TimeframePeriod) => {
     setSelectedTimeframe(timeframe)
+
+    // If we have cached 1Y data, immediately filter and display
+    const yearKey = '1Y'
+    if (cachedData[yearKey] && cachedData[yearKey].length > 0) {
+      const filteredData = filterDataForTimeframe(cachedData[yearKey], timeframe)
+      setPriceData(filteredData)
+    }
   }
 
   const toggleIndicator = (indicator: string) => {
@@ -254,10 +431,26 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
     }))
   }
 
-  const currentPrice = priceData.length > 0 ? priceData[priceData.length - 1].close : 0
-  const previousPrice = priceData.length > 1 ? priceData[priceData.length - 2].close : currentPrice
-  const priceChange = currentPrice - previousPrice
-  const priceChangePercent = previousPrice !== 0 ? (priceChange / previousPrice) * 100 : 0
+  // Use real-time price if available, otherwise fall back to chart data
+  const currentPrice = realtimePrice?.price || (priceData.length > 0 ? priceData[priceData.length - 1].close : 0)
+  const priceChange = realtimePrice?.change || 0
+  const priceChangePercent = realtimePrice?.changePercent || 0
+
+  // Calculate dynamic Y-axis range
+  const priceRange = useMemo(() => {
+    if (priceData.length === 0) return { min: 0, max: 100 }
+
+    const allPrices = priceData.flatMap(d => [d.high, d.low, d.open, d.close])
+    const minPrice = Math.min(...allPrices)
+    const maxPrice = Math.max(...allPrices)
+    const range = maxPrice - minPrice
+    const padding = range * 0.1 // 10% padding on each side
+
+    return {
+      min: Math.max(0, minPrice - padding),
+      max: maxPrice + padding
+    }
+  }, [priceData])
 
 const chartHeight = '320px'
 
@@ -436,7 +629,10 @@ const chartHeight = '320px'
               crosshairTooltip: { enable: true },
               titleStyle: { size: '12px', color: palette.textSecondary, fontFamily: 'Inter' },
               labelStyle: { color: palette.textSecondary, fontFamily: 'Inter' },
-              rowIndex: 0
+              rowIndex: 0,
+              minimum: priceRange.min,
+              maximum: priceRange.max,
+              rangePadding: 'None'
             }}
             axes={[
               {

@@ -1,7 +1,7 @@
 """
 Jobs API endpoints
 """
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
@@ -18,6 +18,8 @@ from app.services.universe_job import _refresh_universe_job
 from app.services.tech_job import run_tech_job
 from app.services.ttl_cleanup_job import cleanup_old_job_records
 from app.services.token_validation_job import validate_schwab_token_job
+from app.services.daily_movers_job import run_daily_movers_job
+from app.services.asset_metadata_enrichment_job import run_asset_metadata_enrichment_job
 import asyncio
 import logging
 
@@ -119,20 +121,90 @@ def get_all_jobs(db: Session = Depends(get_db)):
         for job in jobs
     ]
 
+class JobWithHistoryResponse(BaseModel):
+    job_name: str
+    description: str
+    enabled: bool
+    schedule_display: str
+    next_run_at: Optional[str] = None
+    job_history: List[JobStatusResponse] = []
+
+@router.get("/jobs/all-with-history", response_model=List[JobWithHistoryResponse])
+def get_all_jobs_with_history(db: Session = Depends(get_db)):
+    """Get all job configurations with their execution history - database-driven approach"""
+    jobs = db.query(JobConfiguration).filter(JobConfiguration.enabled == True).all()
+    result = []
+
+    # Database-driven approach - scheduler_id now comes from job_configurations table
+
+    for job in jobs:
+        # Get last 10 execution statuses for this job
+        job_history = db.query(JobExecutionStatus).filter(
+            JobExecutionStatus.job_name == job.job_name
+        ).order_by(JobExecutionStatus.started_at.desc()).limit(10).all()
+
+        # Format schedule display
+        if job.schedule_type == 'interval':
+            schedule_display = f"Every {job.interval_value} {job.interval_unit}"
+            if job.only_market_hours:
+                schedule_display += " (market hours only)"
+        else:  # cron
+            if job.cron_day_of_week == 'sun':
+                day_display = "Sunday"
+            elif job.cron_day_of_week == 'mon,tue,wed,thu,fri':
+                day_display = "Weekdays"
+            elif job.cron_day_of_week == 'mon-fri':
+                day_display = "mon-fri"
+            elif job.cron_day_of_week is None:
+                day_display = "Daily"
+            else:
+                day_display = job.cron_day_of_week
+            schedule_display = f"{day_display} at {job.cron_hour:02d}:{job.cron_minute:02d}"
+
+        # Get next run time from scheduler using database-driven scheduler_id
+        next_run_at = None
+        if job.scheduler_id:
+            try:
+                scheduler_job = scheduler.get_job(job.scheduler_id)
+                if scheduler_job and scheduler_job.next_run_time:
+                    next_run_at = scheduler_job.next_run_time.isoformat()
+            except Exception as e:
+                logger.error(f"Error getting next_run_at for {job.job_name} (scheduler_id: {job.scheduler_id}): {e}")
+
+        # Convert job history to response format
+        history_responses = [
+            JobStatusResponse(
+                id=status.id,
+                job_name=status.job_name,
+                status=status.status,
+                started_at=_iso_utc(status.started_at) or "",
+                completed_at=_iso_utc(status.completed_at),
+                duration_seconds=status.duration_seconds,
+                records_processed=status.records_processed,
+                error_message=status.error_message,
+                next_run_at=_iso_utc(status.next_run_at)
+            )
+            for status in job_history
+        ]
+
+        result.append(JobWithHistoryResponse(
+            job_name=job.job_name,
+            description=job.description,
+            enabled=job.enabled,
+            schedule_display=schedule_display,
+            next_run_at=next_run_at,
+            job_history=history_responses
+        ))
+
+    return result
+
 @router.get("/jobs/summary", response_model=List[JobSummaryResponse])
 def get_jobs_summary(db: Session = Depends(get_db)):
     """Get job summaries with last run status"""
     jobs = db.query(JobConfiguration).all()
     result = []
 
-    # Mapping from job names to scheduler IDs
-    scheduler_id_map = {
-        'update_market_data': 'update_market_data',
-        'nasdaq_universe_refresh': 'refresh_universe',
-        'eod_price_scan': 'eod_price_scan',
-        'technical_compute': 'eod_price_scan',  # Technical compute runs via EOD scan
-        'job_ttl_cleanup': 'job_ttl_cleanup'
-    }
+    # Database-driven approach - scheduler_id now comes from job_configurations table
 
     for job in jobs:
         # Skip deprecated job name (use nasdaq_universe_refresh instead)
@@ -175,19 +247,18 @@ def get_jobs_summary(db: Session = Depends(get_db)):
                 next_run_at=_iso_utc(last_status.next_run_at)
             )
         
-        # Get next run time from scheduler
+        # Get next run time from scheduler using database-driven scheduler_id
         next_run_at = None
-        scheduler_id = scheduler_id_map.get(job.job_name)
-        if scheduler_id:
+        if job.scheduler_id:
             try:
-                scheduler_job = scheduler.get_job(scheduler_id)
+                scheduler_job = scheduler.get_job(job.scheduler_id)
                 if scheduler_job and scheduler_job.next_run_time:
                     next_run_at = scheduler_job.next_run_time.isoformat()
                     logger.info(f"Found next_run_at for {job.job_name}: {next_run_at}")
                 else:
-                    logger.info(f"No scheduler job or next_run_time for {job.job_name} (scheduler_id={scheduler_id})")
+                    logger.info(f"No scheduler job or next_run_time for {job.job_name} (scheduler_id={job.scheduler_id})")
             except Exception as e:
-                logger.error(f"Error getting next_run_at for {job.job_name}: {e}")
+                logger.error(f"Error getting next_run_at for {job.job_name} (scheduler_id: {job.scheduler_id}): {e}")
 
         result.append(JobSummaryResponse(
             job_name=job.job_name,
@@ -265,10 +336,14 @@ def get_job_status_history(job_name: str, limit: int = 10, db: Session = Depends
         for status in statuses
     ]
 
-async def _background_market_data():
-    """Background task for market data refresh"""
+def _run_market_data_thread():
+    """Run market data refresh in a separate thread"""
     try:
-        await _update_market_data_job()
+        # Run in a new event loop to avoid blocking the main thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(_update_market_data_job())
+        loop.close()
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -276,11 +351,20 @@ async def _background_market_data():
 
 # Manual job execution endpoints
 @router.post("/jobs/market-data/run")
-async def run_market_data_now(background_tasks: BackgroundTasks):
+async def run_market_data_now():
     """Manually trigger market data refresh"""
     try:
-        background_tasks.add_task(_background_market_data)
+        # Check if market data job is already running
+        if is_job_running("update_market_data"):
+            raise HTTPException(status_code=409, detail="Market data refresh job is already running")
+
+        # Start the job in a separate thread to avoid blocking
+        thread = threading.Thread(target=_run_market_data_thread, daemon=True)
+        thread.start()
+
         return {"message": "Market data refresh started successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -351,10 +435,14 @@ async def run_eod_scan_now(request: EodScanRequest = EodScanRequest()):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def _background_universe_refresh():
-    """Background task for universe refresh"""
+def _run_universe_refresh_thread():
+    """Run universe refresh in a separate thread"""
     try:
-        await _refresh_universe_job()
+        # Run in a new event loop to avoid blocking the main thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(_refresh_universe_job())
+        loop.close()
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -409,11 +497,20 @@ async def _background_tech_analysis():
         logger.error(f"Background technical analysis failed: {str(e)}")
 
 @router.post("/jobs/universe/run")
-async def run_universe_refresh_now(background_tasks: BackgroundTasks):
+async def run_universe_refresh_now():
     """Manually trigger universe refresh"""
     try:
-        background_tasks.add_task(_background_universe_refresh)
+        # Check if universe refresh job is already running
+        if is_job_running("nasdaq_universe_refresh"):
+            raise HTTPException(status_code=409, detail="Universe refresh job is already running")
+
+        # Start the job in a separate thread to avoid blocking
+        thread = threading.Thread(target=_run_universe_refresh_thread, daemon=True)
+        thread.start()
+
         return {"message": "Universe refresh started successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -453,6 +550,65 @@ async def run_token_validation_now():
     try:
         validate_schwab_token_job()
         return {"message": "Schwab token validation completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _run_daily_movers_thread():
+    """Run daily movers calculation in a separate thread"""
+    import logging
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history, is_job_running
+    logger = logging.getLogger(__name__)
+
+    # Always record job status for manual runs
+    job_name = "daily_movers_calculation"
+    job_id = None
+
+    try:
+        job_id = begin_job(job_name)
+
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(run_daily_movers_job())
+
+        loop.close()
+
+        # Record completion with results
+        total_movers = result.get('total_movers', 0) if result else 0
+        complete_job(job_id, records_processed=total_movers)
+        prune_history(job_name, keep=5)
+
+        logger.info("Background daily movers calculation completed successfully")
+    except Exception as e:
+        logger.error(f"Background daily movers calculation failed: {str(e)}")
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
+
+@router.post("/jobs/daily_movers_calculation/run")
+async def run_daily_movers_now():
+    """Manually trigger daily movers calculation"""
+    try:
+        # Check if daily movers job is already running
+        if is_job_running("daily_movers_calculation"):
+            raise HTTPException(status_code=409, detail="Daily movers calculation job is already running")
+
+        # Run daily movers calculation in a separate thread to avoid blocking the API
+        thread = threading.Thread(
+            target=_run_daily_movers_thread,
+            daemon=True
+        )
+        thread.start()
+
+        return {"message": "Daily movers calculation started successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -694,4 +850,63 @@ async def cleanup_duplicate_jobs(db: Session = Depends(get_db)):
 
     except Exception as e:
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _run_asset_metadata_enrichment_thread():
+    """Run asset metadata enrichment in a separate thread"""
+    import logging
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history, is_job_running
+    logger = logging.getLogger(__name__)
+
+    # Always record job status for manual runs
+    job_name = "asset_metadata_enrichment"
+    job_id = None
+
+    try:
+        job_id = begin_job(job_name)
+
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(run_asset_metadata_enrichment_job())
+
+        loop.close()
+
+        # Record completion with results
+        symbols_enriched = result.get('symbols_enriched', 0) if result else 0
+        complete_job(job_id, records_processed=symbols_enriched)
+        prune_history(job_name, keep=5)
+
+        logger.info("Background asset metadata enrichment completed successfully")
+    except Exception as e:
+        logger.error(f"Background asset metadata enrichment failed: {str(e)}")
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
+
+@router.post("/jobs/asset_metadata_enrichment/run")
+async def run_asset_metadata_enrichment_now():
+    """Manually trigger asset metadata enrichment (one-time job)"""
+    try:
+        # Check if enrichment job is already running
+        if is_job_running("asset_metadata_enrichment"):
+            raise HTTPException(status_code=409, detail="Asset metadata enrichment job is already running")
+
+        # Run enrichment in a separate thread to avoid blocking the API
+        thread = threading.Thread(
+            target=_run_asset_metadata_enrichment_thread,
+            daemon=True
+        )
+        thread.start()
+
+        return {"message": "Asset metadata enrichment started successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -288,6 +288,52 @@ class TechJobSuccess(Base):
     date = Column(String, nullable=False)  # latest_trade_date
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
+
+# --- Daily Movers tables ---
+class DailyMover(Base):
+    __tablename__ = "daily_movers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(String, nullable=False)  # YYYY-MM-DD
+    symbol = Column(String, nullable=False)
+
+    # Classification
+    sector = Column(String, nullable=True)
+    market_cap_category = Column(String, nullable=True)  # 'large', 'mid', 'small', 'micro'
+    mover_type = Column(String, nullable=False)  # 'gainer' or 'loser'
+    rank_in_category = Column(Integer, nullable=False)  # 1-5 for top 5
+
+    # Price movement data
+    open_price = Column(Float, nullable=False)
+    close_price = Column(Float, nullable=False)
+    high_price = Column(Float, nullable=False)
+    low_price = Column(Float, nullable=False)
+
+    # Calculated metrics
+    price_change = Column(Float, nullable=False)  # close - open
+    price_change_percent = Column(Float, nullable=False)  # percentage change
+    volume = Column(BigInteger, nullable=False)
+
+    # Additional stock information
+    market_cap = Column(Float, nullable=True)  # Current market cap
+    week_52_high = Column(Float, nullable=True)
+    week_52_low = Column(Float, nullable=True)
+    distance_to_52w_high = Column(Float, nullable=True)  # Percentage from 52w high
+    distance_to_52w_low = Column(Float, nullable=True)   # Percentage from 52w low
+
+    # Technical indicators
+    rsi = Column(Float, nullable=True)
+    relative_volume = Column(Float, nullable=True)  # volume vs average
+
+    # Metadata
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+# Add indexes for efficient querying
+Index("daily_movers_date_idx", DailyMover.date)
+Index("daily_movers_date_sector_idx", DailyMover.date, DailyMover.sector)
+Index("daily_movers_date_market_cap_idx", DailyMover.date, DailyMover.market_cap_category)
+Index("daily_movers_date_type_idx", DailyMover.date, DailyMover.mover_type)
+
 # Import config from centralized location
 try:
     from app.core.config import DATABASE_URL, DATA_DIR

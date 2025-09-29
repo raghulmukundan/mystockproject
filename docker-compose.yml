@@ -1,12 +1,54 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15
+    container_name: mystockproject_postgres
+    environment:
+      - POSTGRES_DB=${DATABASE_NAME}
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - "${DATABASE_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/database:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: mystockproject_pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@mystockproject.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin123}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./scripts/database/pgadmin_servers.json:/pgadmin4/servers.json
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
       - TZ=America/Chicago
       - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
       - SCHWAB_CLIENT_ID=${SCHWAB_CLIENT_ID}
@@ -22,6 +64,9 @@ services:
       - C:\Users\raghu\Downloads:/downloads
     networks:
       - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -47,7 +92,7 @@ services:
     ports:
       - "8004:8004"
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
       - TZ=America/Chicago
       - TIMEZONE=America/Chicago
       - BACKEND_URL=http://backend:8000
@@ -66,10 +111,13 @@ services:
       - ./jobs-service:/app
     networks:
       - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      external-apis:
+        condition: service_started
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on:
-      - external-apis
 
   frontend:
     build: ./frontend
@@ -92,3 +140,7 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  pgadmin_data:

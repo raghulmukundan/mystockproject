@@ -12,6 +12,8 @@ from app.services.universe_job import refresh_universe_job
 from app.services.tech_job import run_tech_job_scheduled
 from app.services.ttl_cleanup_job import cleanup_old_job_records
 from app.services.token_validation_job import validate_schwab_token_job
+from app.services.daily_movers_job import run_daily_movers_job_scheduled
+from app.services.asset_metadata_enrichment_job import run_asset_metadata_enrichment_job_scheduled
 from app.core.database import SessionLocal
 from app.db.models import JobConfiguration
 import logging
@@ -89,6 +91,16 @@ def setup_job_configurations():
                 "interval_value": 12,
                 "interval_unit": "hours",
                 "only_market_hours": False
+            },
+            {
+                "job_name": "daily_movers_calculation",
+                "description": "Calculate daily top movers by sector and market cap after tech analysis",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "mon-fri",
+                "cron_hour": 18,
+                "cron_minute": 30,
+                "only_market_hours": False
             }
         ]
 
@@ -160,6 +172,15 @@ def setup_jobs():
         trigger=IntervalTrigger(hours=12),
         id="schwab_token_validation",
         name="Validate Schwab token status every 12 hours",
+        replace_existing=True,
+    )
+
+    # Daily movers calculation after market close and tech analysis
+    scheduler.add_job(
+        func=run_daily_movers_job_scheduled,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30),
+        id="daily_movers_calculation",
+        name="Calculate daily top movers by sector and market cap",
         replace_existing=True,
     )
 

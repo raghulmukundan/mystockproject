@@ -599,14 +599,14 @@ const Watchlists: React.FC = () => {
             </div>
             <div className="max-h-56 space-y-2 overflow-y-auto px-4 pb-4 pr-2">
               {topPerformers.length > 0 ? (
-                topPerformers.map(stock => {
+                topPerformers.map((stock, index) => {
                   const belongsToWatchlist = watchlists.find(w =>
                     w.items.some(item => item.symbol === stock.symbol)
                   )
 
                   return (
                     <div
-                      key={`top-performer-${stock.symbol}`}
+                      key={`top-performer-${stock.symbol}-${index}`}
                       className="rounded-xl border border-green-100 bg-green-50/70 px-3 py-2 text-sm transition-colors duration-200 hover:border-green-200 hover:bg-green-100/70"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -646,14 +646,14 @@ const Watchlists: React.FC = () => {
             </div>
             <div className="max-h-56 space-y-2 overflow-y-auto px-4 pb-4 pr-2">
               {topDecliners.length > 0 ? (
-                topDecliners.map(stock => {
+                topDecliners.map((stock, index) => {
                   const belongsToWatchlist = watchlists.find(w =>
                     w.items.some(item => item.symbol === stock.symbol)
                   )
 
                   return (
                     <div
-                      key={`top-decliner-${stock.symbol}`}
+                      key={`top-decliner-${stock.symbol}-${index}`}
                       className="rounded-xl border border-red-100 bg-red-50/70 px-3 py-2 text-sm transition-colors duration-200 hover:border-red-200 hover:bg-red-100/70"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -1009,7 +1009,9 @@ const Watchlists: React.FC = () => {
                                   >
                                     {item.symbol}
                                   </div>
-                                  <div className="text-xs text-gray-500">{item.sector ?? '—'}</div>
+                                  <div className="text-xs text-gray-500">
+                                    {item.sector || '—'}
+                                  </div>
                                 </td>
                                 <td className="px-5 py-3 text-right text-gray-900">
                                   {stockPrice ? formatCurrency(stockPrice.current_price) : '—'}
@@ -1094,8 +1096,8 @@ const Watchlists: React.FC = () => {
                 <span className="text-xs font-medium text-green-600">{topPerformers.length}</span>
               </div>
               <div className="mt-3 space-y-2">
-                {topPerformers.slice(0, 3).map(stock => (
-                  <div key={stock.symbol} className="flex items-center justify-between rounded-xl border border-green-100 bg-green-50/80 px-3 py-2">
+                {topPerformers.slice(0, 3).map((stock, index) => (
+                  <div key={`mobile-top-performer-${stock.symbol}-${index}`} className="flex items-center justify-between rounded-xl border border-green-100 bg-green-50/80 px-3 py-2">
                     <span className="text-sm font-semibold text-green-900">{stock.symbol}</span>
                     <span className="text-xs font-semibold text-green-700">{formatPercent(stock.change_percent)}</span>
                   </div>
@@ -1111,8 +1113,8 @@ const Watchlists: React.FC = () => {
                 <span className="text-xs font-medium text-red-600">{topDecliners.length}</span>
               </div>
               <div className="mt-3 space-y-2">
-                {topDecliners.slice(0, 3).map(stock => (
-                  <div key={stock.symbol} className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50/80 px-3 py-2">
+                {topDecliners.slice(0, 3).map((stock, index) => (
+                  <div key={`mobile-top-decliner-${stock.symbol}-${index}`} className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50/80 px-3 py-2">
                     <span className="text-sm font-semibold text-red-900">{stock.symbol}</span>
                     <span className="text-xs font-semibold text-red-700">{formatPercent(stock.change_percent)}</span>
                   </div>
@@ -1272,7 +1274,9 @@ const Watchlists: React.FC = () => {
                                     }}
                                   >
                                     <div className={`text-sm font-semibold ${symbolClass} hover:text-blue-600 transition-colors`}>{item.symbol}</div>
-                                    <div className="text-xs text-gray-500">{item.sector ?? '—'}</div>
+                                    <div className="text-xs text-gray-500">
+                                      {item.sector || '—'}
+                                    </div>
                                   </div>
                                   {stockPrice ? (
                                     <div className="text-right">
