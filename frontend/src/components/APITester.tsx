@@ -158,6 +158,40 @@ const API_ENDPOINTS: APIEndpoint[] = [
     description: 'Get current stock quotes from Schwab',
     category: 'External APIs'
   },
+  {
+    id: 'schwab-history-single',
+    name: 'Get Schwab Price History (Single)',
+    method: 'GET',
+    url: 'http://localhost:8003/schwab/history/AAPL?period_type=month&period=1&frequency_type=daily&frequency=1',
+    description: 'Get price history for a single symbol with flexible periods',
+    category: 'External APIs'
+  },
+  {
+    id: 'schwab-history-daily',
+    name: 'Get Schwab Daily History',
+    method: 'GET',
+    url: 'http://localhost:8003/schwab/history/AAPL/daily?start=2024-01-01&end=2024-01-31',
+    description: 'Get daily OHLCV bars for a single symbol',
+    category: 'External APIs'
+  },
+  {
+    id: 'schwab-history-fetch',
+    name: 'Fetch Schwab History (Multiple)',
+    method: 'POST',
+    url: 'http://localhost:8003/schwab/history/fetch?start=2024-01-01&end=2024-01-31',
+    description: 'Fetch daily price history for multiple symbols',
+    defaultBody: JSON.stringify(["AAPL", "MSFT", "GOOGL"], null, 2),
+    headers: { 'Content-Type': 'application/json' },
+    category: 'External APIs'
+  },
+  {
+    id: 'schwab-instruments-search',
+    name: 'Search Schwab Instruments',
+    method: 'GET',
+    url: 'http://localhost:8003/schwab/instruments/search?symbol=AAPL&projection=symbol-search',
+    description: 'Search for instruments by symbol',
+    category: 'External APIs'
+  },
 
   // Jobs Service Endpoints
   {

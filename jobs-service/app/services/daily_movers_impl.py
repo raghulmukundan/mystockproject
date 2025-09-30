@@ -30,21 +30,15 @@ async def run_daily_movers_compute() -> Dict:
 
         logger.info(f"Computing daily movers for date: {latest_date}")
 
-        # Get stock data with price movements and metadata
-        stocks_data = await get_stocks_with_movements(latest_date)
+        # Get ALL stock data with price movements and metadata in one query
+        stocks_data = await get_all_stocks_with_movements(latest_date)
         logger.info(f"Found {len(stocks_data)} stocks with price data")
 
         if not stocks_data:
             raise Exception("No stock movement data available for analysis")
 
-        # Categorize stocks by market cap
-        stocks_with_market_cap = await enrich_with_market_cap_categories(stocks_data)
-
-        # Categorize by sector (get sector info from asset_metadata)
-        stocks_with_sectors = await enrich_with_sector_info(stocks_with_market_cap)
-
-        # Calculate top movers by sector and market cap category
-        movers_results = calculate_top_movers(stocks_with_sectors)
+        # Calculate top movers with nested structure (Sector->MarketCap and MarketCap->Sector)
+        movers_results = calculate_top_movers_nested(stocks_data)
 
         # Store results in database
         stored_count = await store_daily_movers(latest_date, movers_results)
@@ -53,8 +47,8 @@ async def run_daily_movers_compute() -> Dict:
             'date': latest_date,
             'total_stocks_analyzed': len(stocks_data),
             'total_movers': stored_count,
-            'sectors_processed': len(set(stock.get('sector') for stock in stocks_with_sectors if stock.get('sector'))),
-            'market_cap_categories': len(set(stock.get('market_cap_category') for stock in stocks_with_sectors if stock.get('market_cap_category')))
+            'sectors_processed': len(set(stock.get('sector') for stock in stocks_data if stock.get('sector'))),
+            'market_cap_categories': len(set(stock.get('market_cap_category') for stock in stocks_data if stock.get('market_cap_category')))
         }
 
         logger.info(f"Daily movers computation completed: {result}")
@@ -78,10 +72,10 @@ async def get_latest_trading_date() -> Optional[str]:
             if result and result.latest_date:
                 return result.latest_date
 
-            # Fallback to prices_daily_ohlc
+            # Fallback to unified price data
             result = db.execute(text("""
                 SELECT MAX(date) as latest_date
-                FROM prices_daily_ohlc
+                FROM unified_price_data
                 WHERE date IS NOT NULL
             """)).fetchone()
 
@@ -91,71 +85,58 @@ async def get_latest_trading_date() -> Optional[str]:
         logger.error(f"Error getting latest trading date: {str(e)}")
         raise
 
-async def get_stocks_with_movements(date: str) -> List[Dict]:
-    """Get stock price movements for the given date"""
+async def get_all_stocks_with_movements(date: str) -> List[Dict]:
+    """Get ALL stock price movements for the given date (no limit)"""
     try:
         with SessionLocal() as db:
-            # Get price data from both sources
+            # Get ALL price data with CORRECT daily percentage change calculation
+            # Daily % Change = (Current Close - Previous Close) / Previous Close * 100
             query = text("""
-                WITH price_data AS (
-                    -- From prices_daily_ohlc
-                    SELECT
-                        symbol,
-                        date,
-                        open,
-                        high,
-                        low,
-                        close,
-                        volume,
-                        close - open AS price_change,
-                        CASE
-                            WHEN open > 0 THEN ((close - open) / open) * 100
-                            ELSE 0
-                        END AS price_change_percent
-                    FROM prices_daily_ohlc
-                    WHERE date = :date
-
-                    UNION ALL
-
-                    -- From historical_prices (for additional coverage)
-                    SELECT
-                        symbol,
-                        date,
-                        open,
-                        high,
-                        low,
-                        close,
-                        volume,
-                        close - open AS price_change,
-                        CASE
-                            WHEN open > 0 THEN ((close - open) / open) * 100
-                            ELSE 0
-                        END AS price_change_percent
-                    FROM historical_prices
-                    WHERE date = :date
-                    AND country = 'us'
-                    AND asset_type = 'stock'
-                )
                 SELECT
-                    symbol,
-                    date,
-                    open,
-                    high,
-                    low,
-                    close,
-                    volume,
-                    price_change,
-                    price_change_percent
-                FROM price_data
-                WHERE ABS(price_change_percent) > 0.5  -- Only include meaningful moves
-                ORDER BY ABS(price_change_percent) DESC
-                LIMIT 500  -- Process top 500 movers for performance
+                    upd.symbol,
+                    upd.date,
+                    upd.open,
+                    upd.high,
+                    upd.low,
+                    upd.close,
+                    upd.volume,
+                    prev.close as previous_close,
+                    upd.close - COALESCE(prev.close, upd.open) AS price_change,
+                    CASE
+                        WHEN COALESCE(prev.close, upd.open) > 0
+                        THEN ((upd.close - COALESCE(prev.close, upd.open)) / COALESCE(prev.close, upd.open)) * 100
+                        ELSE 0
+                    END AS price_change_percent,
+                    am.sector,
+                    am.market_cap
+                FROM unified_price_data upd
+                LEFT JOIN unified_price_data prev ON upd.symbol = prev.symbol
+                    AND prev.date = (
+                        SELECT MAX(date)
+                        FROM unified_price_data prev2
+                        WHERE prev2.symbol = upd.symbol
+                        AND prev2.date < upd.date
+                    )
+                LEFT JOIN asset_metadata am ON upd.symbol = am.symbol AND am.country = 'us'
+                WHERE upd.date = :date
+                AND upd.open > 0
+                AND upd.close > 0
+                ORDER BY upd.symbol
             """)
 
             result = db.execute(query, {"date": date}).fetchall()
 
             stocks = []
             for row in result:
+                # Calculate market cap category
+                market_cap_category = 'unknown'
+                if row.market_cap:
+                    try:
+                        market_cap_value = float(row.market_cap)
+                        market_cap_category = categorize_market_cap(market_cap_value)
+                    except (ValueError, TypeError):
+                        market_cap_category = 'unknown'
+
                 stocks.append({
                     'symbol': row.symbol,
                     'date': row.date,
@@ -164,8 +145,12 @@ async def get_stocks_with_movements(date: str) -> List[Dict]:
                     'low': float(row.low),
                     'close': float(row.close),
                     'volume': int(row.volume),
+                    'previous_close': float(row.previous_close) if row.previous_close else None,
                     'price_change': float(row.price_change),
-                    'price_change_percent': float(row.price_change_percent)
+                    'price_change_percent': float(row.price_change_percent),
+                    'sector': row.sector or 'Unknown',
+                    'market_cap': float(row.market_cap) if row.market_cap else None,
+                    'market_cap_category': market_cap_category
                 })
 
             return stocks
@@ -246,87 +231,64 @@ async def enrich_with_sector_info(stocks: List[Dict]) -> List[Dict]:
                 stock['sector'] = 'Unknown'
         return stocks
 
-def calculate_top_movers(stocks: List[Dict]) -> List[Dict]:
-    """Calculate top 5 gainers and 5 losers per sector and market cap category"""
+import heapq
+from collections import defaultdict
+
+def calculate_top_movers_nested(stocks: List[Dict]) -> List[Dict]:
+    """Calculate top movers: For each sector-market_cap combination, get top 5 gainers and top 5 losers"""
     movers = []
 
-    # Group by sector and get top movers
-    sectors = {}
+    # Use a set to track which (symbol, sector, market_cap) combinations we've already processed
+    # to avoid duplicates
+    processed_combinations = set()
+
+    # Group by Sector -> Market Cap Category (single view, no duplicates)
+    sector_market_cap_groups = defaultdict(lambda: defaultdict(list))
     for stock in stocks:
         sector = stock.get('sector', 'Unknown')
-        if sector not in sectors:
-            sectors[sector] = []
-        sectors[sector].append(stock)
+        market_cap_category = stock.get('market_cap_category', 'unknown')
+        if sector != 'Unknown' and market_cap_category != 'unknown':
+            sector_market_cap_groups[sector][market_cap_category].append(stock)
 
-    # Process sector-based movers - always get 5 gainers and 5 losers per sector
-    for sector, sector_stocks in sectors.items():
-        if sector == 'Unknown' or len(sector_stocks) < 2:
-            continue
+    # Process each sector-market_cap combination
+    for sector, market_cap_dict in sector_market_cap_groups.items():
+        for market_cap_category, stocks_list in market_cap_dict.items():
+            if len(stocks_list) < 1:
+                continue
 
-        # Sort by percentage change - get top 5 of each
-        gainers = sorted([s for s in sector_stocks if s['price_change_percent'] > 0],
-                        key=lambda x: x['price_change_percent'], reverse=True)[:5]
-        losers = sorted([s for s in sector_stocks if s['price_change_percent'] < 0],
-                       key=lambda x: x['price_change_percent'])[:5]
+            # Get gainers and losers
+            gainers = [s for s in stocks_list if s['price_change_percent'] > 0]
+            losers = [s for s in stocks_list if s['price_change_percent'] < 0]
 
-        # Add all gainers (up to 5)
-        for rank, stock in enumerate(gainers, 1):
-            mover = stock.copy()
-            mover.update({
-                'mover_type': 'gainer',
-                'rank_in_category': rank,
-                'category': f'sector_{sector}'
-            })
-            movers.append(mover)
+            # Sort and take top 5 of each
+            top_gainers = sorted(gainers, key=lambda x: x['price_change_percent'], reverse=True)[:5]
+            top_losers = sorted(losers, key=lambda x: x['price_change_percent'])[:5]
 
-        # Add all losers (up to 5)
-        for rank, stock in enumerate(losers, 1):
-            mover = stock.copy()
-            mover.update({
-                'mover_type': 'loser',
-                'rank_in_category': rank,
-                'category': f'sector_{sector}'
-            })
-            movers.append(mover)
+            # Add gainers
+            for rank, stock in enumerate(top_gainers, 1):
+                combination_key = (stock['symbol'], sector, market_cap_category, 'gainer')
+                if combination_key not in processed_combinations:
+                    mover = stock.copy()
+                    mover.update({
+                        'mover_type': 'gainer',
+                        'rank_in_category': rank,
+                        'category': f'sector_{sector}_marketcap_{market_cap_category}'
+                    })
+                    movers.append(mover)
+                    processed_combinations.add(combination_key)
 
-    # Group by market cap category and get top movers
-    market_caps = {}
-    for stock in stocks:
-        cap_category = stock.get('market_cap_category', 'unknown')
-        if cap_category not in market_caps:
-            market_caps[cap_category] = []
-        market_caps[cap_category].append(stock)
-
-    # Process market cap movers - get top 5 gainers and 5 losers per market cap
-    for cap_category, cap_stocks in market_caps.items():
-        if cap_category == 'unknown' or len(cap_stocks) < 2:
-            continue
-
-        # Sort by percentage change - get top 5 of each
-        gainers = sorted([s for s in cap_stocks if s['price_change_percent'] > 0],
-                        key=lambda x: x['price_change_percent'], reverse=True)[:5]
-        losers = sorted([s for s in cap_stocks if s['price_change_percent'] < 0],
-                       key=lambda x: x['price_change_percent'])[:5]
-
-        # Add all gainers (up to 5)
-        for rank, stock in enumerate(gainers, 1):
-            mover = stock.copy()
-            mover.update({
-                'mover_type': 'gainer',
-                'rank_in_category': rank,
-                'category': f'market_cap_{cap_category}'
-            })
-            movers.append(mover)
-
-        # Add all losers (up to 5)
-        for rank, stock in enumerate(losers, 1):
-            mover = stock.copy()
-            mover.update({
-                'mover_type': 'loser',
-                'rank_in_category': rank,
-                'category': f'market_cap_{cap_category}'
-            })
-            movers.append(mover)
+            # Add losers
+            for rank, stock in enumerate(top_losers, 1):
+                combination_key = (stock['symbol'], sector, market_cap_category, 'loser')
+                if combination_key not in processed_combinations:
+                    mover = stock.copy()
+                    mover.update({
+                        'mover_type': 'loser',
+                        'rank_in_category': rank,
+                        'category': f'sector_{sector}_marketcap_{market_cap_category}'
+                    })
+                    movers.append(mover)
+                    processed_combinations.add(combination_key)
 
     return movers
 
@@ -342,9 +304,12 @@ async def store_daily_movers(date: str, movers: List[Dict]) -> int:
             # Insert new data
             insert_count = 0
             for mover in movers:
-                category_parts = mover['category'].split('_', 1)
-                category_type = category_parts[0]  # 'sector' or 'market_cap'
-                category_value = category_parts[1] if len(category_parts) > 1 else None
+                # Parse the new nested category format
+                # Examples: 'sector_Technology_marketcap_large' or 'marketcap_mega_sector_Technology'
+                category_parts = mover['category'].split('_')
+
+                # Extract category info - always store both sector and market_cap_category from the stock data
+                # The category field is just for tracking the grouping logic
 
                 # Get additional technical data
                 tech_data = get_technical_data(db, mover['symbol'], date)

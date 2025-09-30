@@ -159,7 +159,9 @@ def get_all_jobs_with_history(db: Session = Depends(get_db)):
                 day_display = "Daily"
             else:
                 day_display = job.cron_day_of_week
-            schedule_display = f"{day_display} at {job.cron_hour:02d}:{job.cron_minute:02d}"
+            hour = job.cron_hour if job.cron_hour is not None else 0
+            minute = job.cron_minute if job.cron_minute is not None else 0
+            schedule_display = f"{day_display} at {hour:02d}:{minute:02d}"
 
         # Get next run time from scheduler using database-driven scheduler_id
         next_run_at = None
@@ -231,7 +233,9 @@ def get_jobs_summary(db: Session = Depends(get_db)):
                 day_display = "Daily"
             else:
                 day_display = job.cron_day_of_week
-            schedule_display = f"{day_display} at {job.cron_hour:02d}:{job.cron_minute:02d}"
+            hour = job.cron_hour if job.cron_hour is not None else 0
+            minute = job.cron_minute if job.cron_minute is not None else 0
+            schedule_display = f"{day_display} at {hour:02d}:{minute:02d}"
         
         last_run_response = None
         if last_status:
@@ -400,6 +404,16 @@ def _run_eod_scan_thread(start_date: Optional[str] = None, end_date: Optional[st
         prune_history(job_name, keep=5)
 
         logger.info("Background EOD scan completed successfully")
+
+        # Trigger technical analysis after successful EOD completion
+        # This ensures technical analysis only runs when EOD data is fresh and available
+        logger.info("EOD scan completed successfully. Triggering technical analysis...")
+        from app.services.eod_scan_job import _trigger_technical_analysis_after_eod
+        loop2 = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop2)
+        loop2.run_until_complete(_trigger_technical_analysis_after_eod())
+        loop2.close()
+
     except Exception as e:
         logger.error(f"Background EOD scan failed: {str(e)}")
         if job_id is not None:
@@ -465,8 +479,9 @@ def _run_tech_analysis_thread():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        from app.services.tech_impl import run_technical_compute
-        result = loop.run_until_complete(run_technical_compute())
+        # Use the updated tech_job.run_tech_job() function which includes daily movers triggering
+        from app.services.tech_job import run_tech_job
+        result = loop.run_until_complete(run_tech_job())
 
         loop.close()
 

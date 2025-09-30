@@ -10,13 +10,10 @@ import TradingViewWidget from '../components/TradingViewWidget'
 import FinancialWidget from '../components/FinancialWidget'
 import StockDetailView from '../components/StockDetailView'
 import DailyMoversTable from '../components/DailyMoversTable'
-import SectorSummaryGrid from '../components/SectorSummaryGrid'
+import DailyMoversHeatmap from '../components/DailyMoversHeatmap'
 import MarketSummaryCard from '../components/MarketSummaryCard'
 import { dailyMoversApi, DailyMoversResponse } from '../services/dailyMoversApi'
 import { universeApi } from '../lib/universeApi'
-
-// Major market indexes to track
-const MAJOR_INDEXES = ['SPY', 'QQQ', 'DIA']
 
 export default function Dashboard() {
   const [dailyMoversData, setDailyMoversData] = useState<DailyMoversResponse | null>(null)
@@ -313,10 +310,14 @@ export default function Dashboard() {
             {/* Check if we have data */}
             {(dailyMoversData.sectors.length > 0 || dailyMoversData.market_caps.length > 0) ? (
               <>
-                {/* Sector Performance Overview */}
-                {dailyMoversData.sectors.length > 0 && (
+                {/* Sector & Market Cap Heatmap */}
+                {(dailyMoversData.sectors.length > 0 || dailyMoversData.market_caps.length > 0) && (
                   <div className="mb-8">
-                    <SectorSummaryGrid sectors={dailyMoversData.sectors} />
+                    <DailyMoversHeatmap
+                      sectors={dailyMoversData.sectors}
+                      marketCaps={dailyMoversData.market_caps}
+                      onSelectStock={handleStockSelect}
+                    />
                   </div>
                 )}
 
