@@ -1,60 +1,29 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { 
-  ChartBarIcon, 
-  TrophyIcon, 
-  ExclamationTriangleIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  ClockIcon,
+import {
+  ChartBarIcon,
   ArrowTopRightOnSquareIcon,
-  ChevronDownIcon,
-  ChevronUpIcon
+  ClockIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
-import { Watchlist } from '../types'
 import TradingViewWidget from '../components/TradingViewWidget'
 import FinancialWidget from '../components/FinancialWidget'
 import StockDetailView from '../components/StockDetailView'
-import { watchlistsApi } from '../services/api'
-import { stockApi, StockPrice } from '../services/stockApi'
+import DailyMoversTable from '../components/DailyMoversTable'
+import DailyMoversHeatmap from '../components/DailyMoversHeatmap'
+import MarketSummaryCard from '../components/MarketSummaryCard'
+import SectorPerformanceSummary from '../components/SectorPerformanceSummary'
+import { dailyMoversApi, DailyMoversResponse } from '../services/dailyMoversApi'
 import { universeApi } from '../lib/universeApi'
 
-// Major market indexes to track
-const MAJOR_INDEXES = ['SPY', 'QQQ', 'DIA']
-
-// Function to calculate real performance data
-const calculateWatchlistPerformance = (watchlist: Watchlist, priceData: Record<string, StockPrice>) => {
-  let totalGainLoss = 0
-  let totalValue = 0
-  let validItems = 0
-
-  for (const item of watchlist.items) {
-    const price = priceData[item.symbol]
-    if (price) {
-      totalGainLoss += price.change_percent
-      totalValue += price.current_price
-      validItems++
-    }
-  }
-
-  if (validItems === 0) {
-    return { performance: 0, trend: 'neutral' as const, hasData: false }
-  }
-
-  const avgPerformance = totalGainLoss / validItems
-  return {
-    performance: avgPerformance,
-    trend: avgPerformance >= 0 ? ('up' as const) : ('down' as const),
-    hasData: true
-  }
-}
-
 export default function Dashboard() {
-  const [watchlists, setWatchlists] = useState<Watchlist[]>([])
+  const [activeTab, setActiveTab] = useState<'overview' | 'movers'>('overview')
+  const [dailyMoversData, setDailyMoversData] = useState<DailyMoversResponse | null>(null)
+  const [summaryData, setSummaryData] = useState<{total_movers: number, total_gainers: number, total_losers: number} | null>(null)
   const [loading, setLoading] = useState(true)
-  const [pricesLoading, setPricesLoading] = useState(false)
   const [error, setError] = useState('')
-  const [priceData, setPriceData] = useState<Record<string, StockPrice>>({})
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+
   // Major market indexes with TradingView symbols
   const majorIndexes = [
     {
@@ -76,140 +45,83 @@ export default function Dashboard() {
       tradingViewSymbol: 'AMEX:DIA'
     }
   ]
-  
-  // Index prices removed - now shown in TradingView widgets
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   useEffect(() => {
-    loadWatchlists()
+    loadDailyMovers()
   }, [])
 
-  const loadWatchlists = async () => {
+  const loadDailyMovers = async () => {
     try {
-      const data = await watchlistsApi.getAll()
-      console.log('🔍 Received watchlists data:', data)
-      console.log('🔍 Data type:', typeof data, 'Is array:', Array.isArray(data))
+      setLoading(true)
+      setError('')
+      const data = await dailyMoversApi.getLatest()
+      setDailyMoversData(data)
 
-      // Ensure data is an array
-      const watchlistsArray = Array.isArray(data) ? data : []
-      setWatchlists(watchlistsArray)
-      setLoading(false) // Show dashboard immediately
+      // Get raw summary data for accurate counts
+      if (data.date) {
+        const summary = await dailyMoversApi.getRawSummary(data.date)
+        setSummaryData(summary)
+      }
 
-      // Prices will be loaded from backend cache when needed
-      // No automatic price loading on page load
+      setLastRefresh(new Date())
     } catch (err: any) {
-      setError('Failed to load watchlists')
-      console.error(err)
+      setError('Failed to load daily movers data. Please try again later.')
+      console.error('Error loading daily movers:', err)
+    } finally {
       setLoading(false)
     }
   }
 
-
-  const loadPricesInBackground = async (watchlistData: Watchlist[]) => {
-    const allSymbols = Array.from(new Set(watchlistData.flatMap(w => w.items.map(item => item.symbol))))
-    if (allSymbols.length === 0) return
-    
-    // Note: Market hours check is now handled by the backend
-    // The backend will serve cached data during market close or allow first-time fetching
-    
-    setPricesLoading(true)
-    try {
-      // Optimized: Backend now handles cache efficiently
-      const batchSize = 15 // Larger batches since backend is cache-optimized
-      const delay = 1000 // Reduced delay since backend handles caching
-      let allPrices: Record<string, StockPrice> = {}
-      
-      console.log(`Loading prices for ${allSymbols.length} symbols progressively...`)
-      
-      for (let i = 0; i < allSymbols.length; i += batchSize) {
-        const batch = allSymbols.slice(i, i + batchSize)
-        console.log(`Loading batch ${Math.floor(i/batchSize) + 1}: ${batch.join(', ')}`)
-        
-        try {
-          const params = new URLSearchParams()
-          batch.forEach(symbol => params.append('symbols', symbol))
-          
-          // Use a more compatible approach for timeouts
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
-          
-          const response = await fetch(`/api/stocks/prices?${params}`, {
-            signal: controller.signal
-          })
-          clearTimeout(timeoutId)
-          
-          if (response.ok) {
-            const batchPrices = await response.json()
-            allPrices = { ...allPrices, ...batchPrices }
-            
-            // Update UI progressively
-            setPriceData(prev => ({ ...prev, ...batchPrices }))
-          } else {
-            console.warn(`Failed to load prices for batch: ${batch.join(', ')}`)
-          }
-          
-          // Wait between batches (except for the last batch)
-          if (i + batchSize < allSymbols.length) {
-            await new Promise(resolve => setTimeout(resolve, delay))
-          }
-        } catch (batchError) {
-          console.error(`Error loading batch ${batch.join(', ')}:`, batchError)
-        }
-      }
-      
-      console.log(`Loaded ${Object.keys(allPrices).length} prices total`)
-    } catch (priceError) {
-      console.error('Failed to load stock prices:', priceError)
-    } finally {
-      setPricesLoading(false)
-    }
+  const handleRefresh = () => {
+    loadDailyMovers()
   }
 
-  // Index price loading removed - TradingView widgets handle this
-
-  // Calculate statistics
-  const totalWatchlists = watchlists.length
-  const allSymbols = Array.isArray(watchlists) ? watchlists.flatMap(w => w.items?.map(item => item.symbol) || []) : []
-  const uniqueSymbols = new Set(allSymbols).size
-  
-  // Calculate performance metrics
-  const watchlistPerformances = Array.isArray(watchlists) ? watchlists.map(watchlist => ({
-    ...watchlist,
-    performance: calculateWatchlistPerformance(watchlist, priceData)
-  })) : []
-  
-  const bestPerforming = watchlistPerformances.reduce((best, current) => 
-    current.performance.performance > (best?.performance.performance || -Infinity) ? current : best, 
-    null as typeof watchlistPerformances[0] | null
-  )
-  
-  const worstPerforming = watchlistPerformances.reduce((worst, current) => 
-    current.performance.performance < (worst?.performance.performance || Infinity) ? current : worst,
-    null as typeof watchlistPerformances[0] | null
-  )
-
-  const watchlistsWithData = watchlistPerformances.filter(w => w.performance.hasData)
-  const avgPerformance = watchlistsWithData.length > 0 
-    ? watchlistsWithData.reduce((sum, w) => sum + w.performance.performance, 0) / watchlistsWithData.length 
-    : 0
-  
-  const priceDataCount = Object.keys(priceData).length
-  const totalUniqueSymbols = uniqueSymbols
-
-  const totalMarketValue = watchlists.reduce((total, watchlist) => {
-    return total + watchlist.items.reduce((sum, item) => {
-      const price = priceData[item.symbol]
-      const currentPrice = price?.current_price || 0
-      const shares = 100 // Assume 100 shares per position for market value calculation
-      return sum + (currentPrice * shares)
-    }, 0)
-  }, 0)
-
-  // Define all state variables at the top level - never conditionally
+  // Search functionality
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [searchResults, setSearchResults] = useState<string[]>([])
   const [selectedStock, setSelectedStock] = useState<string | null>(null)
   const [analysisModalOpen, setAnalysisModalOpen] = useState<boolean>(false)
+
+  // Calculate summary statistics using raw data when available
+  const calculateSummaryStats = () => {
+    if (summaryData) {
+      return {
+        totalGainers: summaryData.total_gainers,
+        totalLosers: summaryData.total_losers,
+        totalMovers: summaryData.total_movers
+      }
+    }
+
+    if (!dailyMoversData) {
+      return { totalGainers: 0, totalLosers: 0, totalMovers: 0 }
+    }
+
+    // Fallback to grouped data calculation
+    let totalGainers = 0
+    let totalLosers = 0
+
+    // Count from sectors
+    dailyMoversData.sectors.forEach(sector => {
+      totalGainers += sector.gainers.length
+      totalLosers += sector.losers.length
+    })
+
+    // Count from market caps (avoid double counting by only counting if no sectors)
+    if (dailyMoversData.sectors.length === 0) {
+      dailyMoversData.market_caps.forEach(marketCap => {
+        totalGainers += marketCap.gainers.length
+        totalLosers += marketCap.losers.length
+      })
+    }
+
+    return {
+      totalGainers,
+      totalLosers,
+      totalMovers: dailyMoversData.total_movers
+    }
+  }
+
+  const summaryStats = calculateSummaryStats()
   
   if (loading) {
     return (
@@ -239,17 +151,13 @@ export default function Dashboard() {
         sort: 'symbol',
         order: 'asc'
       })
-      
+
       // Extract symbols from the response
       const matches = response.items.map(item => item.symbol)
       setSearchResults(matches)
     } catch (error) {
       console.error('Failed to search symbols:', error)
-      // Fallback to watchlist symbols if universe API fails
-      const matches = allSymbols
-        .filter(symbol => symbol.toUpperCase().includes(query.toUpperCase()))
-        .slice(0, 8)
-      setSearchResults(matches)
+      setSearchResults([])
     }
   }
 
@@ -270,220 +178,236 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="px-4 py-6 sm:px-0">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-600">
-            Welcome to your stock watchlist dashboard
-          </p>
-        </div>
-        
-        {/* Search Bar */}
-        <div className="w-full max-w-md relative">
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              onKeyPress={handleSearchKeyPress}
-              placeholder="Search stocks by symbol..."
-              className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Market Dashboard</h1>
+              <p className="text-sm text-gray-600 mt-0.5">
+                Real-time market data and sector analysis
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {/* Refresh Button */}
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                <ArrowPathIcon className={`h-4 w-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    onKeyPress={handleSearchKeyPress}
+                    placeholder="Search stocks..."
+                    className="w-56 px-3 py-1.5 pr-9 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Search Results Dropdown */}
+                {searchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+                    <ul className="py-1">
+                      {searchResults.map((symbol) => (
+                        <li
+                          key={symbol}
+                          className="px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+                          onClick={() => handleStockSelect(symbol)}
+                        >
+                          {symbol}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          
-          {/* Search Results Dropdown */}
-          {searchResults.length > 0 && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
-              <ul className="py-1">
-                {searchResults.map((symbol) => (
-                  <li 
-                    key={symbol}
-                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => handleStockSelect(symbol)}
-                  >
-                    {symbol}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+
+          {/* Tabs */}
+          <div className="mt-4 border-b border-gray-200">
+            <nav className="-mb-px flex space-x-4">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'overview'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setActiveTab('movers')}
+                className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'movers'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Movers
+              </button>
+            </nav>
+          </div>
         </div>
       </div>
 
-      {/* Market Status Bar with Refresh Controls */}
-
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-700">{error}</p>
-        </div>
-      )}
-
-      {/* Compact Market Widgets in One Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Market Indexes - Compact */}
-        {majorIndexes.map((index) => (
-          <div key={index.symbol} className="bg-white shadow-sm rounded-lg border border-gray-200 p-3">
-            <div className="flex justify-between items-center mb-2">
-              <div>
-                <h3 className="text-base font-medium text-gray-900">{index.symbol}</h3>
-                <p className="text-xs text-gray-600">{index.name}</p>
-              </div>
-              <ArrowTopRightOnSquareIcon className="h-4 w-4 text-gray-400" />
+      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <ExclamationTriangleIcon className="h-5 w-5 text-red-600 mr-2" />
+              <p className="text-red-700">{error}</p>
             </div>
-            
-            {/* Compact TradingView Widget */}
-            <div className="h-36">
-              <TradingViewWidget
-                symbol={index.tradingViewSymbol}
+          </div>
+        )}
+
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Market Indexes Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {majorIndexes.map((index) => (
+            <div key={index.symbol} className="bg-white shadow-sm rounded-lg border border-gray-200 p-4">
+              <div className="flex justify-between items-center mb-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{index.symbol}</h3>
+                  <p className="text-sm text-gray-600">{index.name}</p>
+                </div>
+                <ArrowTopRightOnSquareIcon className="h-5 w-5 text-gray-400" />
+              </div>
+
+              <div className="h-40">
+                <TradingViewWidget
+                  symbol={index.tradingViewSymbol}
+                  height="100%"
+                  width="100%"
+                  chartOnly={true}
+                  dateRange="1M"
+                  colorTheme="light"
+                  isTransparent={true}
+                />
+              </div>
+            </div>
+          ))}
+
+          {/* Economic Calendar */}
+          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold text-gray-900">Economic Calendar</h3>
+              <ClockIcon className="h-5 w-5 text-blue-600" />
+            </div>
+            <div className="h-40">
+              <FinancialWidget
+                type="economic-calendar"
                 height="100%"
                 width="100%"
-                chartOnly={true}
-                dateRange="1M"
                 colorTheme="light"
-                isTransparent={true}
               />
             </div>
           </div>
-        ))}
-        
-        {/* Economic Calendar - Compact */}
-        <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-3">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-base font-medium text-gray-900">Economic Calendar</h3>
-            <ClockIcon className="h-4 w-4 text-blue-600" />
-          </div>
-          <div className="h-36">
-            <FinancialWidget
-              type="economic-calendar"
-              height="100%"
-              width="100%"
-              colorTheme="light"
-            />
-          </div>
-        </div>
+            </div>
+          </>
+        )}
+
+        {/* Movers Tab */}
+        {activeTab === 'movers' && (
+          <>
+            {/* Market Summary Card */}
+            <div className="mb-6">
+              <MarketSummaryCard
+                date={dailyMoversData?.date || new Date().toISOString().split('T')[0]}
+                totalMovers={summaryStats.totalMovers}
+                totalGainers={summaryStats.totalGainers}
+                totalLosers={summaryStats.totalLosers}
+                loading={loading}
+              />
+            </div>
+
+            {/* Daily Movers Professional View */}
+            {dailyMoversData && (
+              <>
+                {/* Check if we have data */}
+                {(dailyMoversData.sectors.length > 0 || dailyMoversData.market_caps.length > 0) ? (
+                  <>
+                    {/* Sector Performance Summary */}
+                    {dailyMoversData.sectors.length > 0 && (
+                      <div className="mb-6">
+                        <SectorPerformanceSummary sectors={dailyMoversData.sectors} />
+                      </div>
+                    )}
+
+                    {/* Sector & Market Cap Heatmap */}
+                    {(dailyMoversData.sectors.length > 0 || dailyMoversData.market_caps.length > 0) && (
+                      <div className="mb-6">
+                        <DailyMoversHeatmap
+                          sectors={dailyMoversData.sectors}
+                          marketCaps={dailyMoversData.market_caps}
+                          onSelectStock={handleStockSelect}
+                        />
+                      </div>
+                    )}
+
+                    {/* Professional Sortable Table */}
+                    <div className="mb-6">
+                      <DailyMoversTable data={dailyMoversData} />
+                    </div>
+                  </>
+                ) : (
+                  /* No Data State */
+                  <div className="text-center py-12">
+                    <ChartBarIcon className="mx-auto h-12 w-12 text-blue-400" />
+                    <h3 className="mt-2 text-lg font-medium text-gray-900">Sector & Market Cap Data Processing</h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {summaryStats.totalMovers} daily movers have been calculated successfully!
+                    </p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Sector and market cap categorization is currently being enriched with external API data.
+                      The job will process market cap information from Finnhub and sector data from asset metadata.
+                    </p>
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                      <p className="text-sm text-blue-800">
+                        <strong>Current Data:</strong><br/>
+                        ✅ {summaryStats.totalGainers} Gainers<br/>
+                        ✅ {summaryStats.totalLosers} Losers<br/>
+                        ⏳ Sector categorization in progress<br/>
+                        ⏳ Market cap enrichment in progress
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
 
-      {/* Watchlist Quick Access and Performance Section */}
-      <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-4 mb-8">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Your Watchlists</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {watchlists.map(watchlist => {
-            const performance = calculateWatchlistPerformance(watchlist, priceData)
-            const trend = performance.trend
-            const performanceValue = performance.performance.toFixed(2)
-            
-            return (
-              <Link 
-                key={watchlist.id} 
-                to={`/watchlists/${watchlist.id}`}
-                className="block bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="text-base font-medium text-gray-900">{watchlist.name}</h3>
-                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    trend === 'up' ? 'bg-green-100 text-green-800' : 
-                    trend === 'down' ? 'bg-red-100 text-red-800' : 
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {trend === 'up' ? '+' : trend === 'down' ? '' : ''}
-                    {performanceValue}%
-                  </div>
-                </div>
-                
-                <div className="mt-2 text-sm text-gray-600">
-                  {watchlist.items.length} symbols
-                </div>
-                
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {watchlist.items.slice(0, 5).map(item => (
-                    <span 
-                      key={item.symbol} 
-                      className="inline-block px-2 py-1 bg-gray-200 rounded text-xs"
-                    >
-                      {item.symbol}
-                    </span>
-                  ))}
-                  {watchlist.items.length > 5 && (
-                    <span className="inline-block px-2 py-1 bg-gray-200 rounded text-xs">
-                      +{watchlist.items.length - 5} more
-                    </span>
-                  )}
-                </div>
-              </Link>
-            )
-          })}
-          
-          {/* Add Watchlist Link */}
-          <Link 
-            to="/watchlists"
-            className="flex items-center justify-center h-full bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors border-2 border-dashed border-gray-300"
-          >
-            <div className="text-center">
-              <svg className="h-8 w-8 text-gray-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <span className="mt-2 block text-sm font-medium text-gray-600">Create New Watchlist</span>
-            </div>
-          </Link>
-        </div>
-      </div>
-      
-      {/* Your Recent Activities */}
-      <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-4">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
-        
-        <div className="space-y-4">
-          {/* Activity item examples */}
-          <div className="flex items-start">
-            <div className="flex-shrink-0 bg-blue-100 rounded-full p-2">
-              <ClockIcon className="h-5 w-5 text-blue-600" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-900">Data refreshed</p>
-              <p className="text-xs text-gray-500">
-                {lastRefresh.toLocaleString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit'
-                })}
-              </p>
-            </div>
-          </div>
-          
-          {priceDataCount > 0 && (
-            <div className="flex items-start">
-              <div className="flex-shrink-0 bg-green-100 rounded-full p-2">
-                <ChartBarIcon className="h-5 w-5 text-green-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">Price data updated</p>
-                <p className="text-xs text-gray-500">
-                  Loaded {priceDataCount} symbols
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      
       {/* Stock Analysis Modal */}
       {analysisModalOpen && selectedStock && (
-        <StockDetailView 
+        <StockDetailView
           symbol={selectedStock}
           isOpen={analysisModalOpen}
           onClose={() => {
             setAnalysisModalOpen(false)
             setSelectedStock(null)
           }}
-          priceData={priceData[selectedStock]}
+          priceData={undefined}
           entryPrice={undefined}
           targetPrice={undefined}
           stopLoss={undefined}

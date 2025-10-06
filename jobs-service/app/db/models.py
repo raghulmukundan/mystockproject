@@ -14,6 +14,7 @@ class JobConfiguration(Base):
     job_name = Column(String, nullable=False, unique=True)  # 'market_data_refresh', 'nasdaq_universe_refresh', 'eod_price_scan'
     description = Column(String, nullable=False)
     enabled = Column(Boolean, nullable=False, default=True)
+    scheduler_id = Column(String, nullable=True)  # APScheduler job ID for getting next_run_at
     schedule_type = Column(String, nullable=False)  # 'interval', 'cron'
     
     # Interval scheduling (for every X minutes/hours)

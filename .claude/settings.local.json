@@ -55,7 +55,13 @@
       "Bash(git rebase:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(npm ls:*)",
+      "Bash(where psql)",
+      "Bash(del \"C:\\Users\\raghu\\OneDrive\\Documents\\mystockproject\\backend\\app\\api\\eod_scan-32496B8IJGQKK.py\")"
     ],
     "deny": [],
     "ask": []

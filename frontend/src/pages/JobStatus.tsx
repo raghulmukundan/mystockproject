@@ -65,6 +65,7 @@ const JobStatus: React.FC = () => {
   const [universeJobs, setUniverseJobs] = useState<any[]>([])
   const [ttlCleanupJobs, setTtlCleanupJobs] = useState<any[]>([])
   const [marketRefreshJobs, setMarketRefreshJobs] = useState<any[]>([])
+  const [dailyMoversJobs, setDailyMoversJobs] = useState<any[]>([])
   const [selectedTechJobId, setSelectedTechJobId] = useState<number | null>(null)
   const [techSkips, setTechSkips] = useState<any[]>([])
   const [techSuccesses, setTechSuccesses] = useState<any[]>([])
@@ -95,6 +96,7 @@ const JobStatus: React.FC = () => {
     universe: true,
     ttl: true,
     marketRefresh: true,
+    dailyMovers: true,
     import: true
   })
   const [refreshingErrors, setRefreshingErrors] = useState<Record<number, boolean>>({})
@@ -205,6 +207,15 @@ const JobStatus: React.FC = () => {
       } catch (e) {
         console.log('No market refresh jobs found or error loading market refresh jobs:', e)
         setMarketRefreshJobs([])
+      }
+
+      // Load daily movers jobs from jobs-service
+      try {
+        const dailyMoversJobsData = await jobsApiService.getJobStatus('daily_movers_calculation', 10)
+        setDailyMoversJobs(dailyMoversJobsData)
+      } catch (e) {
+        console.log('No daily movers jobs found or error loading daily movers jobs:', e)
+        setDailyMoversJobs([])
       }
     } catch (e) {
       console.error('Failed to load job status', e)
@@ -378,6 +389,8 @@ const JobStatus: React.FC = () => {
         return ttlCleanupJobs.some(job => job.status === 'running')
       case 'marketRefresh':
         return marketRefreshJobs.some(job => job.status === 'running')
+      case 'dailyMovers':
+        return dailyMoversJobs.some(job => job.status === 'running')
       case 'import':
         return importJobs.some(job => job.status === 'running')
       default:
@@ -937,6 +950,86 @@ const JobStatus: React.FC = () => {
                       {job.records_processed && (
                         <div className="text-gray-600">
                           Symbols refreshed: {job.records_processed.toLocaleString()}
+                        </div>
+                      )}
+                      {job.duration_seconds !== null && (
+                        <div className="text-gray-600">
+                          Duration: {job.duration_seconds}s
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'secondary'}>
+                        {job.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                  {job.error_message && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                      <strong>Error:</strong> {job.error_message}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        )}
+      </Card>
+
+      {/* Daily Movers Jobs */}
+      <Card className={getSectionCardClass('dailyMovers')}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('dailyMovers')} onClick={() => toggleSection('dailyMovers')}>
+              {collapsedSections['dailyMovers'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>Daily Movers Calculation Jobs</CardTitle>
+              {hasRunningJobs('dailyMovers') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!collapsedSections['dailyMovers'] && (
+            <p className="text-sm text-slate-600">Daily top movers calculation job history - computes top 5 gainers/losers per sector and market cap.</p>
+          )}
+        </CardHeader>
+        {!collapsedSections['dailyMovers'] && (
+        <CardContent>
+          {dailyMoversJobs.length === 0 ? (
+            <div className="text-gray-500">No daily movers jobs found.</div>
+          ) : (
+            <div className="space-y-3">
+              {dailyMoversJobs.map((job) => (
+                <div key={job.id} className={`border rounded p-3 ${job.status === 'running' ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : ''}`}>
+                  <div className="flex justify-between items-start text-sm">
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        Daily Movers Calculation #{job.id}
+                        {job.status === 'running' && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-gray-600">
+                        Started: {job.started_at ? formatChicagoDateTime(job.started_at) : 'N/A'}
+                      </div>
+                      {job.completed_at && (
+                        <div className="text-gray-600">
+                          Completed: {formatChicagoDateTime(job.completed_at)}
+                        </div>
+                      )}
+                      {job.records_processed && (
+                        <div className="text-gray-600">
+                          Total movers calculated: {job.records_processed.toLocaleString()}
                         </div>
                       )}
                       {job.duration_seconds !== null && (

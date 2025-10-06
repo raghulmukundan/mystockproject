@@ -126,9 +126,9 @@ def compute_indicators_tail(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_latest_trade_date(db: Session) -> Optional[str]:
-    """Get the latest trade date from prices_daily_ohlc"""
+    """Get the latest trade date from unified price data"""
     try:
-        result = db.execute(text("SELECT MAX(date) FROM prices_daily_ohlc"))
+        result = db.execute(text("SELECT MAX(date) FROM unified_price_data"))
         row = result.fetchone()
         return str(row[0]) if row and row[0] else None
     except Exception:
@@ -139,7 +139,7 @@ def get_symbols_for_date(db: Session, date: str) -> List[str]:
     """Get all symbols that have data for the given date"""
     try:
         result = db.execute(
-            text("SELECT DISTINCT symbol FROM prices_daily_ohlc WHERE date = :date ORDER BY symbol"),
+            text("SELECT DISTINCT symbol FROM unified_price_data WHERE date = :date ORDER BY symbol"),
             {"date": date}
         )
         return [row[0] for row in result.fetchall()]
@@ -161,21 +161,14 @@ def get_cutoff(latest_trade_date: str, tail_days: int, buffer_days: int) -> str:
 
 
 def load_tail_df(db: Session, symbol: str, cutoff: str) -> Optional[pd.DataFrame]:
-    """Load price data for a symbol from the cutoff date, combining historical and current data"""
+    """Load price data for a symbol from the cutoff date using unified price data"""
     try:
-        # Combine historical_prices and prices_daily_ohlc data
+        # Get data from unified view
         result = db.execute(
             text("""
-                SELECT date, open, high, low, close, volume, 'historical' as source
-                FROM historical_prices
+                SELECT date, open, high, low, close, volume, data_source as source
+                FROM unified_price_data
                 WHERE symbol = :symbol AND date >= :cutoff
-
-                UNION ALL
-
-                SELECT date, open, high, low, close, volume, 'current' as source
-                FROM prices_daily_ohlc
-                WHERE symbol = :symbol AND date >= :cutoff
-
                 ORDER BY date
             """),
             {"symbol": symbol, "cutoff": cutoff}

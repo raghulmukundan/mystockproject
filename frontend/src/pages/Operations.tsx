@@ -224,6 +224,10 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
       const res = await jobsApiService.runTokenValidation();
       return res.message;
     },
+    daily_movers_calculation: async () => {
+      const res = await jobsApiService.runDailyMoversCalculation();
+      return res.message;
+    },
   };
 
   const runJob = async (job: JobSummaryResponse) => {

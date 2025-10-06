@@ -9,6 +9,7 @@ import asyncio
 from app.core.database import get_db
 from app.models.watchlist import Watchlist
 from app.models.watchlist_item import WatchlistItem
+from sqlalchemy import text
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,6 @@ class WatchlistItemResponse(BaseModel):
     symbol: str
     company_name: str | None = None
     sector: str | None = None
-    industry: str | None = None
     market_cap: float | None = None
     entry_price: float | None = None
     target_price: float | None = None
@@ -44,7 +44,6 @@ class WatchlistItemRequest(BaseModel):
     symbol: str
     company_name: str | None = None
     sector: str | None = None
-    industry: str | None = None
     market_cap: float | None = None
     entry_price: float | None = None
     target_price: float | None = None
@@ -113,7 +112,7 @@ def get_watchlists(db: Session = Depends(get_db)):
                 else:
                     updated_at_str = str(watchlist.updated_at)
             
-            # Convert items to response format
+            # Convert items to response format using enriched_symbols view
             item_responses = []
             for item in items:
                 item_created_at = ""
@@ -122,14 +121,30 @@ def get_watchlists(db: Session = Depends(get_db)):
                         item_created_at = item.created_at.isoformat()
                     else:
                         item_created_at = str(item.created_at)
-                
+
+                # Fetch enriched data from enriched_symbols view
+                enriched_result = db.execute(text("""
+                    SELECT sector, company_name, market_cap
+                    FROM enriched_symbols
+                    WHERE symbol = :symbol
+                """), {"symbol": item.symbol}).fetchone()
+
+                # Use enriched data if available, otherwise fallback to item data
+                if enriched_result:
+                    sector = enriched_result.sector
+                    company_name = enriched_result.company_name or item.company_name
+                    market_cap = float(enriched_result.market_cap) if enriched_result.market_cap else (float(item.market_cap) if item.market_cap else None)
+                else:
+                    sector = item.sector
+                    company_name = item.company_name
+                    market_cap = float(item.market_cap) if item.market_cap else None
+
                 item_responses.append(WatchlistItemResponse(
                     id=item.id,
                     symbol=item.symbol,
-                    company_name=item.company_name,
-                    sector=item.sector,
-                    industry=item.industry,
-                    market_cap=float(item.market_cap) if item.market_cap else None,
+                    company_name=company_name,
+                    sector=sector,
+                    market_cap=market_cap,
                     entry_price=float(item.entry_price) if item.entry_price else None,
                     target_price=float(item.target_price) if item.target_price else None,
                     stop_loss=float(item.stop_loss) if item.stop_loss else None,
@@ -161,7 +176,7 @@ def get_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
         WatchlistItem.watchlist_id == watchlist_id
     ).all()
     
-    # Convert items to response format
+    # Convert items to response format using enriched_symbols view
     item_responses = []
     for item in items:
         item_created_at = ""
@@ -170,14 +185,30 @@ def get_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
                 item_created_at = item.created_at.isoformat()
             else:
                 item_created_at = str(item.created_at)
-        
+
+        # Fetch enriched data from enriched_symbols view
+        enriched_result = db.execute(text("""
+            SELECT sector, company_name, market_cap
+            FROM enriched_symbols
+            WHERE symbol = :symbol
+        """), {"symbol": item.symbol}).fetchone()
+
+        # Use enriched data if available, otherwise fallback to item data
+        if enriched_result:
+            sector = enriched_result.sector
+            company_name = enriched_result.company_name or item.company_name
+            market_cap = float(enriched_result.market_cap) if enriched_result.market_cap else (float(item.market_cap) if item.market_cap else None)
+        else:
+            sector = item.sector
+            company_name = item.company_name
+            market_cap = float(item.market_cap) if item.market_cap else None
+
         item_responses.append(WatchlistItemResponse(
             id=item.id,
             symbol=item.symbol,
-            company_name=item.company_name,
-            sector=item.sector,
-            industry=item.industry,
-            market_cap=float(item.market_cap) if item.market_cap else None,
+            company_name=company_name,
+            sector=sector,
+            market_cap=market_cap,
             entry_price=float(item.entry_price) if item.entry_price else None,
             target_price=float(item.target_price) if item.target_price else None,
             stop_loss=float(item.stop_loss) if item.stop_loss else None,
@@ -246,13 +277,29 @@ async def create_watchlist(request: WatchlistCreateRequest, db: Session = Depend
                     else:
                         item_created_at = str(item.created_at)
 
+                # Fetch enriched data from enriched_symbols view
+                enriched_result = db.execute(text("""
+                    SELECT sector, company_name, market_cap
+                    FROM enriched_symbols
+                    WHERE symbol = :symbol
+                """), {"symbol": item.symbol}).fetchone()
+
+                # Use enriched data if available, otherwise fallback to item data
+                if enriched_result:
+                    sector = enriched_result.sector
+                    company_name = enriched_result.company_name or item.company_name
+                    market_cap = float(enriched_result.market_cap) if enriched_result.market_cap else (float(item.market_cap) if item.market_cap else None)
+                else:
+                    sector = item.sector
+                    company_name = item.company_name
+                    market_cap = float(item.market_cap) if item.market_cap else None
+
                 items.append(WatchlistItemResponse(
                     id=item.id,
                     symbol=item.symbol,
-                    company_name=item.company_name,
-                    sector=item.sector,
-                    industry=item.industry,
-                    market_cap=float(item.market_cap) if item.market_cap else None,
+                    company_name=company_name,
+                    sector=sector,
+                    market_cap=market_cap,
                     entry_price=float(item.entry_price) if item.entry_price else None,
                     target_price=float(item.target_price) if item.target_price else None,
                     stop_loss=float(item.stop_loss) if item.stop_loss else None,
@@ -293,7 +340,6 @@ async def update_watchlist(watchlist_id: int, request: WatchlistUpdateRequest, d
                 symbol=item_data.symbol.upper(),
                 company_name=item_data.company_name,
                 sector=item_data.sector,
-                industry=item_data.industry,
                 market_cap=item_data.market_cap,
                 entry_price=item_data.entry_price,
                 target_price=item_data.target_price,
@@ -320,13 +366,29 @@ async def update_watchlist(watchlist_id: int, request: WatchlistUpdateRequest, d
             else:
                 item_created_at = str(item.created_at)
 
+        # Fetch enriched data from enriched_symbols view
+        enriched_result = db.execute(text("""
+            SELECT sector, company_name, market_cap
+            FROM enriched_symbols
+            WHERE symbol = :symbol
+        """), {"symbol": item.symbol}).fetchone()
+
+        # Use enriched data if available, otherwise fallback to item data
+        if enriched_result:
+            sector = enriched_result.sector
+            company_name = enriched_result.company_name or item.company_name
+            market_cap = float(enriched_result.market_cap) if enriched_result.market_cap else (float(item.market_cap) if item.market_cap else None)
+        else:
+            sector = item.sector
+            company_name = item.company_name
+            market_cap = float(item.market_cap) if item.market_cap else None
+
         item_responses.append(WatchlistItemResponse(
             id=item.id,
             symbol=item.symbol,
-            company_name=item.company_name,
-            sector=item.sector,
-            industry=item.industry,
-            market_cap=float(item.market_cap) if item.market_cap else None,
+            company_name=company_name,
+            sector=sector,
+            market_cap=market_cap,
             entry_price=float(item.entry_price) if item.entry_price else None,
             target_price=float(item.target_price) if item.target_price else None,
             stop_loss=float(item.stop_loss) if item.stop_loss else None,
@@ -500,7 +562,6 @@ async def add_item_to_watchlist(watchlist_id: int, item: WatchlistItemRequest, d
         symbol=symbol_upper,
         company_name=company_name,
         sector=sector,
-        industry=item.industry,
         market_cap=item.market_cap,
         entry_price=item.entry_price,
         target_price=item.target_price,
@@ -515,13 +576,29 @@ async def add_item_to_watchlist(watchlist_id: int, item: WatchlistItemRequest, d
     logger.info(f"Fetching and storing price for newly added symbol: {symbol_upper}")
     asyncio.create_task(fetch_and_store_prices_for_symbols([symbol_upper]))
 
+    # Fetch enriched data from enriched_symbols view
+    enriched_result = db.execute(text("""
+        SELECT sector, company_name, market_cap
+        FROM enriched_symbols
+        WHERE symbol = :symbol
+    """), {"symbol": new_item.symbol}).fetchone()
+
+    # Use enriched data if available, otherwise fallback to item data
+    if enriched_result:
+        sector = enriched_result.sector or new_item.sector
+        company_name = enriched_result.company_name or new_item.company_name
+        market_cap = float(enriched_result.market_cap) if enriched_result.market_cap else new_item.market_cap
+    else:
+        sector = new_item.sector
+        company_name = new_item.company_name
+        market_cap = new_item.market_cap
+
     return WatchlistItemResponse(
         id=new_item.id,
         symbol=new_item.symbol,
-        company_name=new_item.company_name,
-        sector=new_item.sector,
-        industry=new_item.industry,
-        market_cap=new_item.market_cap,
+        company_name=company_name,
+        sector=sector,
+        market_cap=market_cap,
         entry_price=new_item.entry_price,
         target_price=new_item.target_price,
         stop_loss=new_item.stop_loss,
@@ -549,7 +626,6 @@ async def update_watchlist_item(watchlist_id: int, item_id: int, item: Watchlist
     existing_item.symbol = item.symbol.upper()
     existing_item.company_name = item.company_name
     existing_item.sector = item.sector
-    existing_item.industry = item.industry
     existing_item.market_cap = item.market_cap
     existing_item.entry_price = item.entry_price
     existing_item.target_price = item.target_price
@@ -558,13 +634,29 @@ async def update_watchlist_item(watchlist_id: int, item_id: int, item: Watchlist
     db.commit()
     db.refresh(existing_item)
 
+    # Fetch enriched data from enriched_symbols view
+    enriched_result = db.execute(text("""
+        SELECT sector, company_name, market_cap
+        FROM enriched_symbols
+        WHERE symbol = :symbol
+    """), {"symbol": existing_item.symbol}).fetchone()
+
+    # Use enriched data if available, otherwise fallback to item data
+    if enriched_result:
+        sector = enriched_result.sector or existing_item.sector
+        company_name = enriched_result.company_name or existing_item.company_name
+        market_cap = float(enriched_result.market_cap) if enriched_result.market_cap else existing_item.market_cap
+    else:
+        sector = existing_item.sector
+        company_name = existing_item.company_name
+        market_cap = existing_item.market_cap
+
     return WatchlistItemResponse(
         id=existing_item.id,
         symbol=existing_item.symbol,
-        company_name=existing_item.company_name,
-        sector=existing_item.sector,
-        industry=existing_item.industry,
-        market_cap=existing_item.market_cap,
+        company_name=company_name,
+        sector=sector,
+        market_cap=market_cap,
         entry_price=existing_item.entry_price,
         target_price=existing_item.target_price,
         stop_loss=existing_item.stop_loss,
@@ -686,7 +778,6 @@ async def upload_watchlist_csv(
                 symbol=symbol,
                 company_name=row.get('company_name') or row.get('Company Name') or row.get('name'),
                 sector=row.get('sector') or row.get('Sector'),
-                industry=row.get('industry') or row.get('Industry'),
                 market_cap=float(row['market_cap']) if row.get('market_cap') else None,
                 entry_price=float(row['entry_price']) if row.get('entry_price') else None,
                 target_price=float(row['target_price']) if row.get('target_price') else None,
@@ -715,13 +806,29 @@ async def upload_watchlist_csv(
                 else:
                     item_created_at = str(item.created_at)
 
+            # Fetch enriched data from enriched_symbols view
+            enriched_result = db.execute(text("""
+                SELECT sector, company_name, market_cap
+                FROM enriched_symbols
+                WHERE symbol = :symbol
+            """), {"symbol": item.symbol}).fetchone()
+
+            # Use enriched data if available, otherwise fallback to item data
+            if enriched_result:
+                sector = enriched_result.sector or item.sector
+                company_name = enriched_result.company_name or item.company_name
+                market_cap = float(enriched_result.market_cap) if enriched_result.market_cap else (float(item.market_cap) if item.market_cap else None)
+            else:
+                sector = item.sector
+                company_name = item.company_name
+                market_cap = float(item.market_cap) if item.market_cap else None
+
             item_responses.append(WatchlistItemResponse(
                 id=item.id,
                 symbol=item.symbol,
-                company_name=item.company_name,
-                sector=item.sector,
-                industry=item.industry,
-                market_cap=float(item.market_cap) if item.market_cap else None,
+                company_name=company_name,
+                sector=sector,
+                market_cap=market_cap,
                 entry_price=float(item.entry_price) if item.entry_price else None,
                 target_price=float(item.target_price) if item.target_price else None,
                 stop_loss=float(item.stop_loss) if item.stop_loss else None,

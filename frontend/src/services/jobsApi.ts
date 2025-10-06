@@ -66,10 +66,25 @@ export interface CleanupResponse {
   message: string
 }
 
+export interface JobWithHistoryResponse {
+  job_name: string
+  description: string
+  enabled: boolean
+  schedule_display: string
+  next_run_at?: string
+  job_history: JobStatusResponse[]
+}
+
 export const jobsApiService = {
   // Get job summaries
   async getJobsSummary(): Promise<JobSummaryResponse[]> {
     const response = await jobsApi.get('/jobs/summary')
+    return response.data
+  },
+
+  // Get all jobs with history (database-driven)
+  async getAllJobsWithHistory(): Promise<JobWithHistoryResponse[]> {
+    const response = await jobsApi.get('/jobs/all-with-history')
     return response.data
   },
 
@@ -112,6 +127,11 @@ export const jobsApiService = {
 
   async runTokenValidation(): Promise<{ message: string }> {
     const response = await jobsApi.post('/jobs/schwab_token_validation/run')
+    return response.data
+  },
+
+  async runDailyMoversCalculation(): Promise<{ message: string }> {
+    const response = await jobsApi.post('/jobs/daily_movers_calculation/run')
     return response.data
   },
 

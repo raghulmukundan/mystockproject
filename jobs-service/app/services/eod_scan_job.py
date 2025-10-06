@@ -66,9 +66,9 @@ async def _trigger_technical_analysis_after_eod():
             logger.warning("Skipping technical analysis - too late in the day")
             return
 
-        logger.info("Starting technical analysis after EOD completion...")
+        logger.info("🔥 TRIGGER: Starting technical analysis after EOD completion...")
         result = await run_tech_job()
-        logger.info(f"Technical analysis triggered by EOD completion: {result.get('updated_symbols', 0)} symbols processed")
+        logger.info(f"🎯 TRIGGER SUCCESS: Technical analysis triggered by EOD completion: {result.get('updated_symbols', 0)} symbols processed")
 
     except Exception as e:
         logger.error(f"Failed to trigger technical analysis after EOD: {str(e)}")
@@ -83,8 +83,9 @@ async def _run_eod_scan_job():
     job_name = "eod_price_scan"
     job_id = None
     try:
-        logger.info("Starting EOD price scan job")
+        logger.info(f"🚀 JOB START: {job_name} - Beginning EOD price scan job")
         job_id = begin_job(job_name)
+        logger.info(f"📝 JOB TRACKING: {job_name} - Job ID {job_id} created in database")
 
         # Pre-flight check: Validate Schwab token before processing thousands of symbols
         logger.info("Performing pre-flight token validation...")
@@ -108,16 +109,18 @@ async def _run_eod_scan_job():
         complete_job(job_id, records_processed=processed)
         prune_history(job_name, keep=5)
 
-        logger.info(f"EOD scan completed: {processed} symbols requested, {symbols_fetched} symbols fetched")
+        logger.info(f"✅ JOB COMPLETE: {job_name} - EOD scan completed: {processed} symbols requested, {symbols_fetched} symbols fetched")
 
         # Trigger technical analysis job after successful EOD completion
         # This ensures technical analysis only runs when EOD data is fresh and available
-        logger.info("EOD scan completed successfully. Triggering technical analysis...")
+        logger.info(f"🔗 JOB CHAIN: {job_name} → technical_compute - Triggering technical analysis after EOD completion...")
         await _trigger_technical_analysis_after_eod()
+        logger.info(f"🎯 JOB CHAIN: {job_name} → technical_compute - Technical analysis trigger completed")
 
     except Exception as e:
-        logger.error(f"EOD scan failed: {str(e)}")
+        logger.error(f"❌ JOB FAILED: {job_name} - EOD scan failed: {str(e)}")
         if job_id is not None:
             fail_job(job_id, str(e))
             prune_history(job_name, keep=5)
+            logger.info(f"📝 JOB TRACKING: {job_name} - Job ID {job_id} marked as failed in database")
         raise

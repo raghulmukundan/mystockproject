@@ -68,6 +68,31 @@ const API_ENDPOINTS: APIEndpoint[] = [
     category: 'Backend'
   },
   {
+    id: 'technical-data-batch',
+    name: 'Get Technical Data (Batch)',
+    method: 'POST',
+    url: 'http://localhost:8000/api/technical/latest',
+    description: 'Get latest technical indicators for multiple symbols',
+    defaultBody: JSON.stringify({ "symbols": ["AAPL", "MSFT", "GOOGL", "TSLA"] }, null, 2),
+    category: 'Backend'
+  },
+  {
+    id: 'technical-data-single',
+    name: 'Get Technical Data (Single)',
+    method: 'GET',
+    url: 'http://localhost:8000/api/technical/latest/AAPL',
+    description: 'Get latest technical indicators for a single symbol',
+    category: 'Backend'
+  },
+  {
+    id: 'technical-health',
+    name: 'Technical Data Health Check',
+    method: 'GET',
+    url: 'http://localhost:8000/api/technical/health',
+    description: 'Check technical data availability and statistics',
+    category: 'Backend'
+  },
+  {
     id: 'universe-refresh',
     name: 'Refresh Universe',
     method: 'POST',
@@ -131,6 +156,40 @@ const API_ENDPOINTS: APIEndpoint[] = [
     method: 'GET',
     url: 'http://localhost:8003/schwab/quotes?symbols=AAPL,MSFT,GOOGL',
     description: 'Get current stock quotes from Schwab',
+    category: 'External APIs'
+  },
+  {
+    id: 'schwab-history-single',
+    name: 'Get Schwab Price History (Single)',
+    method: 'GET',
+    url: 'http://localhost:8003/schwab/history/AAPL?period_type=month&period=1&frequency_type=daily&frequency=1',
+    description: 'Get price history for a single symbol with flexible periods',
+    category: 'External APIs'
+  },
+  {
+    id: 'schwab-history-daily',
+    name: 'Get Schwab Daily History',
+    method: 'GET',
+    url: 'http://localhost:8003/schwab/history/AAPL/daily?start=2024-01-01&end=2024-01-31',
+    description: 'Get daily OHLCV bars for a single symbol',
+    category: 'External APIs'
+  },
+  {
+    id: 'schwab-history-fetch',
+    name: 'Fetch Schwab History (Multiple)',
+    method: 'POST',
+    url: 'http://localhost:8003/schwab/history/fetch?start=2024-01-01&end=2024-01-31',
+    description: 'Fetch daily price history for multiple symbols',
+    defaultBody: JSON.stringify(["AAPL", "MSFT", "GOOGL"], null, 2),
+    headers: { 'Content-Type': 'application/json' },
+    category: 'External APIs'
+  },
+  {
+    id: 'schwab-instruments-search',
+    name: 'Search Schwab Instruments',
+    method: 'GET',
+    url: 'http://localhost:8003/schwab/instruments/search?symbol=AAPL&projection=symbol-search',
+    description: 'Search for instruments by symbol',
     category: 'External APIs'
   },
 
