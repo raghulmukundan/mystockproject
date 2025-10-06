@@ -147,12 +147,14 @@ def setup_jobs():
     )
 
     # EOD daily OHLC scan at 5:30 PM America/Chicago (Mon–Fri)
+    # Override max_instances for EOD job to allow multiple runs per day
     scheduler.add_job(
         func=run_eod_scan_job,
         trigger=CronTrigger(day_of_week='mon-fri', hour=17, minute=30),
         id="eod_price_scan",
         name="EOD price scan at 5:30 PM",
         replace_existing=True,
+        max_instances=2,  # Allow scheduled run even if manual run occurred earlier
     )
 
     # Technical analysis fallback removed - EOD scan already triggers technical analysis automatically

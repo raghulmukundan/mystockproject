@@ -1,3 +1,4 @@
+// Force cache refresh - Updated 2025-09-30
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   ChartComponent,
@@ -20,9 +21,7 @@ import {
   ChartAnnotation
 } from '@syncfusion/ej2-react-charts'
 import type { IAxisLabelRenderEventArgs } from '@syncfusion/ej2-charts'
-import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
-import { Badge } from './ui/badge'
 import {
   XMarkIcon,
   ChartBarIcon,
@@ -71,7 +70,7 @@ interface ProfessionalStockChartProps {
   onClose: () => void
 }
 
-type TimeframePeriod = '1D' | '7D' | '1M' | '3M' | '6M' | '1Y' | '2Y' | '5Y'
+type TimeframePeriod = '1D' | '5D' | '7D' | '1M' | '3M' | '6M' | '1Y' | '2Y' | '5Y'
 
 interface TimeframeConfig {
   label: string
@@ -81,6 +80,7 @@ interface TimeframeConfig {
 
 const TIMEFRAMES: Record<TimeframePeriod, TimeframeConfig> = {
   '1D': { label: '1D', days: 1, interval: '5min' },
+  '5D': { label: '5D', days: 5, interval: 'daily' },
   '7D': { label: '7D', days: 7, interval: '1hour' },
   '1M': { label: '1M', days: 30, interval: 'daily' },
   '3M': { label: '3M', days: 90, interval: 'daily' },
@@ -160,14 +160,21 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
   const [priceData, setPriceData] = useState<ChartDataPoint[]>([])
   const [technicalData, setTechnicalData] = useState<TechnicalData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedTimeframe, setSelectedTimeframe] = useState<TimeframePeriod>('1M')
+  const [selectedTimeframe, setSelectedTimeframe] = useState<TimeframePeriod>('5D')
   const [showTechnicals, setShowTechnicals] = useState(false)
   const [chartType, setChartType] = useState<'candlestick' | 'line' | 'area'>('candlestick')
-  const [enabledIndicators, setEnabledIndicators] = useState<string[]>(['sma20'])
+  const [enabledIndicators] = useState<string[]>(['sma20'])
   const [cachedData, setCachedData] = useState<Record<string, ChartDataPoint[]>>({})
   const cachedDataRef = useRef<Record<string, ChartDataPoint[]>>({})
   const [realtimePrice, setRealtimePrice] = useState<{price: number, change: number, changePercent: number} | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const [loadingStates, setLoadingStates] = useState<Partial<Record<TimeframePeriod, boolean>>>(() => ({
+    '5D': false,
+    '1M': false,
+    '3M': false,
+    '6M': false,
+    '1Y': false
+  }))
+  // const abortControllerRef = useRef<AbortController | null>(null)
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -181,7 +188,7 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 2000) // 2 second timeout for faster fallback
 
-      const response = await fetch(`http://localhost:8000/api/stocks/prices?symbols=${symbol}`, {
+      const response = await fetch(`/api/stocks/prices?symbols=${symbol}`, {
         signal: controller.signal
       })
 
@@ -190,15 +197,15 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
       if (response.ok) {
         const data = await response.json()
         if (data.length > 0) {
-          const priceData = data[0]
+          const priceDataItem = data[0]
           setRealtimePrice({
-            price: priceData.current_price,
-            change: priceData.change,
-            changePercent: priceData.change_percent
+            price: priceDataItem.current_price,
+            change: priceDataItem.change,
+            changePercent: priceDataItem.change_percent
           })
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('Realtime price request timed out')
       } else {
@@ -206,9 +213,10 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
       }
 
       // Fallback: use chart data if realtime fails
-      if (priceData.length > 1) {
-        const currentClose = priceData[priceData.length - 1].close
-        const previousClose = priceData[priceData.length - 2].close
+      const currentPriceData = cachedDataRef.current[`${symbol}-5D`] || []
+      if (currentPriceData.length > 1) {
+        const currentClose = currentPriceData[currentPriceData.length - 1].close
+        const previousClose = currentPriceData[currentPriceData.length - 2].close
         const change = currentClose - previousClose
         const changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0
 
@@ -219,7 +227,7 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
         })
       }
     }
-  }, [symbol, priceData])
+  }, [symbol])
 
   // Filter 1Y data for specific timeframe
   const filterDataForTimeframe = useCallback((yearData: ChartDataPoint[], timeframe: TimeframePeriod): ChartDataPoint[] => {
@@ -233,116 +241,140 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
   }, [])
 
 
-  // Fetch price data with minimal resource usage
-  const fetchPriceData = useCallback(async (timeframe: TimeframePeriod, forceRefresh = false, retryCount = 0) => {
-    // Cancel any ongoing request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+  // Fast fetch for a single timeframe with optimized page size
+  const fetchSingleTimeframe = useCallback(async (timeframe: TimeframePeriod, abortSignal?: AbortSignal): Promise<ChartDataPoint[]> => {
+    const config = TIMEFRAMES[timeframe]
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setDate(endDate.getDate() - config.days)
+
+    const dateFrom = startDate.toISOString().split('T')[0]
+    const dateTo = endDate.toISOString().split('T')[0]
+
+    // Optimize page size based on timeframe
+    const pageSize = timeframe === '5D' ? 10 : timeframe === '1M' ? 50 : 100
+
+    const url = `/api/prices/browse?symbol=${symbol}&date_from=${dateFrom}&date_to=${dateTo}&page_size=${pageSize}&sort_by=date&sort_order=asc`
+
+    const response = await fetch(url, {
+      signal: abortSignal,
+      // Add headers to help with browser resource management
+      headers: {
+        'Cache-Control': 'max-age=60' // Cache for 60 seconds
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
-    // Create new abort controller for this request
-    abortControllerRef.current = new AbortController()
-    const { signal } = abortControllerRef.current
+    const responseData = await response.json()
+    return responseData.prices.map((item: any) => ({
+      x: new Date(item.date),
+      open: item.open,
+      high: item.high,
+      low: item.low,
+      close: item.close,
+      volume: item.volume || 0
+    }))
+  }, [symbol])
 
+  // Progressive loading: 5D first, then async 1M, 3M, 6M, 1Y (with delays to avoid overwhelming)
+  const startProgressiveLoading = useCallback(async (abortSignal?: AbortSignal, currentTimeframe: TimeframePeriod = '5D') => {
     setLoading(true)
+    setLoadingStates({})
 
     try {
-      // Check if we have cached data for this timeframe using ref (no dependency issues)
-      const cacheKey = `${symbol}-${timeframe}` // Include symbol in cache key!
-      if (!forceRefresh && cachedDataRef.current[cacheKey] && cachedDataRef.current[cacheKey].length > 0) {
-        setPriceData(cachedDataRef.current[cacheKey])
-        setLoading(false)
-        return
+      // Step 1: Load 5D immediately for fast initial display
+      setLoadingStates(prev => ({ ...prev, '5D': true }))
+      const fiveDayData = await fetchSingleTimeframe('5D', abortSignal)
+
+      const cacheKey = `${symbol}-5D`
+      const newCachedData = {
+        ...cachedDataRef.current,
+        [cacheKey]: fiveDayData
       }
+      setCachedData(newCachedData)
+      cachedDataRef.current = newCachedData
 
-      // Very conservative data request to avoid resource exhaustion
-      const config = TIMEFRAMES[timeframe]
-      const endDate = new Date()
-      const startDate = new Date()
-
-      // Use smaller page sizes for faster loading
-      let adjustedDays = config.days
-      let maxPageSize = 50 // Reduced from 100 for faster response
-
-      if (retryCount === 0) {
-        adjustedDays = Math.min(config.days, 365) // Cap at 1 year for initial load
-        maxPageSize = 50
-      } else if (retryCount === 1) {
-        adjustedDays = Math.floor(config.days * 0.5) // More aggressive reduction
-        maxPageSize = 30
-      } else {
-        adjustedDays = Math.floor(config.days * 0.3) // Even smaller for last retry
-        maxPageSize = 20
+      // If user is on 5D, show data immediately
+      if (currentTimeframe === '5D') {
+        setPriceData(fiveDayData)
       }
+      setLoadingStates(prev => ({ ...prev, '5D': false }))
+      setLoading(false) // Chart shows now!
 
-      startDate.setDate(endDate.getDate() - adjustedDays)
+      // Step 2: Load other timeframes sequentially with delays (avoid parallel overload)
+      const timeframesToLoad: TimeframePeriod[] = ['1M', '3M', '6M', '1Y']
 
-      const dateFrom = startDate.toISOString().split('T')[0]
-      const dateTo = endDate.toISOString().split('T')[0]
+      // Load sequentially with small delays between requests
+      for (const tf of timeframesToLoad) {
+        if (abortSignal?.aborted) break // Stop if aborted
 
-      // Small delay only on retries
-      if (retryCount > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      }
+        try {
+          // Add 300ms delay between requests to avoid overwhelming browser
+          await new Promise(resolve => setTimeout(resolve, 300))
 
-      const url = `http://localhost:8000/api/prices/browse?symbol=${symbol}&date_from=${dateFrom}&date_to=${dateTo}&page_size=${maxPageSize}&sort_by=date&sort_order=asc`
+          if (abortSignal?.aborted) break // Check again after delay
 
-      const response = await fetch(url, { signal })
+          setLoadingStates(prev => ({ ...prev, [tf]: true }))
+          const data = await fetchSingleTimeframe(tf, abortSignal)
 
-      if (response.ok) {
-        const responseData = await response.json()
-        let allData: ChartDataPoint[] = responseData.prices.map((item: any) => ({
-          x: new Date(item.date),
-          open: item.open,
-          high: item.high,
-          low: item.low,
-          close: item.close,
-          volume: item.volume || 0
-        }))
+          const tfCacheKey = `${symbol}-${tf}`
+          setCachedData(prev => ({ ...prev, [tfCacheKey]: data }))
+          cachedDataRef.current[tfCacheKey] = data
 
-        // Skip additional page fetching for faster loading
-        // Single page should be sufficient for chart display
-
-        // Cache the data with symbol-specific key
-        const cacheKey = `${symbol}-${timeframe}`
-        const newCachedData = {
-          ...cachedDataRef.current,
-          [cacheKey]: allData
+          setLoadingStates(prev => ({ ...prev, [tf]: false }))
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            console.log(`Request aborted for ${tf}`)
+            break
+          }
+          console.error(`Error loading ${tf} data:`, error)
+          setLoadingStates(prev => ({ ...prev, [tf]: false }))
         }
-        setCachedData(newCachedData)
-        cachedDataRef.current = newCachedData // Keep ref in sync immediately
+      }
 
-        setPriceData(allData)
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Progressive loading aborted')
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        console.error('Error in progressive loading:', error)
       }
-    } catch (error) {
-      // Ignore abort errors (normal when switching timeframes quickly)
-      if (error instanceof Error && error.name === 'AbortError') {
-        return
-      }
-      console.error('Error fetching price data:', error)
-
-      // Retry with even smaller data set if this was not the last attempt
-      if (retryCount < 2) {
-        console.log(`Retrying with smaller dataset... (attempt ${retryCount + 2}/3)`)
-        setTimeout(() => {
-          fetchPriceData(timeframe, forceRefresh, retryCount + 1)
-        }, 3000 + (retryCount * 2000)) // Progressive delay
-        return
-      } else {
-        // All retry attempts failed - show error state instead of mock data
-        console.error('All retry attempts failed, unable to load data')
-        setPriceData([])
-      }
-    } finally {
       setLoading(false)
     }
-  }, [symbol])
+  }, [symbol, fetchSingleTimeframe])
+
+  // Single timeframe fetch for manual requests
+  const fetchPriceData = useCallback(async (timeframe: TimeframePeriod, forceRefresh = false) => {
+    // Check cache first
+    const cacheKey = `${symbol}-${timeframe}`
+    if (!forceRefresh && cachedDataRef.current[cacheKey]) {
+      setPriceData(cachedDataRef.current[cacheKey])
+      return
+    }
+
+    setLoadingStates(prev => ({ ...prev, [timeframe]: true }))
+    try {
+      const data = await fetchSingleTimeframe(timeframe)
+
+      const newCachedData = {
+        ...cachedDataRef.current,
+        [cacheKey]: data
+      }
+      setCachedData(newCachedData)
+      cachedDataRef.current = newCachedData
+
+      setPriceData(data)
+    } catch (error) {
+      console.error(`Error fetching ${timeframe} data:`, error)
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [timeframe]: false }))
+    }
+  }, [symbol, fetchSingleTimeframe])
 
   const fetchTechnicalData = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/technical/latest/${symbol}`)
+      const response = await fetch(`/api/technical/latest/${symbol}`)
       if (response.ok) {
         const data = await response.json()
         setTechnicalData(data)
@@ -363,15 +395,28 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
   }, [symbol, priceData])
 
 
-  // Reset cache and data when symbol changes
+  // Reset cache and data when symbol changes ONLY (not when timeframe changes)
   useEffect(() => {
+    const abortController = new AbortController()
+
     setCachedData({})
     cachedDataRef.current = {} // Also clear the ref
     setTechnicalData(null)
     setPriceData([])
     setRealtimePrice(null)
-    fetchPriceData(selectedTimeframe, true) // Force refresh for new symbol
-    fetchRealtimePrice() // Get current real-time price
+    startProgressiveLoading(abortController.signal, '5D') // Start with 5D immediate, then async load others
+
+    // Delay realtime price fetch to avoid overwhelming with simultaneous requests
+    const timer = setTimeout(() => {
+      fetchRealtimePrice() // Get current real-time price
+    }, 500) // Wait 500ms after progressive loading starts
+
+    return () => {
+      abortController.abort() // Cancel all in-flight requests
+      clearTimeout(timer)
+    }
+    // Only re-run when symbol changes, NOT when callbacks change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol])
 
   // Handle timeframe changes for same symbol
@@ -381,10 +426,10 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
     if (cachedDataRef.current[cacheKey] && cachedDataRef.current[cacheKey].length > 0) {
       setPriceData(cachedDataRef.current[cacheKey])
     } else {
-      // Fetch new data for this timeframe
+      // Fetch new data for this timeframe if not in cache
       fetchPriceData(selectedTimeframe)
     }
-  }, [selectedTimeframe, symbol])
+  }, [selectedTimeframe, symbol, fetchPriceData])
 
   useEffect(() => {
     if (priceData.length > 0 && !technicalData) {
@@ -415,13 +460,13 @@ const ProfessionalStockChart: React.FC<ProfessionalStockChartProps> = ({
     }
   }
 
-  const toggleIndicator = (indicator: string) => {
-    setEnabledIndicators(prev =>
-      prev.includes(indicator)
-        ? prev.filter(i => i !== indicator)
-        : [...prev, indicator]
-    )
-  }
+  // const toggleIndicator = (indicator: string) => {
+  //   setEnabledIndicators(prev =>
+  //     prev.includes(indicator)
+  //       ? prev.filter(i => i !== indicator)
+  //       : [...prev, indicator]
+  //   )
+  // }
 
   const getVolumeData = () => {
     return priceData.map(item => ({
@@ -458,10 +503,10 @@ const chartHeight = '320px'
   const sessionHigh = priceData.length > 0 ? Math.max(...priceData.map(point => point.high)) : undefined
   const sessionLow = priceData.length > 0 ? Math.min(...priceData.map(point => point.low)) : undefined
   const volumeSummary = latestPoint?.volume
-  const averageVolume = technicalData?.avg_vol20
+  // const averageVolume = technicalData?.avg_vol20
   const rsi = technicalData?.rsi14
-  const fiftyTwoWeekHigh = technicalData?.high_252
-  const fiftyTwoWeekProgress = technicalData?.distance_to_52w_high !== undefined
+  // const fiftyTwoWeekHigh = technicalData?.high_252
+  // const fiftyTwoWeekProgress = technicalData?.distance_to_52w_high !== undefined
     ? Math.max(0, Math.min(100, (1 - technicalData.distance_to_52w_high) * 100))
     : undefined
 
@@ -535,18 +580,25 @@ const chartHeight = '320px'
         <div className="flex items-center gap-2">
           {/* Compact controls */}
           <div className="flex gap-1">
-            {Object.entries(TIMEFRAMES).slice(2, 6).map(([key, config]) => {
+            {Object.entries(TIMEFRAMES).map(([key, config]) => {
               const isActive = selectedTimeframe === key
+              const isLoading = loadingStates[key as TimeframePeriod]
               return (
                 <button
                   key={key}
                   onClick={() => handleTimeframeChange(key as TimeframePeriod)}
-                  className={`px-2 py-1 text-xs font-medium rounded transition ${isActive
+                  disabled={isLoading}
+                  className={`px-2 py-1 text-xs font-medium rounded transition relative ${isActive
                     ? 'bg-blue-500 text-white'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
-                  }`}
+                  } ${isLoading ? 'opacity-50' : ''}`}
                 >
-                  {config.label}
+                  {isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="h-2 w-2 animate-spin rounded-full border border-white border-t-transparent" />
+                    </div>
+                  )}
+                  <span className={isLoading ? 'opacity-0' : ''}>{config.label}</span>
                 </button>
               )
             })}

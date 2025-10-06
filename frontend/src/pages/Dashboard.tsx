@@ -12,10 +12,12 @@ import StockDetailView from '../components/StockDetailView'
 import DailyMoversTable from '../components/DailyMoversTable'
 import DailyMoversHeatmap from '../components/DailyMoversHeatmap'
 import MarketSummaryCard from '../components/MarketSummaryCard'
+import SectorPerformanceSummary from '../components/SectorPerformanceSummary'
 import { dailyMoversApi, DailyMoversResponse } from '../services/dailyMoversApi'
 import { universeApi } from '../lib/universeApi'
 
 export default function Dashboard() {
+  const [activeTab, setActiveTab] = useState<'overview' | 'movers'>('overview')
   const [dailyMoversData, setDailyMoversData] = useState<DailyMoversResponse | null>(null)
   const [summaryData, setSummaryData] = useState<{total_movers: number, total_gainers: number, total_losers: number} | null>(null)
   const [loading, setLoading] = useState(true)
@@ -179,23 +181,23 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Professional Market Dashboard</h1>
-              <p className="text-gray-600 mt-1">
-                Advanced daily movers monitoring with sector analysis and market cap categorization
+              <h1 className="text-2xl font-bold text-gray-900">Market Dashboard</h1>
+              <p className="text-sm text-gray-600 mt-0.5">
+                Real-time market data and sector analysis
               </p>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
               {/* Refresh Button */}
               <button
                 onClick={handleRefresh}
                 disabled={loading}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
-                <ArrowPathIcon className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                <ArrowPathIcon className={`h-4 w-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </button>
 
@@ -208,10 +210,10 @@ export default function Dashboard() {
                     onChange={(e) => handleSearch(e.target.value)}
                     onKeyPress={handleSearchKeyPress}
                     placeholder="Search stocks..."
-                    className="w-64 px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-56 px-3 py-1.5 pr-9 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </div>
@@ -224,7 +226,7 @@ export default function Dashboard() {
                       {searchResults.map((symbol) => (
                         <li
                           key={symbol}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                          className="px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
                           onClick={() => handleStockSelect(symbol)}
                         >
                           {symbol}
@@ -236,10 +238,36 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* Tabs */}
+          <div className="mt-4 border-b border-gray-200">
+            <nav className="-mb-px flex space-x-4">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'overview'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setActiveTab('movers')}
+                className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'movers'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Movers
+              </button>
+            </nav>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         {/* Error Message */}
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -250,19 +278,11 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Market Summary Card */}
-        <div className="mb-8">
-          <MarketSummaryCard
-            date={dailyMoversData?.date || new Date().toISOString().split('T')[0]}
-            totalMovers={summaryStats.totalMovers}
-            totalGainers={summaryStats.totalGainers}
-            totalLosers={summaryStats.totalLosers}
-            loading={loading}
-          />
-        </div>
-
-        {/* Market Indexes Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Market Indexes Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {majorIndexes.map((index) => (
             <div key={index.symbol} className="bg-white shadow-sm rounded-lg border border-gray-200 p-4">
               <div className="flex justify-between items-center mb-3">
@@ -302,52 +322,77 @@ export default function Dashboard() {
               />
             </div>
           </div>
-        </div>
+            </div>
+          </>
+        )}
 
-        {/* Daily Movers Professional View */}
-        {dailyMoversData && (
+        {/* Movers Tab */}
+        {activeTab === 'movers' && (
           <>
-            {/* Check if we have data */}
-            {(dailyMoversData.sectors.length > 0 || dailyMoversData.market_caps.length > 0) ? (
+            {/* Market Summary Card */}
+            <div className="mb-6">
+              <MarketSummaryCard
+                date={dailyMoversData?.date || new Date().toISOString().split('T')[0]}
+                totalMovers={summaryStats.totalMovers}
+                totalGainers={summaryStats.totalGainers}
+                totalLosers={summaryStats.totalLosers}
+                loading={loading}
+              />
+            </div>
+
+            {/* Daily Movers Professional View */}
+            {dailyMoversData && (
               <>
-                {/* Sector & Market Cap Heatmap */}
-                {(dailyMoversData.sectors.length > 0 || dailyMoversData.market_caps.length > 0) && (
-                  <div className="mb-8">
-                    <DailyMoversHeatmap
-                      sectors={dailyMoversData.sectors}
-                      marketCaps={dailyMoversData.market_caps}
-                      onSelectStock={handleStockSelect}
-                    />
+                {/* Check if we have data */}
+                {(dailyMoversData.sectors.length > 0 || dailyMoversData.market_caps.length > 0) ? (
+                  <>
+                    {/* Sector Performance Summary */}
+                    {dailyMoversData.sectors.length > 0 && (
+                      <div className="mb-6">
+                        <SectorPerformanceSummary sectors={dailyMoversData.sectors} />
+                      </div>
+                    )}
+
+                    {/* Sector & Market Cap Heatmap */}
+                    {(dailyMoversData.sectors.length > 0 || dailyMoversData.market_caps.length > 0) && (
+                      <div className="mb-6">
+                        <DailyMoversHeatmap
+                          sectors={dailyMoversData.sectors}
+                          marketCaps={dailyMoversData.market_caps}
+                          onSelectStock={handleStockSelect}
+                        />
+                      </div>
+                    )}
+
+                    {/* Professional Sortable Table */}
+                    <div className="mb-6">
+                      <DailyMoversTable data={dailyMoversData} />
+                    </div>
+                  </>
+                ) : (
+                  /* No Data State */
+                  <div className="text-center py-12">
+                    <ChartBarIcon className="mx-auto h-12 w-12 text-blue-400" />
+                    <h3 className="mt-2 text-lg font-medium text-gray-900">Sector & Market Cap Data Processing</h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {summaryStats.totalMovers} daily movers have been calculated successfully!
+                    </p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Sector and market cap categorization is currently being enriched with external API data.
+                      The job will process market cap information from Finnhub and sector data from asset metadata.
+                    </p>
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                      <p className="text-sm text-blue-800">
+                        <strong>Current Data:</strong><br/>
+                        ✅ {summaryStats.totalGainers} Gainers<br/>
+                        ✅ {summaryStats.totalLosers} Losers<br/>
+                        ⏳ Sector categorization in progress<br/>
+                        ⏳ Market cap enrichment in progress
+                      </p>
+                    </div>
                   </div>
                 )}
-
-                {/* Professional Sortable Table */}
-                <div className="mb-8">
-                  <DailyMoversTable data={dailyMoversData} />
-                </div>
               </>
-            ) : (
-              /* No Data State */
-              <div className="text-center py-12">
-                <ChartBarIcon className="mx-auto h-12 w-12 text-blue-400" />
-                <h3 className="mt-2 text-lg font-medium text-gray-900">Sector & Market Cap Data Processing</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  {summaryStats.totalMovers} daily movers have been calculated successfully!
-                </p>
-                <p className="mt-1 text-sm text-gray-500">
-                  Sector and market cap categorization is currently being enriched with external API data.
-                  The job will process market cap information from Finnhub and sector data from asset metadata.
-                </p>
-                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-                  <p className="text-sm text-blue-800">
-                    <strong>Current Data:</strong><br/>
-                    ✅ {summaryStats.totalGainers} Gainers<br/>
-                    ✅ {summaryStats.totalLosers} Losers<br/>
-                    ⏳ Sector categorization in progress<br/>
-                    ⏳ Market cap enrichment in progress
-                  </p>
-                </div>
-              </div>
             )}
           </>
         )}

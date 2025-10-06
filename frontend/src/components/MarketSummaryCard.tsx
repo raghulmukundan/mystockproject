@@ -54,63 +54,45 @@ const MarketSummaryCard: React.FC<MarketSummaryCardProps> = ({
   }
 
   return (
-    <div className="bg-gradient-to-br from-blue-600 to-purple-700 text-white rounded-xl shadow-lg p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Daily Market Movers</h2>
-          <div className="flex items-center mt-2 text-blue-100">
-            <CalendarIcon className="w-4 h-4 mr-2" />
-            <span className="text-sm">{formatDate(date)}</span>
-          </div>
-        </div>
-        <div className="bg-white bg-opacity-20 rounded-full p-3">
-          <ChartBarIcon className="w-8 h-8" />
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Total Movers */}
-        <div className="text-center">
-          <div className="text-3xl font-bold mb-1">{totalMovers}</div>
-          <div className="text-blue-100 text-sm">Total Movers</div>
+    <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-lg shadow-sm border border-slate-600 p-4">
+      <div className="flex items-center justify-between">
+        {/* Date */}
+        <div className="flex items-center gap-2">
+          <CalendarIcon className="w-4 h-4 text-slate-300" />
+          <span className="text-sm font-medium text-slate-200">{formatDate(date)}</span>
         </div>
 
-        {/* Gainers */}
-        <div className="text-center">
-          <div className="flex items-center justify-center mb-2">
-            <ArrowTrendingUpIcon className="w-6 h-6 text-green-300 mr-1" />
-            <span className="text-3xl font-bold text-green-300">{totalGainers}</span>
+        {/* Stats - Compact Inline */}
+        <div className="flex items-center gap-6">
+          {/* Total Movers */}
+          <div className="flex items-center gap-2">
+            <ChartBarIcon className="w-4 h-4 text-blue-400" />
+            <span className="text-lg font-bold">{totalMovers}</span>
+            <span className="text-xs text-slate-300">movers</span>
           </div>
-          <div className="text-green-200 text-sm">
-            Gainers ({gainersPercentage.toFixed(1)}%)
-          </div>
-        </div>
 
-        {/* Losers */}
-        <div className="text-center">
-          <div className="flex items-center justify-center mb-2">
-            <ArrowTrendingDownIcon className="w-6 h-6 text-red-300 mr-1" />
-            <span className="text-3xl font-bold text-red-300">{totalLosers}</span>
+          {/* Gainers */}
+          <div className="flex items-center gap-1.5">
+            <ArrowTrendingUpIcon className="w-4 h-4 text-green-400" />
+            <span className="text-lg font-bold text-green-400">{totalGainers}</span>
+            <span className="text-xs text-green-300">({gainersPercentage.toFixed(0)}%)</span>
           </div>
-          <div className="text-red-200 text-sm">
-            Losers ({losersPercentage.toFixed(1)}%)
-          </div>
-        </div>
-      </div>
 
-      {/* Progress Bar */}
-      <div className="mt-6">
-        <div className="flex justify-between text-sm text-blue-100 mb-2">
-          <span>Market Sentiment</span>
-          <span>{gainersPercentage > losersPercentage ? 'Bullish' : 'Bearish'}</span>
-        </div>
-        <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
-          <div
-            className="bg-green-400 h-2 rounded-full transition-all duration-500"
-            style={{ width: `${gainersPercentage}%` }}
-          ></div>
+          {/* Losers */}
+          <div className="flex items-center gap-1.5">
+            <ArrowTrendingDownIcon className="w-4 h-4 text-red-400" />
+            <span className="text-lg font-bold text-red-400">{totalLosers}</span>
+            <span className="text-xs text-red-300">({losersPercentage.toFixed(0)}%)</span>
+          </div>
+
+          {/* Sentiment Badge */}
+          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            gainersPercentage > losersPercentage
+              ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+              : 'bg-red-500/20 text-red-300 border border-red-500/30'
+          }`}>
+            {gainersPercentage > losersPercentage ? '🐂 Bullish' : '🐻 Bearish'}
+          </div>
         </div>
       </div>
     </div>

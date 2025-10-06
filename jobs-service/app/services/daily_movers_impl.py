@@ -235,7 +235,7 @@ import heapq
 from collections import defaultdict
 
 def calculate_top_movers_nested(stocks: List[Dict]) -> List[Dict]:
-    """Calculate top movers: For each sector-market_cap combination, get top 5 gainers and top 5 losers"""
+    """Calculate top movers: For each sector-market_cap combination, get top 10 gainers and top 10 losers"""
     movers = []
 
     # Use a set to track which (symbol, sector, market_cap) combinations we've already processed
@@ -260,9 +260,9 @@ def calculate_top_movers_nested(stocks: List[Dict]) -> List[Dict]:
             gainers = [s for s in stocks_list if s['price_change_percent'] > 0]
             losers = [s for s in stocks_list if s['price_change_percent'] < 0]
 
-            # Sort and take top 5 of each
-            top_gainers = sorted(gainers, key=lambda x: x['price_change_percent'], reverse=True)[:5]
-            top_losers = sorted(losers, key=lambda x: x['price_change_percent'])[:5]
+            # Sort and take top 10 of each (increased from 5)
+            top_gainers = sorted(gainers, key=lambda x: x['price_change_percent'], reverse=True)[:10]
+            top_losers = sorted(losers, key=lambda x: x['price_change_percent'])[:10]
 
             # Add gainers
             for rank, stock in enumerate(top_gainers, 1):

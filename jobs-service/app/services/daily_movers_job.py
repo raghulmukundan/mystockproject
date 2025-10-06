@@ -18,8 +18,9 @@ async def run_daily_movers_job():
     job_name = "daily_movers_calculation"
     job_id = None
     try:
-        logger.info("Starting daily movers analysis job")
+        logger.info(f"🚀 JOB START: {job_name} - Beginning daily movers analysis job")
         job_id = begin_job(job_name)
+        logger.info(f"📝 JOB TRACKING: {job_name} - Job ID {job_id} created in database")
 
         result = await run_daily_movers_compute()
         total_movers = result.get('total_movers', 0)
@@ -27,11 +28,12 @@ async def run_daily_movers_job():
         complete_job(job_id, records_processed=total_movers)
         prune_history(job_name, keep=5)
 
-        logger.info(f"Daily movers analysis completed successfully: {total_movers} movers calculated across {result.get('sectors_processed', 0)} sectors")
+        logger.info(f"✅ JOB COMPLETE: {job_name} - Daily movers analysis completed successfully: {total_movers} movers calculated across {result.get('sectors_processed', 0)} sectors")
         return result
 
     except Exception as e:
-        logger.error(f"Daily movers analysis failed: {str(e)}")
+        logger.error(f"❌ JOB FAILED: {job_name} - Daily movers analysis failed: {str(e)}")
         if job_id:
             fail_job(job_id, str(e))
+            logger.info(f"📝 JOB TRACKING: {job_name} - Job ID {job_id} marked as failed in database")
         raise

@@ -25,10 +25,10 @@ async def _trigger_daily_movers_after_tech():
             logger.warning("Skipping daily movers calculation - too late in the day")
             return
 
-        logger.info("Starting daily movers calculation after technical analysis completion...")
+        logger.info("🔥 TRIGGER: Starting daily movers calculation after technical analysis completion...")
         result = await run_daily_movers_job()
         total_movers = result.get('total_movers', 0) if result else 0
-        logger.info(f"Daily movers calculation triggered by technical analysis completion: {total_movers} movers processed")
+        logger.info(f"🎯 TRIGGER SUCCESS: Daily movers calculation triggered by technical analysis completion: {total_movers} movers processed")
 
     except Exception as e:
         logger.error(f"Failed to trigger daily movers calculation after technical analysis: {str(e)}")
@@ -40,18 +40,20 @@ def run_tech_job_scheduled():
 
 async def run_tech_job():
     """Run technical analysis computation"""
+    job_name = "technical_compute"
     try:
-        logger.info("Starting technical analysis job")
+        logger.info(f"🚀 JOB START: {job_name} - Beginning technical analysis computation")
         result = await run_technical_compute()
-        logger.info(f"Technical analysis completed successfully: {result['updated_symbols']} symbols updated")
+        logger.info(f"✅ JOB COMPLETE: {job_name} - Technical analysis completed successfully: {result['updated_symbols']} symbols updated")
 
         # Trigger daily movers calculation after successful technical analysis completion
         # This ensures daily movers calculation only runs when technical data is fresh and available
-        logger.info("Technical analysis completed successfully. Triggering daily movers calculation...")
+        logger.info(f"🔗 JOB CHAIN: {job_name} → daily_movers_calculation - Triggering daily movers calculation after technical analysis...")
         await _trigger_daily_movers_after_tech()
+        logger.info(f"🎯 JOB CHAIN: {job_name} → daily_movers_calculation - Daily movers trigger completed")
 
         return result
 
     except Exception as e:
-        logger.error(f"Technical analysis failed: {str(e)}")
+        logger.error(f"❌ JOB FAILED: {job_name} - Technical analysis failed: {str(e)}")
         raise

@@ -115,11 +115,11 @@ const computeSegmentStats = (
     topGainers: uniqueGainers
       .slice()
       .sort((a, b) => b.price_change_percent - a.price_change_percent)
-      .slice(0, 3),
+      .slice(0, 5),
     topLosers: uniqueLosers
       .slice()
       .sort((a, b) => a.price_change_percent - b.price_change_percent)
-      .slice(0, 3)
+      .slice(0, 5)
   }
 }
 
@@ -285,60 +285,57 @@ const DailyMoversHeatmap: React.FC<DailyMoversHeatmapProps> = ({ sectors, market
   const cardsToRender = activeView === 'sector' ? filteredSectorCards : filteredMarketCapCards
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
-      <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-3">
-          <Squares2X2Icon className="h-6 w-6 text-blue-600" />
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Market Heatmap Overview</h2>
-            <p className="text-sm text-gray-600">Spot sector and market-cap momentum with the movers behind each block.</p>
-          </div>
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Squares2X2Icon className="h-5 w-5 text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Market Heatmap</h2>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveView('sector')}
             className={clsx(
-              'inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+              'inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
               activeView === 'sector'
                 ? 'border-blue-500 bg-blue-50 text-blue-700'
                 : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
             )}
           >
-            <BuildingOffice2Icon className="mr-1.5 h-4 w-4" />
-            By sector
+            <BuildingOffice2Icon className="mr-1 h-3.5 w-3.5" />
+            Sectors
           </button>
           <button
             type="button"
             onClick={() => setActiveView('marketCap')}
             className={clsx(
-              'inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+              'inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
               activeView === 'marketCap'
                 ? 'border-blue-500 bg-blue-50 text-blue-700'
                 : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
             )}
           >
-            <CircleStackIcon className="mr-1.5 h-4 w-4" />
-            By market cap
+            <CircleStackIcon className="mr-1 h-3.5 w-3.5" />
+            Market Caps
           </button>
         </div>
       </div>
 
-      <div className="px-5 py-4 space-y-4">
+      <div className="px-4 py-3 space-y-3">
         {activeView === 'sector' ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={() => setSelectedMarketCap('all')}
               className={clsx(
-                'rounded-full border px-3 py-1 text-sm',
+                'rounded-md border px-2 py-0.5 text-xs',
                 selectedMarketCap === 'all'
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
               )}
             >
-              All market caps
+              All
             </button>
             {MARKET_CAP_ORDER.map(key => (
               <button
@@ -346,7 +343,7 @@ const DailyMoversHeatmap: React.FC<DailyMoversHeatmapProps> = ({ sectors, market
                 type="button"
                 onClick={() => setSelectedMarketCap(key)}
                 className={clsx(
-                  'rounded-full border px-3 py-1 text-sm transition-colors',
+                  'rounded-md border px-2 py-0.5 text-xs transition-colors',
                   selectedMarketCap === key
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
@@ -357,18 +354,18 @@ const DailyMoversHeatmap: React.FC<DailyMoversHeatmapProps> = ({ sectors, market
             ))}
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={() => setSelectedSector('all')}
               className={clsx(
-                'rounded-full border px-3 py-1 text-sm',
+                'rounded-md border px-2 py-0.5 text-xs',
                 selectedSector === 'all'
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
               )}
             >
-              All sectors
+              All
             </button>
             {availableSectorNames.map(sector => (
               <button
@@ -376,7 +373,7 @@ const DailyMoversHeatmap: React.FC<DailyMoversHeatmapProps> = ({ sectors, market
                 type="button"
                 onClick={() => setSelectedSector(sector)}
                 className={clsx(
-                  'rounded-full border px-3 py-1 text-sm transition-colors',
+                  'rounded-md border px-2 py-0.5 text-xs transition-colors',
                   selectedSector === sector
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
@@ -389,113 +386,101 @@ const DailyMoversHeatmap: React.FC<DailyMoversHeatmapProps> = ({ sectors, market
         )}
 
         {cardsToRender.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 py-12 text-center">
-            <p className="text-sm font-medium text-gray-600">No movers match the current filters.</p>
-            <p className="mt-1 text-sm text-gray-500">Try adjusting your filters to surface additional segments.</p>
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 py-8 text-center">
+            <p className="text-xs font-medium text-gray-600">No movers match filters</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {cardsToRender.map(card => (
-              <div key={`${activeView}-${card.key}`} className="rounded-xl border border-gray-200 bg-white/70 shadow-sm">
-                <div className="border-b border-gray-100 px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <h3 className="text-base font-semibold text-gray-900">{card.label}</h3>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+              <div key={`${activeView}-${card.key}`} className="rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 px-3 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <h3 className="text-sm font-bold text-gray-900">{card.label}</h3>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-500">
                         <span>{card.totalGainers + card.totalLosers} movers</span>
-                        <span>Avg {formatPercent(card.netChange)}</span>
+                        <span className={card.netChange >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                          {formatPercent(card.netChange)}
+                        </span>
                       </div>
-                      {card.label === 'Unclassified' && (
-                        <p className="text-[11px] text-amber-600">Sector metadata not yet linked for these symbols.</p>
-                      )}
                       {activeView === 'marketCap' && (
-                        <p className="text-[11px] text-gray-400">
+                        <p className="text-[10px] text-gray-400">
                           {MARKET_CAP_LABELS[card.key]?.description}
                         </p>
                       )}
                     </div>
-                    <div className="flex flex-col items-end gap-1 text-xs font-medium">
-                      <span className="flex items-center gap-1 text-green-600">
-                        <ArrowTrendingUpIcon className="h-4 w-4" />
+                    <div className="flex items-center gap-2 text-[10px] font-semibold">
+                      <span className="flex items-center gap-0.5 text-green-600">
+                        <ArrowTrendingUpIcon className="h-3 w-3" />
                         {card.totalGainers}
                       </span>
-                      <span className="flex items-center gap-1 text-red-500">
-                        <ArrowTrendingDownIcon className="h-4 w-4" />
+                      <span className="flex items-center gap-0.5 text-red-500">
+                        <ArrowTrendingDownIcon className="h-3 w-3" />
                         {card.totalLosers}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="px-4 py-3 space-y-3">
+                <div className="px-3 py-2 space-y-2">
                   {card.segments.map(segment => (
                     <div
                       key={`${card.key}-${segment.key}`}
-                      className="rounded-lg border px-3 py-3 shadow-inner transition-shadow hover:shadow-md"
+                      className="rounded-md border px-2 py-2 shadow-sm transition-shadow hover:shadow"
                       style={getHeatmapStyles(segment.netChange, segment.total)}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold text-gray-900/90">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-bold text-gray-900/90">
                             {segment.label}
                           </p>
-                          <p className="text-[11px] text-gray-700/80">
-                            {segment.total} movers · {formatPercent(segment.netChange)}
-                          </p>
+                          <span className={`text-[10px] font-semibold ${segment.netChange >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {formatPercent(segment.netChange)}
+                          </span>
                         </div>
-                        <div className="text-right text-[11px] font-medium text-gray-700 leading-4">
-                          <div className="text-green-700">
-                            ↑ {segment.gainers.length}
-                          </div>
-                          <div className="text-red-600">
-                            ↓ {segment.losers.length}
-                          </div>
+                        <div className="flex items-center gap-1.5 text-[10px] font-medium">
+                          <span className="text-green-700">↑{segment.gainers.length}</span>
+                          <span className="text-red-600">↓{segment.losers.length}</span>
                         </div>
                       </div>
 
-                      <div className="mt-2 grid gap-2 text-[11px] text-gray-800 md:grid-cols-2">
-                        <div className="space-y-1">
-                          <p className="font-semibold uppercase tracking-wide text-green-900">Gainers</p>
-                          <div className="flex flex-wrap gap-1.5">
+                      <div className="grid gap-1.5 text-[10px] md:grid-cols-2">
+                        <div className="space-y-0.5">
+                          <p className="font-semibold text-[9px] uppercase tracking-wide text-green-800">Gainers</p>
+                          <div className="flex flex-wrap gap-1">
                             {segment.topGainers.length ? (
                               segment.topGainers.map(stock => (
                                 <button
                                   key={stock.id}
                                   type="button"
                                   onClick={() => onSelectStock?.(stock.symbol)}
-                                  className="rounded-md bg-white/70 px-2 py-0.5 font-semibold text-green-700 shadow-sm transition hover:bg-white"
+                                  className="rounded bg-white/70 px-1.5 py-0.5 font-semibold text-green-700 shadow-sm transition hover:bg-white text-[10px]"
                                 >
-                                  {stock.symbol}
-                                  <span className="ml-1 text-[10px] font-medium text-green-600">
-                                    +{stock.price_change_percent.toFixed(1)}%
-                                  </span>
+                                  {stock.symbol} <span className="text-green-600">+{stock.price_change_percent.toFixed(1)}%</span>
                                 </button>
                               ))
                             ) : (
-                              <span className="text-gray-700">—</span>
+                              <span className="text-gray-600 text-xs">—</span>
                             )}
                           </div>
                         </div>
 
-                        <div className="space-y-1">
-                          <p className="font-semibold uppercase tracking-wide text-red-800">Decliners</p>
-                          <div className="flex flex-wrap gap-1.5">
+                        <div className="space-y-0.5">
+                          <p className="font-semibold text-[9px] uppercase tracking-wide text-red-800">Decliners</p>
+                          <div className="flex flex-wrap gap-1">
                             {segment.topLosers.length ? (
                               segment.topLosers.map(stock => (
                                 <button
                                   key={stock.id}
                                   type="button"
                                   onClick={() => onSelectStock?.(stock.symbol)}
-                                  className="rounded-md bg-white/70 px-2 py-0.5 font-semibold text-red-600 shadow-sm transition hover:bg-white"
+                                  className="rounded bg-white/70 px-1.5 py-0.5 font-semibold text-red-600 shadow-sm transition hover:bg-white text-[10px]"
                                 >
-                                  {stock.symbol}
-                                  <span className="ml-1 text-[10px] font-medium text-red-500">
-                                    {stock.price_change_percent.toFixed(1)}%
-                                  </span>
+                                  {stock.symbol} <span className="text-red-500">{stock.price_change_percent.toFixed(1)}%</span>
                                 </button>
                               ))
                             ) : (
-                              <span className="text-gray-700">—</span>
+                              <span className="text-gray-600 text-xs">—</span>
                             )}
                           </div>
                         </div>
