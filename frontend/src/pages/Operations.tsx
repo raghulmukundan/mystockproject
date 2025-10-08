@@ -33,6 +33,11 @@ const jobNameOverrides: Record<string, string> = {
   job_ttl_cleanup_daily: 'TTL Cleanup',
   job_ttl_cleanup_weekly: 'TTL Cleanup (Weekly)',
   tech_analysis: 'Technical Analysis',
+  daily_movers_calculation: 'Daily Movers',
+  daily_signals_computation: 'Daily Signals',
+  weekly_bars_etl: 'Weekly Bars ETL',
+  weekly_technicals_etl: 'Weekly Technicals ETL',
+  weekly_signals_computation: 'Weekly Signals',
 };
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
@@ -228,9 +233,30 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
       const res = await jobsApiService.runDailyMoversCalculation();
       return res.message;
     },
+    daily_signals_computation: async () => {
+      const res = await jobsApiService.runDailySignalsComputation();
+      return res.message;
+    },
+    weekly_bars_etl: async () => {
+      const res = await jobsApiService.runWeeklyBarsEtl();
+      return res.message;
+    },
+    weekly_technicals_etl: async () => {
+      const res = await jobsApiService.runWeeklyTechnicalsEtl();
+      return res.message;
+    },
+    weekly_signals_computation: async () => {
+      const res = await jobsApiService.runWeeklySignalsComputation();
+      return res.message;
+    },
   };
 
   const runJob = async (job: JobSummaryResponse) => {
+    // Prevent duplicate runs
+    if (jobLoading === job.job_name) {
+      return;
+    }
+
     setFeedback(null);
     setJobLoading(job.job_name);
 

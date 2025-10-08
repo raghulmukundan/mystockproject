@@ -14,6 +14,10 @@ from app.services.ttl_cleanup_job import cleanup_old_job_records
 from app.services.token_validation_job import validate_schwab_token_job
 from app.services.daily_movers_job import run_daily_movers_job_scheduled
 from app.services.asset_metadata_enrichment_job import run_asset_metadata_enrichment_job_scheduled
+from app.services.daily_signals_job import run_daily_signals_job_scheduled
+from app.services.weekly_bars_job import run_weekly_bars_job_scheduled
+from app.services.weekly_technicals_job import run_weekly_technicals_job_scheduled
+from app.services.weekly_signals_job import run_weekly_signals_job_scheduled
 from app.core.database import SessionLocal
 from app.db.models import JobConfiguration
 import logging
@@ -101,6 +105,46 @@ def setup_job_configurations():
                 "cron_hour": 18,
                 "cron_minute": 30,
                 "only_market_hours": False
+            },
+            {
+                "job_name": "daily_signals_computation",
+                "description": "Compute daily signal flags, trend scores, and trade setups",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "mon-fri",
+                "cron_hour": 18,
+                "cron_minute": 45,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "weekly_bars_etl",
+                "description": "Aggregate daily bars to weekly bars (Friday week-end)",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "fri",
+                "cron_hour": 19,
+                "cron_minute": 0,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "weekly_technicals_etl",
+                "description": "Compute weekly technical indicators using pandas-ta",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "fri",
+                "cron_hour": 19,
+                "cron_minute": 15,
+                "only_market_hours": False
+            },
+            {
+                "job_name": "weekly_signals_computation",
+                "description": "Compute weekly signal flags and trend scores",
+                "enabled": True,
+                "schedule_type": "cron",
+                "cron_day_of_week": "fri",
+                "cron_hour": 19,
+                "cron_minute": 30,
+                "only_market_hours": False
             }
         ]
 
@@ -183,6 +227,42 @@ def setup_jobs():
         trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30),
         id="daily_movers_calculation",
         name="Calculate daily top movers by sector and market cap",
+        replace_existing=True,
+    )
+
+    # Daily signals computation after daily movers (Mon-Fri at 6:45 PM)
+    scheduler.add_job(
+        func=run_daily_signals_job_scheduled,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=45),
+        id="daily_signals_computation",
+        name="Compute daily signal flags, trend scores, and trade setups",
+        replace_existing=True,
+    )
+
+    # Weekly bars ETL after daily signals on Fridays (7:00 PM)
+    scheduler.add_job(
+        func=run_weekly_bars_job_scheduled,
+        trigger=CronTrigger(day_of_week="fri", hour=19, minute=0),
+        id="weekly_bars_etl",
+        name="Aggregate daily bars to weekly bars",
+        replace_existing=True,
+    )
+
+    # Weekly technicals ETL after weekly bars on Fridays (7:15 PM)
+    scheduler.add_job(
+        func=run_weekly_technicals_job_scheduled,
+        trigger=CronTrigger(day_of_week="fri", hour=19, minute=15),
+        id="weekly_technicals_etl",
+        name="Compute weekly technical indicators",
+        replace_existing=True,
+    )
+
+    # Weekly signals computation after weekly technicals on Fridays (7:30 PM)
+    scheduler.add_job(
+        func=run_weekly_signals_job_scheduled,
+        trigger=CronTrigger(day_of_week="fri", hour=19, minute=30),
+        id="weekly_signals_computation",
+        name="Compute weekly signal flags and trend scores",
         replace_existing=True,
     )
 

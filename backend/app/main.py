@@ -15,6 +15,7 @@ from app.api.price_history import router as price_history_router
 from app.api.prices import router as prices_router
 from app.api.technical import router as technical_router
 from app.api.daily_movers import router as daily_movers_router
+from app.api.screener import router as screener_router
 from src.api.import_api import router as import_router
 from src.api.prices_browser import router as prices_browser_router
 # from src.api.tech import router as tech_router  # Temporarily disabled due to NumPy compatibility issue
@@ -64,6 +65,7 @@ app.include_router(prices_browser_router)
 app.include_router(prices_router, prefix="/api/prices")
 app.include_router(technical_router, prefix="/api")
 app.include_router(daily_movers_router, prefix="/api")
+app.include_router(screener_router, prefix="/api")
 # app.include_router(tech_router)  # Temporarily disabled due to NumPy compatibility issue
 # app.include_router(eod_scan_router)  # Moved to jobs-service
 

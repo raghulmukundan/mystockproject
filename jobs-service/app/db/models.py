@@ -164,6 +164,72 @@ class TechJobSuccess(Base):
     date = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
+# Daily Signals Job Tracking
+class DailySignalsJob(Base):
+    __tablename__ = 'daily_signals_jobs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False, default='running')
+    total_symbols = Column(Integer, nullable=True, default=0)
+    strong_trend_count = Column(Integer, nullable=True, default=0)
+    breakout_count = Column(Integer, nullable=True, default=0)
+    trade_setups_count = Column(Integer, nullable=True, default=0)
+    error_message = Column(Text, nullable=True)
+
+# Weekly Bars Job Tracking
+class WeeklyBarsJob(Base):
+    __tablename__ = 'weekly_bars_jobs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False, default='running')
+    inserted_count = Column(Integer, nullable=True, default=0)
+    updated_count = Column(Integer, nullable=True, default=0)
+    total_bars = Column(Integer, nullable=True, default=0)
+    symbols_processed = Column(Integer, nullable=True, default=0)
+    error_message = Column(Text, nullable=True)
+
+# Weekly Technicals Job Tracking
+class WeeklyTechnicalsJob(Base):
+    __tablename__ = 'weekly_technicals_jobs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False, default='running')
+    symbols_processed = Column(Integer, nullable=True, default=0)
+    symbols_errors = Column(Integer, nullable=True, default=0)
+    inserted_count = Column(Integer, nullable=True, default=0)
+    updated_count = Column(Integer, nullable=True, default=0)
+    skipped_count = Column(Integer, nullable=True, default=0)
+    error_message = Column(Text, nullable=True)
+
+class WeeklyTechnicalsJobError(Base):
+    __tablename__ = 'weekly_technicals_job_errors'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(Integer, ForeignKey('weekly_technicals_jobs.id'), nullable=False)
+    occurred_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    symbol = Column(String, nullable=False)
+    error_message = Column(Text, nullable=True)
+
+# Weekly Signals Job Tracking
+class WeeklySignalsJob(Base):
+    __tablename__ = 'weekly_signals_jobs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False, default='running')
+    total_symbols = Column(Integer, nullable=True, default=0)
+    strong_trend_count = Column(Integer, nullable=True, default=0)
+    stack_count = Column(Integer, nullable=True, default=0)
+    breakout_count = Column(Integer, nullable=True, default=0)
+    error_message = Column(Text, nullable=True)
+
 # Indexes for performance
 Index('job_execution_status_job_name_idx', JobExecutionStatus.job_name)
 Index('job_execution_status_started_at_idx', JobExecutionStatus.started_at)
@@ -176,3 +242,8 @@ Index('tech_jobs_started_at_idx', TechJob.started_at)
 Index('tech_job_errors_job_id_idx', TechJobError.tech_job_id)
 Index('tech_job_skips_job_id_idx', TechJobSkip.tech_job_id)
 Index('tech_job_successes_job_id_idx', TechJobSuccess.tech_job_id)
+Index('daily_signals_jobs_started_at_idx', DailySignalsJob.started_at)
+Index('weekly_bars_jobs_started_at_idx', WeeklyBarsJob.started_at)
+Index('weekly_technicals_jobs_started_at_idx', WeeklyTechnicalsJob.started_at)
+Index('weekly_technicals_job_errors_job_id_idx', WeeklyTechnicalsJobError.job_id)
+Index('weekly_signals_jobs_started_at_idx', WeeklySignalsJob.started_at)

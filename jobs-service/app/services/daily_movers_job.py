@@ -29,6 +29,16 @@ async def run_daily_movers_job():
         prune_history(job_name, keep=5)
 
         logger.info(f"✅ JOB COMPLETE: {job_name} - Daily movers analysis completed successfully: {total_movers} movers calculated across {result.get('sectors_processed', 0)} sectors")
+
+        # Trigger daily signals computation after daily movers completes
+        logger.info("🔗 CHAINING: Triggering daily_signals_computation after daily_movers completion")
+        from app.services.daily_signals_job import run_daily_signals_job
+        try:
+            await run_daily_signals_job()
+            logger.info("✅ CHAINING: daily_signals_computation completed successfully")
+        except Exception as chain_error:
+            logger.error(f"❌ CHAINING: daily_signals_computation failed: {str(chain_error)}")
+
         return result
 
     except Exception as e:

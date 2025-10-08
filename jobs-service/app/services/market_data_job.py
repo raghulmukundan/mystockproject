@@ -3,6 +3,8 @@ Market data refresh job
 """
 import asyncio
 import logging
+from datetime import datetime
+import pytz
 from app.services.job_status import begin_job, complete_job, fail_job, prune_history
 from app.services.external_client import backend_client, external_client
 from app.services.price_storage import price_storage
@@ -18,6 +20,23 @@ async def _update_market_data_job():
     job_name = "update_market_data"
     job_id = None
     try:
+        # Check if market is open (9:30 AM - 4:00 PM CT, Mon-Fri)
+        chicago_tz = pytz.timezone('America/Chicago')
+        now = datetime.now(chicago_tz)
+
+        # Skip on weekends
+        if now.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+            logger.info(f"Skipping market data refresh - weekend (day {now.weekday()})")
+            return
+
+        # Skip outside market hours (9:30 AM - 4:00 PM CT)
+        market_open_time = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        market_close_time = now.replace(hour=16, minute=0, second=0, microsecond=0)
+
+        if now < market_open_time or now >= market_close_time:
+            logger.info(f"Skipping market data refresh - outside market hours (current time: {now.strftime('%H:%M:%S')})")
+            return
+
         logger.info("Starting market data refresh job")
         job_id = begin_job(job_name)
         

@@ -66,6 +66,10 @@ const JobStatus: React.FC = () => {
   const [ttlCleanupJobs, setTtlCleanupJobs] = useState<any[]>([])
   const [marketRefreshJobs, setMarketRefreshJobs] = useState<any[]>([])
   const [dailyMoversJobs, setDailyMoversJobs] = useState<any[]>([])
+  const [dailySignalsJobs, setDailySignalsJobs] = useState<any[]>([])
+  const [weeklyBarsJobs, setWeeklyBarsJobs] = useState<any[]>([])
+  const [weeklyTechnicalsJobs, setWeeklyTechnicalsJobs] = useState<any[]>([])
+  const [weeklySignalsJobs, setWeeklySignalsJobs] = useState<any[]>([])
   const [selectedTechJobId, setSelectedTechJobId] = useState<number | null>(null)
   const [techSkips, setTechSkips] = useState<any[]>([])
   const [techSuccesses, setTechSuccesses] = useState<any[]>([])
@@ -97,6 +101,10 @@ const JobStatus: React.FC = () => {
     ttl: true,
     marketRefresh: true,
     dailyMovers: true,
+    dailySignals: true,
+    weeklyBars: true,
+    weeklyTechnicals: true,
+    weeklySignals: true,
     import: true
   })
   const [refreshingErrors, setRefreshingErrors] = useState<Record<number, boolean>>({})
@@ -216,6 +224,42 @@ const JobStatus: React.FC = () => {
       } catch (e) {
         console.log('No daily movers jobs found or error loading daily movers jobs:', e)
         setDailyMoversJobs([])
+      }
+
+      // Load daily signals jobs from jobs-service
+      try {
+        const dailySignalsJobsData = await jobsApiService.getJobStatus('daily_signals_computation', 10)
+        setDailySignalsJobs(dailySignalsJobsData)
+      } catch (e) {
+        console.log('No daily signals jobs found or error loading daily signals jobs:', e)
+        setDailySignalsJobs([])
+      }
+
+      // Load weekly bars jobs from jobs-service
+      try {
+        const weeklyBarsJobsData = await jobsApiService.getJobStatus('weekly_bars_etl', 10)
+        setWeeklyBarsJobs(weeklyBarsJobsData)
+      } catch (e) {
+        console.log('No weekly bars jobs found or error loading weekly bars jobs:', e)
+        setWeeklyBarsJobs([])
+      }
+
+      // Load weekly technicals jobs from jobs-service
+      try {
+        const weeklyTechnicalsJobsData = await jobsApiService.getJobStatus('weekly_technicals_etl', 10)
+        setWeeklyTechnicalsJobs(weeklyTechnicalsJobsData)
+      } catch (e) {
+        console.log('No weekly technicals jobs found or error loading weekly technicals jobs:', e)
+        setWeeklyTechnicalsJobs([])
+      }
+
+      // Load weekly signals jobs from jobs-service
+      try {
+        const weeklySignalsJobsData = await jobsApiService.getJobStatus('weekly_signals_computation', 10)
+        setWeeklySignalsJobs(weeklySignalsJobsData)
+      } catch (e) {
+        console.log('No weekly signals jobs found or error loading weekly signals jobs:', e)
+        setWeeklySignalsJobs([])
       }
     } catch (e) {
       console.error('Failed to load job status', e)
@@ -391,6 +435,14 @@ const JobStatus: React.FC = () => {
         return marketRefreshJobs.some(job => job.status === 'running')
       case 'dailyMovers':
         return dailyMoversJobs.some(job => job.status === 'running')
+      case 'dailySignals':
+        return dailySignalsJobs.some(job => job.status === 'running')
+      case 'weeklyBars':
+        return weeklyBarsJobs.some(job => job.status === 'running')
+      case 'weeklyTechnicals':
+        return weeklyTechnicalsJobs.some(job => job.status === 'running')
+      case 'weeklySignals':
+        return weeklySignalsJobs.some(job => job.status === 'running')
       case 'import':
         return importJobs.some(job => job.status === 'running')
       default:
@@ -1030,6 +1082,326 @@ const JobStatus: React.FC = () => {
                       {job.records_processed && (
                         <div className="text-gray-600">
                           Total movers calculated: {job.records_processed.toLocaleString()}
+                        </div>
+                      )}
+                      {job.duration_seconds !== null && (
+                        <div className="text-gray-600">
+                          Duration: {job.duration_seconds}s
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'secondary'}>
+                        {job.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                  {job.error_message && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                      <strong>Error:</strong> {job.error_message}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        )}
+      </Card>
+
+      {/* Daily Signals Jobs */}
+      <Card className={getSectionCardClass('dailySignals')}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('dailySignals')} onClick={() => toggleSection('dailySignals')}>
+              {collapsedSections['dailySignals'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>Daily Signals Computation Jobs</CardTitle>
+              {hasRunningJobs('dailySignals') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!collapsedSections['dailySignals'] && (
+            <p className="text-sm text-slate-600">Daily signals computation job history - computes signal flags, trend scores, and trade setups.</p>
+          )}
+        </CardHeader>
+        {!collapsedSections['dailySignals'] && (
+        <CardContent>
+          {dailySignalsJobs.length === 0 ? (
+            <div className="text-gray-500">No daily signals jobs found.</div>
+          ) : (
+            <div className="space-y-3">
+              {dailySignalsJobs.map((job) => (
+                <div key={job.id} className={`border rounded p-3 ${job.status === 'running' ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : ''}`}>
+                  <div className="flex justify-between items-start text-sm">
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        Daily Signals #{job.id}
+                        {job.status === 'running' && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-gray-600">
+                        Started: {job.started_at ? formatChicagoDateTime(job.started_at) : 'N/A'}
+                      </div>
+                      {job.completed_at && (
+                        <div className="text-gray-600">
+                          Completed: {formatChicagoDateTime(job.completed_at)}
+                        </div>
+                      )}
+                      {job.records_processed && (
+                        <div className="text-gray-600">
+                          Symbols processed: {job.records_processed.toLocaleString()}
+                        </div>
+                      )}
+                      {job.duration_seconds !== null && (
+                        <div className="text-gray-600">
+                          Duration: {job.duration_seconds}s
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'secondary'}>
+                        {job.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                  {job.error_message && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                      <strong>Error:</strong> {job.error_message}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        )}
+      </Card>
+
+      {/* Weekly Bars ETL Jobs */}
+      <Card className={getSectionCardClass('weeklyBars')}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('weeklyBars')} onClick={() => toggleSection('weeklyBars')}>
+              {collapsedSections['weeklyBars'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>Weekly Bars ETL Jobs</CardTitle>
+              {hasRunningJobs('weeklyBars') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!collapsedSections['weeklyBars'] && (
+            <p className="text-sm text-slate-600">Weekly bars ETL job history - aggregates daily bars to weekly bars.</p>
+          )}
+        </CardHeader>
+        {!collapsedSections['weeklyBars'] && (
+        <CardContent>
+          {weeklyBarsJobs.length === 0 ? (
+            <div className="text-gray-500">No weekly bars jobs found.</div>
+          ) : (
+            <div className="space-y-3">
+              {weeklyBarsJobs.map((job) => (
+                <div key={job.id} className={`border rounded p-3 ${job.status === 'running' ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : ''}`}>
+                  <div className="flex justify-between items-start text-sm">
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        Weekly Bars ETL #{job.id}
+                        {job.status === 'running' && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-gray-600">
+                        Started: {job.started_at ? formatChicagoDateTime(job.started_at) : 'N/A'}
+                      </div>
+                      {job.completed_at && (
+                        <div className="text-gray-600">
+                          Completed: {formatChicagoDateTime(job.completed_at)}
+                        </div>
+                      )}
+                      {job.records_processed && (
+                        <div className="text-gray-600">
+                          Records processed: {job.records_processed.toLocaleString()}
+                        </div>
+                      )}
+                      {job.duration_seconds !== null && (
+                        <div className="text-gray-600">
+                          Duration: {job.duration_seconds}s
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'secondary'}>
+                        {job.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                  {job.error_message && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                      <strong>Error:</strong> {job.error_message}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        )}
+      </Card>
+
+      {/* Weekly Technicals ETL Jobs */}
+      <Card className={getSectionCardClass('weeklyTechnicals')}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('weeklyTechnicals')} onClick={() => toggleSection('weeklyTechnicals')}>
+              {collapsedSections['weeklyTechnicals'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>Weekly Technicals ETL Jobs</CardTitle>
+              {hasRunningJobs('weeklyTechnicals') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!collapsedSections['weeklyTechnicals'] && (
+            <p className="text-sm text-slate-600">Weekly technicals ETL job history - computes weekly technical indicators.</p>
+          )}
+        </CardHeader>
+        {!collapsedSections['weeklyTechnicals'] && (
+        <CardContent>
+          {weeklyTechnicalsJobs.length === 0 ? (
+            <div className="text-gray-500">No weekly technicals jobs found.</div>
+          ) : (
+            <div className="space-y-3">
+              {weeklyTechnicalsJobs.map((job) => (
+                <div key={job.id} className={`border rounded p-3 ${job.status === 'running' ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : ''}`}>
+                  <div className="flex justify-between items-start text-sm">
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        Weekly Technicals ETL #{job.id}
+                        {job.status === 'running' && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-gray-600">
+                        Started: {job.started_at ? formatChicagoDateTime(job.started_at) : 'N/A'}
+                      </div>
+                      {job.completed_at && (
+                        <div className="text-gray-600">
+                          Completed: {formatChicagoDateTime(job.completed_at)}
+                        </div>
+                      )}
+                      {job.records_processed && (
+                        <div className="text-gray-600">
+                          Records processed: {job.records_processed.toLocaleString()}
+                        </div>
+                      )}
+                      {job.duration_seconds !== null && (
+                        <div className="text-gray-600">
+                          Duration: {job.duration_seconds}s
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'secondary'}>
+                        {job.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                  {job.error_message && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                      <strong>Error:</strong> {job.error_message}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        )}
+      </Card>
+
+      {/* Weekly Signals Computation Jobs */}
+      <Card className={getSectionCardClass('weeklySignals')}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className={getSectionHeaderClass('weeklySignals')} onClick={() => toggleSection('weeklySignals')}>
+              {collapsedSections['weeklySignals'] ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+              <CardTitle>Weekly Signals Computation Jobs</CardTitle>
+              {hasRunningJobs('weeklySignals') && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!collapsedSections['weeklySignals'] && (
+            <p className="text-sm text-slate-600">Weekly signals computation job history - computes weekly signal flags and trend scores.</p>
+          )}
+        </CardHeader>
+        {!collapsedSections['weeklySignals'] && (
+        <CardContent>
+          {weeklySignalsJobs.length === 0 ? (
+            <div className="text-gray-500">No weekly signals jobs found.</div>
+          ) : (
+            <div className="space-y-3">
+              {weeklySignalsJobs.map((job) => (
+                <div key={job.id} className={`border rounded p-3 ${job.status === 'running' ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : ''}`}>
+                  <div className="flex justify-between items-start text-sm">
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        Weekly Signals #{job.id}
+                        {job.status === 'running' && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-blue-600 font-medium">RUNNING</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-gray-600">
+                        Started: {job.started_at ? formatChicagoDateTime(job.started_at) : 'N/A'}
+                      </div>
+                      {job.completed_at && (
+                        <div className="text-gray-600">
+                          Completed: {formatChicagoDateTime(job.completed_at)}
+                        </div>
+                      )}
+                      {job.records_processed && (
+                        <div className="text-gray-600">
+                          Symbols processed: {job.records_processed.toLocaleString()}
                         </div>
                       )}
                       {job.duration_seconds !== null && (
