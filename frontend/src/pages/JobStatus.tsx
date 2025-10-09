@@ -52,12 +52,6 @@ type TokenStatus = {
   message?: string
 }
 
-type OAuthStatus = {
-  authenticated: boolean
-  client_id: string
-  scope?: string
-}
-
 const JobStatus: React.FC = () => {
   const [eodScans, setEodScans] = useState<EodScan[]>([])
   const [importJobs, setImportJobs] = useState<ImportJob[]>([])
@@ -113,8 +107,25 @@ const JobStatus: React.FC = () => {
 
   const loadTokenStatus = async () => {
     setTokenLoading(true)
+
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      setTokenLoading(false)
+      setTokenStatus({
+        valid: false,
+        stale: true,
+        credentials_available: false,
+        message: 'Request timed out - external-apis service may be unavailable'
+      })
+    }, 10000) // 10 second timeout
+
     try {
-      const response = await fetch('http://localhost:8003/schwab/auth/status')
+      const response = await fetch('http://localhost:8003/schwab/auth/status', {
+        signal: AbortSignal.timeout(8000) // 8 second fetch timeout
+      })
+
+      clearTimeout(timeoutId)
+
       if (response.ok) {
         const data = await response.json()
         setTokenStatus({
@@ -132,6 +143,7 @@ const JobStatus: React.FC = () => {
         })
       }
     } catch (error) {
+      clearTimeout(timeoutId)
       setTokenStatus({
         valid: false,
         stale: true,
@@ -140,21 +152,6 @@ const JobStatus: React.FC = () => {
       })
     } finally {
       setTokenLoading(false)
-    }
-  }
-
-  const loadOauthStatus = async () => {
-    setOauthLoading(true)
-    try {
-      const response = await fetch('http://localhost:8003/schwab/auth/status')
-      if (response.ok) {
-        const data = await response.json()
-        setOauthStatus(data)
-      }
-    } catch (error) {
-      console.error('Failed to load OAuth status:', error)
-    } finally {
-      setOauthLoading(false)
     }
   }
 
@@ -269,11 +266,9 @@ const JobStatus: React.FC = () => {
   useEffect(() => {
     loadData()
     loadTokenStatus()
-    loadOauthStatus()
     const t = setInterval(() => {
       loadData()
       loadTokenStatus()
-      loadOauthStatus()
     }, 30000) // Refresh every 30 seconds instead of 5 seconds
     return () => clearInterval(t)
   }, [])
@@ -1494,22 +1489,22 @@ const JobStatus: React.FC = () => {
                 <ChevronDownIcon className="h-4 w-4" />
               )}
               <CardTitle>Schwab API Token Status</CardTitle>
-              {tokenStatus && !tokenStatus.valid && tokenStatus.credentials_available && (
-                <div className="flex items-center gap-1 ml-2">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-yellow-600 font-medium">STALE TOKEN</span>
-                </div>
-              )}
-              {tokenStatus && !tokenStatus.credentials_available && (
-                <div className="flex items-center gap-1 ml-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <span className="text-xs text-red-600 font-medium">NO CREDENTIALS</span>
-                </div>
-              )}
               {tokenStatus && tokenStatus.valid && (
                 <div className="flex items-center gap-1 ml-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   <span className="text-xs text-green-600 font-medium">VALID</span>
+                </div>
+              )}
+              {tokenStatus && !tokenStatus.valid && tokenStatus.credentials_available && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-yellow-600 font-medium">EXPIRED/INVALID</span>
+                </div>
+              )}
+              {tokenStatus && !tokenStatus.valid && !tokenStatus.credentials_available && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-xs text-red-600 font-medium">NOT CONFIGURED</span>
                 </div>
               )}
             </div>
@@ -1532,22 +1527,29 @@ const JobStatus: React.FC = () => {
           ) : (
             <div className="space-y-4">
               <div className="space-y-2">
-                <div className="text-sm font-medium text-gray-700">Refresh Token Configuration</div>
+                <div className="text-sm font-medium text-gray-700">Refresh Token Status</div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={tokenStatus.credentials_available ? 'default' : 'destructive'}>
-                    {tokenStatus.credentials_available ? '✅ CONFIGURED' : '❌ MISSING'}
+                  <Badge variant={tokenStatus.valid ? 'default' : tokenStatus.credentials_available ? 'secondary' : 'destructive'}>
+                    {tokenStatus.valid ? '✅ VALID' : tokenStatus.credentials_available ? '⚠️ EXPIRED/INVALID' : '❌ NOT CONFIGURED'}
                   </Badge>
                 </div>
                 <div className="text-sm text-gray-600">
-                  {tokenStatus.credentials_available ? (
+                  {tokenStatus.valid ? (
                     <div className="text-green-700 bg-green-50 p-2 rounded border border-green-200">
-                      ✅ System can obtain access tokens automatically when needed.
-                      Refresh tokens typically expire after 7 days.
+                      ✅ Refresh token is valid and working. The system can automatically obtain temporary access tokens (valid ~30 min) using this refresh token.
+                      <div className="text-xs mt-1 text-green-600">
+                        ⚠️ Schwab refresh tokens expire after 7 days of inactivity and require manual OAuth re-authentication.
+                      </div>
+                    </div>
+                  ) : tokenStatus.credentials_available ? (
+                    <div className="text-yellow-700 bg-yellow-50 p-2 rounded border border-yellow-200">
+                      ⚠️ Refresh token found but appears to be expired or invalid.
+                      Complete the OAuth flow below to obtain a new refresh token.
                     </div>
                   ) : (
                     <div className="text-red-700 bg-red-50 p-2 rounded border border-red-200">
-                      ❌ Missing SCHWAB_REFRESH_TOKEN in environment configuration.
-                      Use OAuth flow above to obtain a refresh token.
+                      ❌ No SCHWAB_REFRESH_TOKEN configured in environment.
+                      Complete the OAuth flow below to obtain a refresh token.
                     </div>
                   )}
                 </div>

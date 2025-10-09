@@ -251,7 +251,7 @@ This section documents the technical indicator pipeline, the tables it writes to
 - Job Settings
   - Configure jobs, enable/disable, view last run details
   - Run Now buttons for universe/market data/tech; live status for tech
-  - Schwab Authentication card to start OAuth flow (refresh tokens expire every 7 days). If using Tailscale, run `tailscale serve --https=443 localhost:8000` before login so the callback can reach the app.
+  - Schwab Authentication card to start OAuth flow (refresh tokens expire every 7 days). If using Tailscale, run `tailscale serve --https=443 localhost:8003` before login so the callback can reach the app.
 
 - Job Status
   - EOD Scans: progress, errors, retry failed, truncate prices_daily

@@ -77,7 +77,8 @@ ALLOWED_SORT_COLUMNS = {
     'trend_score_d', 'trend_score_w', 'combined_score',
     'risk_reward_ratio', 'distance_from_entry_pct',
     'sma20', 'sma50', 'sma200', 'macd', 'macd_hist',
-    'daily_date', 'weekly_date'
+    'daily_date', 'weekly_date',
+    'sector', 'market_cap_numeric'
 }
 
 # ============================================================================
@@ -166,6 +167,14 @@ class ScreenerResult(BaseModel):
     distance_from_entry_pct: Optional[Decimal]
     pct_from_52w_high: Optional[Decimal]
 
+    # Asset metadata
+    asset_type: Optional[str]
+    sector: Optional[str]
+    industry: Optional[str]
+    market_cap: Optional[str]
+    market_cap_category: Optional[str]
+    market_cap_numeric: Optional[int]
+
     class Config:
         from_attributes = True
 
@@ -232,6 +241,9 @@ def build_where_clauses(
     min_avg_vol20: Optional[int],
     min_rel_volume: Optional[float],
     max_distance_to_52w_high: Optional[float],
+    min_market_cap: Optional[int],
+    max_market_cap: Optional[int],
+    asset_type: Optional[str],
     above_sma200: Optional[bool],
     sma_bull_stack: Optional[bool],
     macd_cross_up: Optional[bool],
@@ -269,6 +281,20 @@ def build_where_clauses(
     if max_distance_to_52w_high is not None:
         where_clauses.append("distance_to_52w_high >= :max_distance_to_52w_high")
         params['max_distance_to_52w_high'] = max_distance_to_52w_high
+
+    # Market cap filters
+    if min_market_cap is not None:
+        where_clauses.append("market_cap_numeric >= :min_market_cap")
+        params['min_market_cap'] = min_market_cap
+
+    if max_market_cap is not None:
+        where_clauses.append("market_cap_numeric <= :max_market_cap")
+        params['max_market_cap'] = max_market_cap
+
+    # Asset type filter
+    if asset_type is not None:
+        where_clauses.append("asset_type = :asset_type")
+        params['asset_type'] = asset_type.lower()
 
     # Boolean signal filters
     if above_sma200 is True:
@@ -314,6 +340,13 @@ def get_screener(
         description="Max distance from 52w high (e.g., -0.05 for within 5%)"
     ),
 
+    # Market cap filters
+    minMarketCap: Optional[int] = Query(None, description="Minimum market cap"),
+    maxMarketCap: Optional[int] = Query(None, description="Maximum market cap"),
+
+    # Asset type filter
+    assetType: Optional[str] = Query(None, description="Filter by asset type (stock, etf)"),
+
     # Boolean signal filters
     aboveSMA200: Optional[bool] = Query(None, description="Price above 200 SMA"),
     smaBullStack: Optional[bool] = Query(None, description="SMA20 > SMA50 > SMA200"),
@@ -347,6 +380,9 @@ def get_screener(
             min_avg_vol20=minAvgVol20,
             min_rel_volume=minRelVolume,
             max_distance_to_52w_high=maxDistanceTo52wHigh,
+            min_market_cap=minMarketCap,
+            max_market_cap=maxMarketCap,
+            asset_type=assetType,
             above_sma200=aboveSMA200,
             sma_bull_stack=smaBullStack,
             macd_cross_up=macdCrossUp,
@@ -393,7 +429,8 @@ def get_screener(
                 stack_10_30_40, close_above_30w, donch20w_breakout,
                 macd_w_cross_up, rsi14w_gt_50, trend_score_w,
                 sma_bull_stack, weekly_strong, combined_score,
-                distance_from_entry_pct, pct_from_52w_high
+                distance_from_entry_pct, pct_from_52w_high,
+                asset_type, sector, industry, market_cap, market_cap_category, market_cap_numeric
             FROM screener_latest
             {where_sql}
             ORDER BY {order_by}
@@ -472,6 +509,12 @@ def get_screener(
                 combined_score=row.combined_score,
                 distance_from_entry_pct=row.distance_from_entry_pct,
                 pct_from_52w_high=row.pct_from_52w_high,
+                asset_type=row.asset_type,
+                sector=row.sector,
+                industry=row.industry,
+                market_cap=row.market_cap,
+                market_cap_category=row.market_cap_category,
+                market_cap_numeric=row.market_cap_numeric,
             ))
 
         # Calculate total pages

@@ -19,6 +19,13 @@ export interface ScreenerFilters {
   // Position filter
   maxDistanceTo52wHigh?: number
 
+  // Market cap filters
+  minMarketCap?: number
+  maxMarketCap?: number
+
+  // Asset type filter
+  assetType?: string
+
   // Boolean signal filters
   aboveSMA200?: boolean
   smaBullStack?: boolean
@@ -111,6 +118,14 @@ export interface ScreenerResult {
   combined_score: number | null
   distance_from_entry_pct: string | number | null
   pct_from_52w_high: string | number | null
+
+  // Asset metadata
+  asset_type: string | null
+  sector: string | null
+  industry: string | null
+  market_cap: string | null
+  market_cap_category: string | null
+  market_cap_numeric: number | null
 }
 
 export interface ScreenerResponse {
@@ -146,6 +161,13 @@ class ScreenerApi {
     if (filters.maxDistanceTo52wHigh !== undefined) {
       params.append('maxDistanceTo52wHigh', filters.maxDistanceTo52wHigh.toString())
     }
+
+    // Market cap filters
+    if (filters.minMarketCap !== undefined) params.append('minMarketCap', filters.minMarketCap.toString())
+    if (filters.maxMarketCap !== undefined) params.append('maxMarketCap', filters.maxMarketCap.toString())
+
+    // Asset type filter
+    if (filters.assetType) params.append('assetType', filters.assetType)
 
     // Boolean signal filters
     if (filters.aboveSMA200 === true) params.append('aboveSMA200', 'true')

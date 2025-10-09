@@ -131,9 +131,40 @@ SELECT
         WHEN td.distance_to_52w_high IS NOT NULL
         THEN td.distance_to_52w_high * 100
         ELSE NULL
-    END AS pct_from_52w_high
+    END AS pct_from_52w_high,
+
+    -- ========================================================================
+    -- ASSET METADATA (asset_type, sector, industry, market_cap)
+    -- ========================================================================
+    -- Derive asset_type from symbols.etf flag (Y='etf', N or NULL='stock')
+    CASE
+        WHEN s.etf = 'Y' THEN 'etf'
+        ELSE 'stock'
+    END AS asset_type,
+    am.sector,
+    am.industry,
+    am.market_cap,
+
+    -- Market cap category (Large, Mid, Small, Micro)
+    CASE
+        WHEN am.market_cap IS NULL THEN NULL
+        WHEN CAST(am.market_cap AS NUMERIC) >= 10000000000 THEN 'Large Cap'
+        WHEN CAST(am.market_cap AS NUMERIC) >= 2000000000 THEN 'Mid Cap'
+        WHEN CAST(am.market_cap AS NUMERIC) >= 300000000 THEN 'Small Cap'
+        ELSE 'Micro Cap'
+    END AS market_cap_category,
+
+    -- Market cap as numeric for sorting (convert via NUMERIC first to handle decimals)
+    CASE
+        WHEN am.market_cap IS NULL THEN NULL
+        WHEN am.market_cap ~ '^[0-9]+\.?[0-9]*$' THEN CAST(CAST(am.market_cap AS NUMERIC) AS BIGINT)
+        ELSE NULL
+    END AS market_cap_numeric
 
 FROM technical_latest td
+
+-- Join symbols table for ETF flag
+LEFT JOIN symbols s ON td.symbol = s.symbol
 
 -- Join daily signals (left join - may not exist yet)
 LEFT JOIN signals_daily_latest sd ON td.symbol = sd.symbol
@@ -143,6 +174,9 @@ LEFT JOIN technical_weekly_latest tw ON td.symbol = tw.symbol
 
 -- Join weekly signals (left join - may not exist yet)
 LEFT JOIN weekly_signals_latest ws ON td.symbol = ws.symbol
+
+-- Join asset metadata (left join - sector/industry/market_cap data)
+LEFT JOIN asset_metadata am ON td.symbol = am.symbol AND UPPER(am.country) = 'US'
 
 WHERE td.close IS NOT NULL
   AND td.close > 0;

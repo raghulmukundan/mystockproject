@@ -94,21 +94,43 @@ async def get_oauth_url(state: Optional[str] = None):
 async def oauth_status():
     """
     Check OAuth configuration and authentication status.
+    Tests if refresh token is valid by attempting to get an access token.
     """
     if oauth_service is None:
         return OAuthStatus(
             authenticated=False,
             client_id="Not configured"
         )
-    
+
     # Check if we have a refresh token configured
     refresh_token = os.getenv("SCHWAB_REFRESH_TOKEN", "")
-    
-    return OAuthStatus(
-        authenticated=bool(refresh_token),
-        client_id=oauth_service.client_id[:8] + "..." if oauth_service.client_id else "Not configured",
-        scope="readonly"
-    )
+
+    if not refresh_token:
+        return OAuthStatus(
+            authenticated=False,
+            client_id=oauth_service.client_id[:8] + "..." if oauth_service.client_id else "Not configured",
+            scope="readonly"
+        )
+
+    # Try to validate the refresh token by getting an access token
+    try:
+        from app.clients.schwab.auth import SchwabTokenManager
+        token_manager = SchwabTokenManager()
+        # This will attempt to refresh and throw exception if invalid
+        token_manager.get_access_token()
+
+        return OAuthStatus(
+            authenticated=True,
+            client_id=oauth_service.client_id[:8] + "..." if oauth_service.client_id else "Not configured",
+            scope="readonly"
+        )
+    except Exception as e:
+        # Refresh token exists but is invalid/expired
+        return OAuthStatus(
+            authenticated=False,
+            client_id=oauth_service.client_id[:8] + "..." if oauth_service.client_id else "Not configured",
+            scope=f"Token validation failed: {str(e)[:100]}"
+        )
 
 @router.post("/oauth/token")
 async def exchange_oauth_code(authorization_code: str):

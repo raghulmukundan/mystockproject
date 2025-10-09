@@ -63,7 +63,8 @@
       "Bash(where psql)",
       "Bash(del \"C:\\Users\\raghu\\OneDrive\\Documents\\mystockproject\\backend\\app\\api\\eod_scan-32496B8IJGQKK.py\")",
       "Bash(timeout:*)",
-      "Bash(del /f .env.weekly.example)"
+      "Bash(del /f .env.weekly.example)",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "ask": []

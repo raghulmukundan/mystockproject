@@ -5,9 +5,13 @@ import {
   ChevronUpDownIcon,
   ArrowPathIcon,
   ChartBarIcon,
-  ExclamationCircleIcon
+  ExclamationCircleIcon,
+  ArrowUpIcon,
+  ArrowDownIcon
 } from '@heroicons/react/24/outline'
 import { screenerApi, ScreenerFilters, ScreenerResult, ScreenerResponse } from '../services/screenerApi'
+
+type SortField = 'symbol' | 'close' | 'trend_score_d' | 'trend_score_w' | 'combined_score' | 'market_cap_numeric' | 'sector'
 
 export default function StockScreener() {
   const [filters, setFilters] = useState<ScreenerFilters>({
@@ -20,6 +24,9 @@ export default function StockScreener() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showFilters, setShowFilters] = useState(true)
+  const [sortField, setSortField] = useState<SortField>('combined_score')
+  const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('DESC')
+  const [selectedSector, setSelectedSector] = useState<string>('')
 
   // Load screener results
   const loadResults = useCallback(async () => {
@@ -72,6 +79,57 @@ export default function StockScreener() {
   // Change page
   const goToPage = (page: number) => {
     setFilters(prev => ({ ...prev, page }))
+  }
+
+  // Handle column sorting
+  const handleSort = (field: SortField) => {
+    const newDirection = field === sortField && sortDirection === 'DESC' ? 'ASC' : 'DESC'
+    setSortField(field)
+    setSortDirection(newDirection)
+    updateFilter('sort', `${field} ${newDirection}`)
+  }
+
+  // Get unique sectors from results
+  const sectors = results?.results
+    ? Array.from(new Set(results.results.map(r => r.sector).filter(Boolean))).sort()
+    : []
+
+  // Filter results by sector (client-side for now)
+  const filteredResults = results?.results.filter(stock => {
+    if (selectedSector && stock.sector !== selectedSector) return false
+    return true
+  }) || []
+
+  // Helper to get market cap badge
+  const getMarketCapBadge = (marketCapCategory: string | null): { label: string; color: string } | null => {
+    if (!marketCapCategory) return null
+    const cap = marketCapCategory.toLowerCase()
+    if (cap.includes('large')) return { label: 'L', color: 'bg-blue-100 text-blue-700' }
+    if (cap.includes('mid')) return { label: 'M', color: 'bg-purple-100 text-purple-700' }
+    if (cap.includes('small')) return { label: 'S', color: 'bg-orange-100 text-orange-700' }
+    if (cap.includes('micro')) return { label: 'XS', color: 'bg-gray-100 text-gray-700' }
+    return null
+  }
+
+  // Count daily signals
+  const countDailySignals = (stock: ScreenerResult): number => {
+    let count = 0
+    if (stock.price_above_200) count++
+    if (stock.sma_bull_stack) count++
+    if (stock.macd_cross_up) count++
+    if (stock.donch20_breakout) count++
+    if (stock.high_tight_zone) count++
+    return count
+  }
+
+  // Count weekly signals
+  const countWeeklySignals = (stock: ScreenerResult): number => {
+    let count = 0
+    if (stock.close_above_30w) count++
+    if (stock.stack_10_30_40) count++
+    if (stock.macd_w_cross_up) count++
+    if (stock.donch20w_breakout) count++
+    return count
   }
 
   return (
@@ -184,6 +242,62 @@ export default function StockScreener() {
               />
             </div>
 
+            {/* Asset Type Filter */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Asset Type</label>
+              <select
+                value={filters.assetType || ''}
+                onChange={(e) => updateFilter('assetType', e.target.value || undefined)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Types</option>
+                <option value="stock">Stocks Only</option>
+                <option value="etf">ETFs Only</option>
+              </select>
+            </div>
+
+            {/* Market Cap Filter */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Market Cap</label>
+              <select
+                value={(() => {
+                  const min = filters.minMarketCap
+                  const max = filters.maxMarketCap
+                  if (min === 10000000000) return 'large'
+                  if (min === 2000000000 && max === 10000000000) return 'mid'
+                  if (min === 300000000 && max === 2000000000) return 'small'
+                  if (max === 300000000) return 'micro'
+                  return ''
+                })()}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value === 'large') {
+                    updateFilter('minMarketCap', 10000000000)
+                    updateFilter('maxMarketCap', undefined)
+                  } else if (value === 'mid') {
+                    updateFilter('minMarketCap', 2000000000)
+                    updateFilter('maxMarketCap', 10000000000)
+                  } else if (value === 'small') {
+                    updateFilter('minMarketCap', 300000000)
+                    updateFilter('maxMarketCap', 2000000000)
+                  } else if (value === 'micro') {
+                    updateFilter('minMarketCap', undefined)
+                    updateFilter('maxMarketCap', 300000000)
+                  } else {
+                    updateFilter('minMarketCap', undefined)
+                    updateFilter('maxMarketCap', undefined)
+                  }
+                }}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Market Caps</option>
+                <option value="large">Large Cap (&gt;$10B)</option>
+                <option value="mid">Mid Cap ($2B-$10B)</option>
+                <option value="small">Small Cap ($300M-$2B)</option>
+                <option value="micro">Micro Cap (&lt;$300M)</option>
+              </select>
+            </div>
+
             {/* Min Daily Trend Score */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">Min Daily Score (0-55)</label>
@@ -241,6 +355,21 @@ export default function StockScreener() {
                 <option value="50">50</option>
                 <option value="100">100</option>
                 <option value="200">200</option>
+              </select>
+            </div>
+
+            {/* Sector Filter */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Sector</label>
+              <select
+                value={selectedSector || ''}
+                onChange={(e) => setSelectedSector(e.target.value)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Sectors</option>
+                {sectors.map(sector => (
+                  <option key={sector} value={sector || ''}>{sector}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -304,27 +433,46 @@ export default function StockScreener() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Daily Score</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Weekly Score</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Combined</th>
+                    <SortableHeader field="symbol" label="Symbol" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} align="left" />
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <SortableHeader field="market_cap_numeric" label="Cap" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} align="left" />
+                    <SortableHeader field="close" label="Price" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} align="right" />
+                    <SortableHeader field="trend_score_d" label="Daily Score" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} align="right" />
+                    <SortableHeader field="trend_score_w" label="Weekly Score" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} align="right" />
+                    <SortableHeader field="combined_score" label="Combined" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} align="right" />
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Daily Signals</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Weekly Signals</th>
+                    <SortableHeader field="sector" label="Sector" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} align="left" />
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rel Vol</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">% from 52w</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">R/R Ratio</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {results.results.map((stock) => (
-                    <tr key={stock.symbol} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-gray-900">{stock.symbol}</div>
-                        {stock.daily_notes && (
-                          <div className="text-xs text-amber-600 mt-0.5">{stock.daily_notes}</div>
-                        )}
-                      </td>
+                  {filteredResults.map((stock) => {
+                    const capBadge = getMarketCapBadge(stock.market_cap_category)
+                    const dailyCount = countDailySignals(stock)
+                    const weeklyCount = countWeeklySignals(stock)
+                    return (
+                      <tr key={stock.symbol} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm font-semibold text-gray-900">{stock.symbol}</div>
+                          {stock.daily_notes && (
+                            <div className="text-xs text-amber-600 mt-0.5">{stock.daily_notes}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${stock.asset_type?.toLowerCase() === 'etf' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {stock.asset_type?.toUpperCase() || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {capBadge && (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${capBadge.color}`} title={stock.market_cap_category || ''}>
+                              {capBadge.label}
+                            </span>
+                          )}
+                        </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-900">
                         ${stock.close ? parseFloat(stock.close.toString()).toFixed(2) : '-'}
                       </td>
@@ -338,21 +486,51 @@ export default function StockScreener() {
                         <ScoreBadge score={stock.combined_score ?? 0} maxScore={125} />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex flex-wrap gap-1 justify-center">
-                          {stock.price_above_200 && <SignalPill label="200+" color="green" />}
-                          {stock.sma_bull_stack && <SignalPill label="Stack" color="blue" />}
-                          {stock.macd_cross_up && <SignalPill label="MACD↑" color="purple" />}
-                          {stock.donch20_breakout && <SignalPill label="Donch" color="orange" />}
-                          {stock.high_tight_zone && <SignalPill label="HTZ" color="red" />}
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-sm font-medium text-gray-700">{dailyCount}</span>
+                          <div className="group relative inline-block">
+                            <div className="flex flex-wrap gap-0.5 max-w-[120px]">
+                              {stock.price_above_200 && <SignalDot color="green" title="Above 200 SMA" />}
+                              {stock.sma_bull_stack && <SignalDot color="blue" title="SMA Bull Stack" />}
+                              {stock.macd_cross_up && <SignalDot color="purple" title="MACD Cross Up" />}
+                              {stock.donch20_breakout && <SignalDot color="orange" title="Donchian Breakout" />}
+                              {stock.high_tight_zone && <SignalDot color="red" title="High-Tight Zone" />}
+                            </div>
+                            <div className="hidden group-hover:block absolute z-10 left-0 mt-1 p-2 bg-gray-900 text-white text-xs rounded shadow-lg whitespace-nowrap">
+                              {stock.price_above_200 && <div>• Above 200 SMA</div>}
+                              {stock.sma_bull_stack && <div>• SMA Bull Stack</div>}
+                              {stock.macd_cross_up && <div>• MACD Cross Up</div>}
+                              {stock.donch20_breakout && <div>• Donchian Breakout</div>}
+                              {stock.high_tight_zone && <div>• High-Tight Zone</div>}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex flex-wrap gap-1 justify-center">
-                          {stock.close_above_30w && <SignalPill label="30w+" color="green" />}
-                          {stock.stack_10_30_40 && <SignalPill label="Stack" color="blue" />}
-                          {stock.macd_w_cross_up && <SignalPill label="MACD↑" color="purple" />}
-                          {stock.donch20w_breakout && <SignalPill label="Donch" color="orange" />}
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-sm font-medium text-gray-700">{weeklyCount}</span>
+                          <div className="group relative inline-block">
+                            <div className="flex flex-wrap gap-0.5 max-w-[100px]">
+                              {stock.close_above_30w && <SignalDot color="green" title="Above 30w SMA" />}
+                              {stock.stack_10_30_40 && <SignalDot color="blue" title="Weekly Stack" />}
+                              {stock.macd_w_cross_up && <SignalDot color="purple" title="MACD Cross Up" />}
+                              {stock.donch20w_breakout && <SignalDot color="orange" title="Donchian Breakout" />}
+                            </div>
+                            <div className="hidden group-hover:block absolute z-10 left-0 mt-1 p-2 bg-gray-900 text-white text-xs rounded shadow-lg whitespace-nowrap">
+                              {stock.close_above_30w && <div>• Above 30w SMA</div>}
+                              {stock.stack_10_30_40 && <div>• Weekly Stack</div>}
+                              {stock.macd_w_cross_up && <div>• MACD Cross Up</div>}
+                              {stock.donch20w_breakout && <div>• Donchian Breakout</div>}
+                            </div>
+                          </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-left text-xs text-gray-600">
+                        {stock.sector ? (
+                          <div className="max-w-[120px] truncate" title={stock.sector}>
+                            {stock.sector}
+                          </div>
+                        ) : '-'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
                         {stock.rel_volume ? (
@@ -376,7 +554,7 @@ export default function StockScreener() {
                         ) : '-'}
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
@@ -447,6 +625,62 @@ export default function StockScreener() {
 
 // Helper Components
 
+function SortableHeader({
+  field,
+  label,
+  sortField,
+  sortDirection,
+  onSort,
+  align = 'left'
+}: {
+  field: SortField
+  label: string
+  sortField: SortField
+  sortDirection: 'ASC' | 'DESC'
+  onSort: (field: SortField) => void
+  align?: 'left' | 'right' | 'center'
+}) {
+  const isActive = sortField === field
+  const alignClass = align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
+
+  return (
+    <th
+      className={`px-4 py-3 ${alignClass} text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors`}
+      onClick={() => onSort(field)}
+    >
+      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : ''}`}>
+        <span>{label}</span>
+        {isActive ? (
+          sortDirection === 'DESC' ? (
+            <ArrowDownIcon className="h-4 w-4" />
+          ) : (
+            <ArrowUpIcon className="h-4 w-4" />
+          )
+        ) : (
+          <ChevronUpDownIcon className="h-4 w-4 opacity-40" />
+        )}
+      </div>
+    </th>
+  )
+}
+
+function SignalDot({ color, title }: { color: string; title: string }) {
+  const colorClasses = {
+    green: 'bg-emerald-500',      // Above SMA - bullish
+    blue: 'bg-sky-500',            // Stack - trend alignment
+    purple: 'bg-violet-500',       // MACD - momentum
+    orange: 'bg-amber-500',        // Donchian - breakout
+    red: 'bg-rose-500',            // HTZ - strong breakout
+  }
+
+  return (
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${colorClasses[color as keyof typeof colorClasses]}`}
+      title={title}
+    />
+  )
+}
+
 function FilterChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button
@@ -474,22 +708,6 @@ function ScoreBadge({ score, maxScore }: { score: number; maxScore: number }) {
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${bgColor}`}>
       {score}
-    </span>
-  )
-}
-
-function SignalPill({ label, color }: { label: string; color: string }) {
-  const colorClasses = {
-    green: 'bg-green-100 text-green-700',
-    blue: 'bg-blue-100 text-blue-700',
-    purple: 'bg-purple-100 text-purple-700',
-    orange: 'bg-orange-100 text-orange-700',
-    red: 'bg-red-100 text-red-700',
-  }
-
-  return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${colorClasses[color as keyof typeof colorClasses]}`}>
-      {label}
     </span>
   )
 }
