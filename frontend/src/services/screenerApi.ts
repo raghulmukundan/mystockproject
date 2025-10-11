@@ -144,6 +144,25 @@ class ScreenerApi {
   }
 
   /**
+   * Query screener for a specific symbol
+   */
+  async querySymbol(symbol: string): Promise<ScreenerResponse> {
+    const params = new URLSearchParams()
+    params.append('symbol', symbol.toUpperCase())
+    params.append('page', '1')
+    params.append('pageSize', '1')
+
+    const response = await fetch(`${this.baseUrl}/api/screener?${params.toString()}`)
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || `Screener request failed: ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
+  /**
    * Query screener with filters
    */
   async query(filters: ScreenerFilters): Promise<ScreenerResponse> {

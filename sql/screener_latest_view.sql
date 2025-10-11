@@ -145,9 +145,10 @@ SELECT
     am.industry,
     am.market_cap,
 
-    -- Market cap category (Large, Mid, Small, Micro)
+    -- Market cap category (Mega, Large, Mid, Small, Micro)
     CASE
         WHEN am.market_cap IS NULL THEN NULL
+        WHEN CAST(am.market_cap AS NUMERIC) >= 200000000000 THEN 'Mega Cap'
         WHEN CAST(am.market_cap AS NUMERIC) >= 10000000000 THEN 'Large Cap'
         WHEN CAST(am.market_cap AS NUMERIC) >= 2000000000 THEN 'Mid Cap'
         WHEN CAST(am.market_cap AS NUMERIC) >= 300000000 THEN 'Small Cap'

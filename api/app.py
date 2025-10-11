@@ -236,6 +236,7 @@ def parse_sort_param(sort: str) -> str:
 
 
 def build_where_clauses(
+    symbol: Optional[str],
     min_price: Optional[float],
     max_price: Optional[float],
     min_avg_vol20: Optional[int],
@@ -258,6 +259,11 @@ def build_where_clauses(
     """
     where_clauses = []
     params = {}
+
+    # Symbol filter (exact match)
+    if symbol is not None:
+        where_clauses.append("symbol = :symbol")
+        params['symbol'] = symbol.upper()
 
     # Price filters
     if min_price is not None:
@@ -326,6 +332,9 @@ def build_where_clauses(
 
 @app.get("/api/screener", response_model=ScreenerResponse)
 def get_screener(
+    # Symbol filter
+    symbol: Optional[str] = Query(None, description="Search for specific symbol"),
+
     # Price filters
     minPrice: Optional[float] = Query(None, description="Minimum close price"),
     maxPrice: Optional[float] = Query(None, description="Maximum close price"),
@@ -375,6 +384,7 @@ def get_screener(
 
         # Build WHERE clauses
         where_clauses, params = build_where_clauses(
+            symbol=symbol,
             min_price=minPrice,
             max_price=maxPrice,
             min_avg_vol20=minAvgVol20,
