@@ -1,33 +1,24 @@
-import { useState, useEffect, useMemo } from 'react'
-import { 
-  ChartBarIcon,
-  EyeIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  TrophyIcon,
+import { useState, useEffect } from 'react'
+import {
   XMarkIcon,
   ArrowUpIcon,
   ArrowDownIcon,
-  InformationCircleIcon,
-  ClockIcon,
-  PlusIcon,
-  MinusIcon,
-  BellAlertIcon,
-  ArrowUturnLeftIcon,
-  ShareIcon,
-  BookmarkIcon
+  ChartBarIcon,
+  NewspaperIcon,
+  BuildingOfficeIcon,
+  ChartPieIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline'
-import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
-import { stockApi, StockPrice } from '../services/stockApi'
-import FinancialWidget from './FinancialWidget'
+import { screenerApi, ScreenerResult } from '../services/screenerApi'
 import TradingViewWidget from './TradingViewWidget'
 import StockNewsWidget from './StockNewsWidget'
+import FinancialWidget from './FinancialWidget'
 
 interface StockDetailViewProps {
   symbol: string
   isOpen: boolean
   onClose: () => void
-  priceData?: StockPrice
+  priceData?: any
   entryPrice?: number
   targetPrice?: number
   stopLoss?: number
@@ -36,663 +27,397 @@ interface StockDetailViewProps {
   onAddToWatchlist?: () => void
 }
 
-type Tab = 'overview' | 'chart' | 'fundamentals' | 'technical' | 'profile' | 'news' | 'alerts' | 'notes'
-
 export default function StockDetailView({
   symbol,
   isOpen,
   onClose,
-  priceData,
-  entryPrice,
-  targetPrice,
-  stopLoss,
-  onSaveNotes,
-  onAddAlert,
-  onAddToWatchlist
 }: StockDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
-  const [price, setPrice] = useState<StockPrice | undefined>(priceData)
-  const [loading, setLoading] = useState(!priceData)
-  const [notes, setNotes] = useState('')
-  const [savedNotes, setSavedNotes] = useState('')
-  const [isFavorite, setIsFavorite] = useState(false)
-  const [dateRange, setDateRange] = useState<'1D' | '5D' | '1M' | '3M' | '6M' | '12M' | '60M' | 'ALL'>('6M')
-  
+  const [screenerData, setScreenerData] = useState<ScreenerResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeView, setActiveView] = useState<'chart' | 'news' | 'fundamentals' | 'technical' | 'company'>('chart')
+
   useEffect(() => {
-    if (isOpen && !priceData) {
-      fetchPriceData()
-    } else if (priceData) {
-      setPrice(priceData)
+    if (isOpen) {
+      loadScreenerData()
     }
-    
-    // Check if this stock is a favorite
-    const savedFavorites = localStorage.getItem('favoriteStocks')
-    if (savedFavorites) {
-      try {
-        const favorites = JSON.parse(savedFavorites)
-        setIsFavorite(favorites.includes(symbol))
-      } catch (e) {
-        console.error('Failed to parse favorite stocks', e)
-      }
-    }
-    
-    // Load saved notes for this symbol
-    const savedStockNotes = localStorage.getItem(`stockNotes_${symbol}`)
-    if (savedStockNotes) {
-      setNotes(savedStockNotes)
-      setSavedNotes(savedStockNotes)
-    }
-  }, [isOpen, symbol, priceData])
-  
-  const fetchPriceData = async () => {
+  }, [isOpen, symbol])
+
+  const loadScreenerData = async () => {
     try {
       setLoading(true)
-      const data = await stockApi.getStockPrice(symbol)
-      setPrice(data)
+      const data = await screenerApi.querySymbol(symbol)
+      if (data.results.length > 0) {
+        setScreenerData(data.results[0])
+      }
     } catch (error) {
-      console.error('Error fetching stock price:', error)
+      console.error('Error fetching screener data:', error)
     } finally {
       setLoading(false)
     }
   }
-  
-  const toggleFavorite = () => {
-    const savedFavorites = localStorage.getItem('favoriteStocks')
-    let favorites: string[] = []
-    
-    if (savedFavorites) {
-      try {
-        favorites = JSON.parse(savedFavorites)
-      } catch (e) {
-        console.error('Failed to parse favorite stocks', e)
-      }
-    }
-    
-    if (isFavorite) {
-      favorites = favorites.filter(s => s !== symbol)
-    } else {
-      favorites.push(symbol)
-    }
-    
-    localStorage.setItem('favoriteStocks', JSON.stringify(favorites))
-    setIsFavorite(!isFavorite)
-  }
-  
-  const handleSaveNotes = () => {
-    localStorage.setItem(`stockNotes_${symbol}`, notes)
-    setSavedNotes(notes)
-    
-    if (onSaveNotes) {
-      onSaveNotes(notes)
-    }
-  }
-  
-  const performance = useMemo(() => {
-    if (!price || !entryPrice) return null
-    
-    const gainLoss = price.current_price - entryPrice
-    const gainLossPercent = (gainLoss / entryPrice) * 100
-    
-    return {
-      gainLoss: Number(gainLoss.toFixed(2)),
-      gainLossPercent: Number(gainLossPercent.toFixed(2)),
-      toTarget: targetPrice ? Number(((targetPrice - price.current_price) / price.current_price * 100).toFixed(2)) : null,
-      toStopLoss: stopLoss ? Number(((price.current_price - stopLoss) / price.current_price * 100).toFixed(2)) : null,
-      riskRewardRatio: (targetPrice && stopLoss && price.current_price) 
-        ? Number((Math.abs(targetPrice - price.current_price) / Math.abs(price.current_price - stopLoss)).toFixed(2))
-        : null
-    }
-  }, [price, entryPrice, targetPrice, stopLoss])
-  
-  if (!isOpen) return null
-  
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-screen text-center md:block md:px-2 lg:px-4">
-        {/* Background overlay */}
-        <div 
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-          onClick={onClose}
-        ></div>
 
-        {/* Modal container */}
-        <div className="flex text-base text-left transform transition w-full md:inline-block md:max-w-7xl md:px-4 md:my-8 md:align-middle">
-          <div className="w-full relative bg-white rounded-lg shadow-xl overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-gray-800 to-gray-900 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <h2 className="text-2xl font-bold">{symbol}</h2>
-                <button
-                  onClick={toggleFavorite}
-                  className={`text-white hover:text-yellow-300 transition-colors`}
-                >
-                  {isFavorite ? <BookmarkIconSolid className="h-6 w-6 text-yellow-300" /> : <BookmarkIcon className="h-6 w-6" />}
-                </button>
-                {price && (
-                  <div className="flex items-center space-x-3">
-                    <div className="text-xl font-bold">${price.current_price.toFixed(2)}</div>
-                    <div className={`flex items-center space-x-1 text-sm font-medium ${
-                      price.change >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      <span>{price.change >= 0 ? '+' : ''}{price.change.toFixed(2)}</span>
-                      <span>({price.change_percent >= 0 ? '+' : ''}{price.change_percent.toFixed(2)}%)</span>
-                      {price.change >= 0 ? (
-                        <ArrowUpIcon className="h-4 w-4" />
-                      ) : (
-                        <ArrowDownIcon className="h-4 w-4" />
+  // Helper to get market cap badge
+  const getMarketCapBadge = (category: string | null) => {
+    if (!category) return null
+    const cap = category.toLowerCase()
+    if (cap.includes('mega')) return { label: 'Mega Cap', color: 'bg-emerald-100 text-emerald-700' }
+    if (cap.includes('large')) return { label: 'Large Cap', color: 'bg-blue-100 text-blue-700' }
+    if (cap.includes('mid')) return { label: 'Mid Cap', color: 'bg-purple-100 text-purple-700' }
+    if (cap.includes('small')) return { label: 'Small Cap', color: 'bg-orange-100 text-orange-700' }
+    if (cap.includes('micro')) return { label: 'Micro Cap', color: 'bg-gray-100 text-gray-700' }
+    return null
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-900">
+      {/* Modern Full-Screen Layout */}
+      <div className="h-screen flex flex-col">
+        {/* Top Header Bar - Slim & Modern */}
+        <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <h2 className="text-2xl font-bold text-white">{symbol}</h2>
+            {screenerData && (
+              <>
+                <div className="text-3xl font-bold text-white">
+                  ${screenerData.close ? parseFloat(screenerData.close.toString()).toFixed(2) : 'N/A'}
+                </div>
+                <div className="flex items-center space-x-2 text-sm">
+                  {screenerData.sector && (
+                    <span className="px-2 py-1 bg-slate-700 text-slate-200 rounded text-xs">
+                      {screenerData.sector}
+                    </span>
+                  )}
+                  {getMarketCapBadge(screenerData.market_cap_category) && (
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${getMarketCapBadge(screenerData.market_cap_category)?.color}`}>
+                      {getMarketCapBadge(screenerData.market_cap_category)?.label}
+                    </span>
+                  )}
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    screenerData.asset_type?.toLowerCase() === 'etf' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {screenerData.asset_type?.toLowerCase() === 'etf' ? 'ETF' : 'Stock'}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white transition-colors p-2 hover:bg-slate-700 rounded-lg"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        </div>
+
+        {/* Main Content Area - 2 Column Layout */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Sidebar - Scores & Signals (Fixed Width) */}
+          <div className="w-80 bg-slate-800 border-r border-slate-700 overflow-y-auto custom-scrollbar">
+            {loading ? (
+              <div className="p-6 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                <p className="mt-4 text-slate-400">Loading data...</p>
+              </div>
+            ) : screenerData ? (
+              <div className="p-3 space-y-2">
+                {/* Score Cards - Compact Single Row */}
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Scores</h3>
+                  <div className="bg-slate-900 rounded-lg p-2.5 border border-slate-700">
+                    {/* Grid layout - 3 scores side by side */}
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div className="text-center">
+                        <div className="text-[10px] text-slate-400 mb-0.5">Daily</div>
+                        <div className="text-sm font-bold text-blue-400">{screenerData.trend_score_d ?? 0}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[10px] text-slate-400 mb-0.5">Weekly</div>
+                        <div className="text-sm font-bold text-indigo-400">{screenerData.trend_score_w ?? 0}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[10px] text-purple-300 font-semibold mb-0.5">Total</div>
+                        <div className="text-base font-bold text-purple-300">{screenerData.combined_score ?? 0}</div>
+                      </div>
+                    </div>
+                    {/* Single combined progress bar */}
+                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-400 rounded-full"
+                        style={{ width: `${((screenerData.combined_score ?? 0) / 125) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Signals - Compact 2 Column Layout */}
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Signals</h3>
+                  <div className="bg-slate-900 rounded-lg p-2.5 border border-slate-700">
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                      {/* Daily Signals */}
+                      {screenerData.price_above_200 && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">200 SMA</span>
+                        </div>
+                      )}
+                      {screenerData.sma_bull_stack && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-sky-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">Bull Stack</span>
+                        </div>
+                      )}
+                      {screenerData.macd_cross_up && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-violet-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">MACD↑</span>
+                        </div>
+                      )}
+                      {screenerData.donch20_breakout && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-amber-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">Donch</span>
+                        </div>
+                      )}
+                      {screenerData.high_tight_zone && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-rose-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">HTZ</span>
+                        </div>
+                      )}
+                      {/* Weekly Signals */}
+                      {screenerData.close_above_30w && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">30w SMA</span>
+                        </div>
+                      )}
+                      {screenerData.stack_10_30_40 && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-sky-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">Wk Stack</span>
+                        </div>
+                      )}
+                      {screenerData.macd_w_cross_up && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-violet-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">MACD↑W</span>
+                        </div>
+                      )}
+                      {screenerData.donch20w_breakout && (
+                        <div className="flex items-center space-x-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-amber-500 flex-shrink-0"></div>
+                          <span className="text-[11px] text-slate-300">DonchW</span>
+                        </div>
                       )}
                     </div>
+                    {!screenerData.price_above_200 && !screenerData.sma_bull_stack && !screenerData.macd_cross_up &&
+                     !screenerData.donch20_breakout && !screenerData.high_tight_zone && !screenerData.close_above_30w &&
+                     !screenerData.stack_10_30_40 && !screenerData.macd_w_cross_up && !screenerData.donch20w_breakout && (
+                      <span className="text-xs text-slate-500 italic">No signals</span>
+                    )}
                   </div>
+                </div>
+
+                {/* Key Metrics & Alerts Combined */}
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Metrics</h3>
+                  <div className="bg-slate-900 rounded-lg p-2.5 border border-slate-700 space-y-1">
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-[11px] text-slate-400">RSI</span>
+                        <span className="text-[11px] font-medium text-slate-200">
+                          {screenerData.rsi14 ? parseFloat(screenerData.rsi14.toString()).toFixed(1) : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[11px] text-slate-400">ADX</span>
+                        <span className="text-[11px] font-medium text-slate-200">
+                          {screenerData.adx14 ? parseFloat(screenerData.adx14.toString()).toFixed(1) : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[11px] text-slate-400">Vol</span>
+                        <span className="text-[11px] font-medium text-slate-200">
+                          {screenerData.rel_volume ? parseFloat(screenerData.rel_volume.toString()).toFixed(1) + 'x' : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[11px] text-slate-400">52w</span>
+                        <span className={`text-[11px] font-medium ${
+                          screenerData.pct_from_52w_high && parseFloat(screenerData.pct_from_52w_high.toString()) >= -5
+                            ? 'text-emerald-400'
+                            : 'text-slate-200'
+                        }`}>
+                          {screenerData.pct_from_52w_high !== null && screenerData.pct_from_52w_high !== undefined
+                            ? parseFloat(screenerData.pct_from_52w_high.toString()).toFixed(1) + '%'
+                            : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                    {screenerData.daily_notes && (
+                      <div className="pt-1.5 mt-1.5 border-t border-amber-700/30">
+                        <p className="text-[11px] text-amber-300 leading-tight">⚠️ {screenerData.daily_notes}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-slate-400">No data available</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right Content Area - Chart/News/Fundamentals */}
+          <div className="flex-1 flex flex-col bg-slate-900">
+            {/* Tab Navigation */}
+            <div className="bg-slate-800 border-b border-slate-700 px-6 flex space-x-1">
+              <button
+                onClick={() => setActiveView('chart')}
+                className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                  activeView === 'chart'
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <ChartBarIcon className="h-4 w-4" />
+                  <span>Chart</span>
+                </div>
+                {activeView === 'chart' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
                 )}
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={onAddToWatchlist}
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-md px-3 py-1.5 text-sm font-medium flex items-center"
-                  title="Add to watchlist"
-                >
-                  <PlusIcon className="h-4 w-4 mr-1" />
-                  Add to Watchlist
-                </button>
-                <button
-                  onClick={onClose}
-                  className="text-gray-200 hover:text-white"
-                >
-                  <XMarkIcon className="h-6 w-6" />
-                </button>
-              </div>
+              </button>
+              <button
+                onClick={() => setActiveView('news')}
+                className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                  activeView === 'news'
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <NewspaperIcon className="h-4 w-4" />
+                  <span>News</span>
+                </div>
+                {activeView === 'news' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveView('technical')}
+                className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                  activeView === 'technical'
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <ChartPieIcon className="h-4 w-4" />
+                  <span>Technical</span>
+                </div>
+                {activeView === 'technical' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveView('fundamentals')}
+                className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                  activeView === 'fundamentals'
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <BuildingOfficeIcon className="h-4 w-4" />
+                  <span>Financials</span>
+                </div>
+                {activeView === 'fundamentals' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveView('company')}
+                className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                  activeView === 'company'
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <DocumentTextIcon className="h-4 w-4" />
+                  <span>Company</span>
+                </div>
+                {activeView === 'company' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
+                )}
+              </button>
             </div>
-            
-            {/* Tabs */}
-            <div className="bg-gray-100 border-b border-gray-200 px-6">
-              <div className="flex overflow-x-auto hide-scrollbar">
-                <nav className="flex space-x-4">
-                  <button
-                    onClick={() => setActiveTab('overview')}
-                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'overview' 
-                        ? 'border-blue-600 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Overview
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('chart')}
-                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'chart' 
-                        ? 'border-blue-600 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Chart
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('technical')}
-                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'technical' 
-                        ? 'border-blue-600 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Technical
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('profile')}
-                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'profile' 
-                        ? 'border-blue-600 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Profile
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('fundamentals')}
-                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'fundamentals' 
-                        ? 'border-blue-600 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Fundamentals
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('news')}
-                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'news' 
-                        ? 'border-blue-600 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    News
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('alerts')}
-                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'alerts' 
-                        ? 'border-blue-600 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Alerts
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('notes')}
-                    className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'notes' 
-                        ? 'border-blue-600 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Notes
-                  </button>
-                </nav>
-              </div>
-            </div>
-            
-            {/* Content */}
-            <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
-              {activeTab === 'overview' && (
-                <div className="p-6">
-                  {/* Overview Layout - Simplified with chart and position summary only */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Price Chart - Spans 2 columns on medium screens, full width on small */}
-                    <div className="md:col-span-2">
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-                          <h3 className="text-lg font-medium text-gray-900">Price Chart</h3>
-                          <div className="flex items-center space-x-1 overflow-x-auto hide-scrollbar">
-                            {['1D', '5D', '1M', '3M', '6M', '12M', 'ALL'].map((range) => (
-                              <button
-                                key={range}
-                                onClick={() => setDateRange(range as any)}
-                                className={`px-2 py-1 rounded text-xs ${
-                                  dateRange === range 
-                                    ? 'bg-blue-600 text-white' 
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                              >
-                                {range}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="p-4 h-72">
-                          <TradingViewWidget
-                            symbol={symbol}
-                            height="100%"
-                            width="100%"
-                            colorTheme="light"
-                            chartOnly={false}
-                            dateRange={dateRange}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Position Summary - Single column */}
-                    <div className="md:col-span-1">
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full">
-                        <div className="px-4 py-3 border-b border-gray-200">
-                          <h3 className="text-lg font-medium text-gray-900">Position Summary</h3>
-                        </div>
-                        <div className="p-4 space-y-3">
-                          {price && (
-                            <>
-                              {/* Current Price */}
-                              <div>
-                                <div className="text-sm font-medium text-gray-500 mb-1">Current Price</div>
-                                <div className="flex items-center justify-between">
-                                  <div className="text-lg font-medium text-gray-900">${price.current_price.toFixed(2)}</div>
-                                  <div className={`text-sm font-medium ${price.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {price.change >= 0 ? '+' : ''}{price.change_percent.toFixed(2)}%
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Volume */}
-                              <div>
-                                <div className="text-sm font-medium text-gray-500 mb-1">Volume</div>
-                                <div className="text-base text-gray-900">{price.volume.toLocaleString()}</div>
-                              </div>
-                              
-                              {/* 52-Week Range */}
-                              {(price.high_52w || price.low_52w) && (
-                                <div>
-                                  <div className="text-sm font-medium text-gray-500 mb-1">52-Week Range</div>
-                                  <div className="flex items-center justify-between">
-                                    <div className="text-sm text-gray-900">
-                                      <span className="text-red-600 font-medium">L:</span> ${price.low_52w ? Number(price.low_52w).toFixed(2) : '—'}
-                                    </div>
-                                    <div className="text-sm text-gray-900">
-                                      <span className="text-green-600 font-medium">H:</span> ${price.high_52w ? Number(price.high_52w).toFixed(2) : '—'}
-                                    </div>
-                                  </div>
-                                  {price.current_price && price.high_52w && price.low_52w && (
-                                    <div className="mt-1">
-                                      <div className="relative pt-1">
-                                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200">
-                                          <div 
-                                            className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-600"
-                                            style={{ 
-                                              width: `${Math.max(0, Math.min(100, ((price.current_price - price.low_52w) / (price.high_52w - price.low_52w) * 100)))}%`
-                                            }}
-                                          ></div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Period Changes */}
-                              <div>
-                                <div className="text-sm font-medium text-gray-500 mb-1">Period Changes</div>
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div className="bg-gray-50 p-2 rounded">
-                                    <div className="text-xs text-gray-500">1D</div>
-                                    <div className={`text-sm font-medium ${price.change_percent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                      {price.change_percent >= 0 ? '+' : ''}{price.change_percent.toFixed(2)}%
-                                    </div>
-                                  </div>
-                                  {price.change_week !== undefined && (
-                                    <div className="bg-gray-50 p-2 rounded">
-                                      <div className="text-xs text-gray-500">1W</div>
-                                      <div className={`text-sm font-medium ${price.change_week >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {price.change_week >= 0 ? '+' : ''}{price.change_week.toFixed(2)}%
-                                      </div>
-                                    </div>
-                                  )}
-                                  {price.change_month !== undefined && (
-                                    <div className="bg-gray-50 p-2 rounded">
-                                      <div className="text-xs text-gray-500">1M</div>
-                                      <div className={`text-sm font-medium ${price.change_month >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {price.change_month >= 0 ? '+' : ''}{price.change_month.toFixed(2)}%
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </>
-                          )}
-                          
-                          {/* Entry Position */}
-                          {entryPrice && (
-                            <div>
-                              <div className="text-sm font-medium text-gray-500 mb-1">Your Position</div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-xs text-gray-500">Entry</div>
-                                  <div className="text-sm font-medium text-gray-900">
-                                    ${typeof entryPrice === 'number' ? entryPrice.toFixed(2) : '0.00'}
-                                  </div>
-                                </div>
-                                {performance && (
-                                  <div className="bg-gray-50 p-2 rounded">
-                                    <div className="text-xs text-gray-500">P&L</div>
-                                    <div className={`text-sm font-medium ${performance.gainLossPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                      {performance.gainLossPercent >= 0 ? '+' : ''}{performance.gainLossPercent.toFixed(2)}%
-                                    </div>
-                                  </div>
-                                )}
-                                {targetPrice && (
-                                  <div className="bg-gray-50 p-2 rounded">
-                                    <div className="text-xs text-gray-500">Target</div>
-                                    <div className="text-sm font-medium text-green-600">
-                                      ${typeof targetPrice === 'number' ? targetPrice.toFixed(2) : '0.00'}
-                                    </div>
-                                  </div>
-                                )}
-                                {stopLoss && (
-                                  <div className="bg-gray-50 p-2 rounded">
-                                    <div className="text-xs text-gray-500">Stop</div>
-                                    <div className="text-sm font-medium text-red-600">
-                                      ${typeof stopLoss === 'number' ? stopLoss.toFixed(2) : '0.00'}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              {price && targetPrice && stopLoss && performance?.riskRewardRatio && (
-                                <div className="mt-2 p-2 bg-gray-50 rounded">
-                                  <div className="text-xs text-gray-500">Risk/Reward Ratio</div>
-                                  <div className={`text-sm font-medium ${performance.riskRewardRatio >= 2 ? 'text-green-600' : 'text-gray-900'}`}>
-                                    1:{performance.riskRewardRatio}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          
-                          {/* CTA Buttons */}
-                          <div className="flex flex-col space-y-2 mt-4">
-                            <button
-                              onClick={onAddToWatchlist}
-                              className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2 text-sm font-medium flex items-center justify-center"
-                            >
-                              <PlusIcon className="h-4 w-4 mr-2" />
-                              Add to Watchlist
-                            </button>
-                            <button
-                              onClick={onAddAlert}
-                              className="w-full border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md px-4 py-2 text-sm font-medium flex items-center justify-center"
-                            >
-                              <BellAlertIcon className="h-4 w-4 mr-2" />
-                              Create Price Alert
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+
+            {/* Content Area */}
+            <div className="flex-1 overflow-auto bg-slate-900">
+              {activeView === 'chart' && (
+                <div className="h-full p-4">
+                  <div className="rounded-lg overflow-hidden" style={{ height: 'calc(100vh - 180px)' }}>
+                    <iframe
+                      src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${symbol}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart&utm_term=${symbol}`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                      title={`${symbol} Chart`}
+                    />
                   </div>
                 </div>
               )}
-              
-              {activeTab === 'chart' && (
-                <div className="p-6">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-                      <h3 className="text-lg font-medium text-gray-900">Advanced Chart</h3>
-                      <div className="flex items-center space-x-2 text-sm">
-                        {['1D', '5D', '1M', '3M', '6M', '12M', '60M', 'ALL'].map((range) => (
-                          <button
-                            key={range}
-                            onClick={() => setDateRange(range as any)}
-                            className={`px-2 py-1 rounded ${
-                              dateRange === range 
-                                ? 'bg-blue-600 text-white' 
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {range}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="p-4" style={{ height: '350px' }}>
-                      <TradingViewWidget
-                        symbol={symbol}
-                        height="100%"
-                        width="100%"
-                        colorTheme="light"
-                        chartOnly={false}
-                        dateRange={dateRange}
-                      />
-                    </div>
+
+              {activeView === 'news' && (
+                <div className="h-full p-4">
+                  <div className="h-full">
+                    <StockNewsWidget symbol={symbol} height="100%" />
                   </div>
                 </div>
               )}
-              
-              {activeTab === 'technical' && (
-                <div className="p-6">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                      <h3 className="text-lg font-medium text-gray-900">Technical Analysis</h3>
-                    </div>
-                    <div className="p-4" style={{ height: '400px' }}>
-                      <FinancialWidget
-                        type="technical-analysis"
-                        symbol={symbol}
-                        height="100%"
-                        width="100%"
-                        colorTheme="light"
-                      />
-                    </div>
+
+              {activeView === 'technical' && (
+                <div className="h-full p-4">
+                  {/* TradingView Technical Analysis Widget */}
+                  <div className="rounded-lg overflow-hidden" style={{ height: 'calc(100vh - 180px)' }}>
+                    <iframe
+                      src={`https://s.tradingview.com/embed-widget/technical-analysis/?locale=en&symbol=${symbol}&colorTheme=dark&isTransparent=false&largeChartUrl=&width=100%25&height=100%25&interval=1D&utm_source=localhost&utm_medium=widget&utm_campaign=technical-analysis`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                      title={`${symbol} Technical Analysis`}
+                    />
                   </div>
                 </div>
               )}
-              
-              {activeTab === 'profile' && (
-                <div className="p-6">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                      <h3 className="text-lg font-medium text-gray-900">Company Profile</h3>
-                    </div>
-                    <div className="p-4" style={{ height: '400px' }}>
-                      <FinancialWidget
-                        type="company-profile"
-                        symbol={symbol}
-                        height="100%"
-                        width="100%"
-                        colorTheme="light"
-                      />
-                    </div>
+
+              {activeView === 'fundamentals' && (
+                <div className="h-full p-4">
+                  {/* TradingView Financials Widget - Income Statement, Balance Sheet, Cash Flow */}
+                  <div className="rounded-lg overflow-hidden" style={{ height: 'calc(100vh - 180px)' }}>
+                    <iframe
+                      src={`https://s.tradingview.com/embed-widget/financials/?locale=en&symbol=${symbol}&colorTheme=dark&isTransparent=false&largeChartUrl=&displayMode=regular&width=100%25&height=100%25#%7B%22symbol%22%3A%22${symbol}%22%2C%22colorTheme%22%3A%22dark%22%2C%22isTransparent%22%3Afalse%2C%22largeChartUrl%22%3A%22%22%2C%22displayMode%22%3A%22regular%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%2C%22locale%22%3A%22en%22%7D`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                      title={`${symbol} Financials`}
+                    />
                   </div>
                 </div>
               )}
-              
-              {activeTab === 'fundamentals' && (
-                <div className="p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                      <div className="px-4 py-3 border-b border-gray-200">
-                        <h3 className="text-lg font-medium text-gray-900">Key Financials</h3>
-                      </div>
-                      <div className="p-4 h-96">
-                        <FinancialWidget
-                          type="financials"
-                          symbol={symbol}
-                          height="100%"
-                          width="100%"
-                          colorTheme="light"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                      <div className="px-4 py-3 border-b border-gray-200">
-                        <h3 className="text-lg font-medium text-gray-900">Company Information</h3>
-                      </div>
-                      <div className="p-4 h-96">
-                        <FinancialWidget
-                          type="fundamental-data"
-                          symbol={symbol}
-                          height="100%"
-                          width="100%"
-                          colorTheme="light"
-                        />
-                      </div>
-                    </div>
+
+              {activeView === 'company' && (
+                <div className="h-full p-4">
+                  {/* TradingView Company Profile Widget */}
+                  <div className="rounded-lg overflow-hidden" style={{ height: 'calc(100vh - 180px)' }}>
+                    <iframe
+                      src={`https://s.tradingview.com/embed-widget/symbol-profile/?locale=en&symbol=${symbol}&colorTheme=dark&isTransparent=false&largeChartUrl=&width=100%25&height=100%25&utm_source=localhost&utm_medium=widget&utm_campaign=symbol-profile`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                      title={`${symbol} Company Profile`}
+                    />
                   </div>
                 </div>
               )}
-              
-              {activeTab === 'news' && (
-                <div className="p-6">
-                  <StockNewsWidget 
-                    symbol={symbol}
-                    height="500px"
-                    className="shadow-sm"
-                  />
-                </div>
-              )}
-              
-              {activeTab === 'alerts' && (
-                <div className="p-6">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                      <h3 className="text-lg font-medium text-gray-900">Price Alerts</h3>
-                    </div>
-                    <div className="p-4">
-                      <div className="text-center py-6">
-                        <BellAlertIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                        <p className="text-gray-500 mb-4">No price alerts set for {symbol}.</p>
-                        <button
-                          onClick={onAddAlert}
-                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2 text-sm font-medium inline-flex items-center"
-                        >
-                          <PlusIcon className="h-4 w-4 mr-2" />
-                          Create New Alert
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {activeTab === 'notes' && (
-                <div className="p-6">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                    <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-gray-900">Personal Notes</h3>
-                      <div className="text-xs text-gray-500 flex items-center">
-                        <ClockIcon className="h-3 w-3 mr-1" />
-                        Last saved: {savedNotes ? new Date().toLocaleString() : 'Never'}
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        className="w-full h-64 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder={`Add your personal notes about ${symbol} here...`}
-                      ></textarea>
-                      <div className="flex justify-end mt-4 space-x-2">
-                        <button
-                          onClick={() => setNotes(savedNotes)}
-                          className="border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 rounded-md px-4 py-2 text-sm font-medium inline-flex items-center"
-                          disabled={notes === savedNotes}
-                        >
-                          <ArrowUturnLeftIcon className="h-4 w-4 mr-2" />
-                          Revert
-                        </button>
-                        <button
-                          onClick={handleSaveNotes}
-                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2 text-sm font-medium inline-flex items-center"
-                          disabled={notes === savedNotes}
-                        >
-                          Save Notes
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Footer */}
-            <div className="bg-gray-100 px-6 py-3 flex items-center justify-between border-t border-gray-200">
-              <div className="text-xs text-gray-500">
-                Data provided by Finnhub and TradingView
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(window.location.origin + '/stock/' + symbol)
-                    alert(`Link to ${symbol} copied to clipboard!`)
-                  }}
-                  className="text-gray-500 hover:text-gray-700 flex items-center text-xs"
-                >
-                  <ShareIcon className="h-4 w-4 mr-1" />
-                  Share
-                </button>
-                <button
-                  onClick={onClose}
-                  className="text-gray-500 hover:text-gray-700 text-xs"
-                >
-                  Close
-                </button>
-              </div>
             </div>
           </div>
         </div>

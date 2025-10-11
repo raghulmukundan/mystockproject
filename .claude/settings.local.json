@@ -65,7 +65,8 @@
       "Bash(timeout:*)",
       "Bash(del /f .env.weekly.example)",
       "Bash(git fetch:*)",
-      "Bash(set VITE_BUILD_IGNORE_TS_ERRORS=true)"
+      "Bash(set VITE_BUILD_IGNORE_TS_ERRORS=true)",
+      "WebFetch(domain:finnhub.io)"
     ],
     "deny": [],
     "ask": []

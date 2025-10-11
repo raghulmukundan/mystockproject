@@ -243,13 +243,13 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
   }
   
   return (
-    <div className={`stock-news-widget bg-white rounded-lg border border-gray-200 overflow-hidden ${className}`} style={{ height }}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+    <div className={`stock-news-widget bg-slate-900 rounded-lg border border-slate-700 overflow-hidden ${className}`} style={{ height }}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-800">
         <div className="flex items-center">
-          <NewspaperIcon className="h-5 w-5 text-blue-600 mr-2" />
+          <NewspaperIcon className="h-5 w-5 text-blue-400 mr-2" />
           <div>
-            <h3 className="text-base font-medium text-gray-900">Latest News for {symbol}</h3>
-            <p className="text-xs text-gray-500">
+            <h3 className="text-base font-medium text-white">Latest News for {symbol}</h3>
+            <p className="text-xs text-slate-400">
               Last 48 hours
               {activeSources.length > 0 && (
                 <span className="ml-2">
@@ -264,25 +264,25 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
             </p>
           </div>
         </div>
-        <button 
+        <button
           onClick={fetchNews}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
+          className="text-slate-400 hover:text-slate-200 transition-colors"
           title="Refresh news"
         >
           <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      
+
       <div className="overflow-y-auto" style={{ height: `calc(${height} - 65px)` }}>
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-gray-600">Loading news...</span>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span className="ml-2 text-slate-300">Loading news...</span>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-            <ExclamationTriangleIcon className="h-10 w-10 text-orange-500 mb-2" />
-            <p className="text-gray-600 mb-2">{error}</p>
+            <ExclamationTriangleIcon className="h-10 w-10 text-orange-400 mb-2" />
+            <p className="text-slate-300 mb-2">{error}</p>
             <button
               onClick={fetchNews}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -292,23 +292,23 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
           </div>
         ) : newsItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-            <NewspaperIcon className="h-10 w-10 text-gray-400 mb-2" />
-            <p className="text-gray-600">No news found for {symbol}</p>
+            <NewspaperIcon className="h-10 w-10 text-slate-600 mb-2" />
+            <p className="text-slate-400">No news found for {symbol}</p>
           </div>
         ) : (
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-slate-700">
             {newsItems.map((item, index) => (
-              <li key={index} className="hover:bg-gray-50 transition-colors">
-                <a 
-                  href={item.link} 
-                  target="_blank" 
+              <li key={index} className="hover:bg-slate-800 transition-colors">
+                <a
+                  href={item.link}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="block p-4"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1 pr-4">
-                      <h4 className="text-sm font-medium text-gray-900 mb-1 line-clamp-2">{item.title}</h4>
-                      <div className="flex items-center text-xs text-gray-500">
+                      <h4 className="text-sm font-medium text-slate-100 mb-1 line-clamp-2">{item.title}</h4>
+                      <div className="flex items-center text-xs text-slate-400">
                         <span className="flex items-center mr-3">
                           <span className="mr-1">{getSourceIcon(item.source)}</span>
                           {item.source}
@@ -319,7 +319,7 @@ const StockNewsWidget: React.FC<StockNewsWidgetProps> = ({
                         </span>
                       </div>
                     </div>
-                    <ArrowTopRightOnSquareIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                    <ArrowTopRightOnSquareIcon className="h-4 w-4 text-slate-500 flex-shrink-0" />
                   </div>
                 </a>
               </li>
