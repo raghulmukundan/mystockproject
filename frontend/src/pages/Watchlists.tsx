@@ -29,6 +29,7 @@ import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchli
 import { WatchlistItem } from '../types'
 import AddItemModal from '../components/AddItemModal'
 import StockDetailView from '../components/StockDetailView'
+import { screenerApi, ScreenerResult } from '../services/screenerApi'
 
 interface WatchlistWithPrices extends Watchlist {
   prices: StockPrice[]
@@ -65,6 +66,7 @@ const Watchlists: React.FC = () => {
   const [inlineError, setInlineError] = useState('')
   const [sortColumn, setSortColumn] = useState<string>('symbol')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [screenerData, setScreenerData] = useState<Record<string, ScreenerResult>>({})
   const navigate = useNavigate()
   const detailContainerRef = useRef<HTMLDivElement | null>(null)
 
@@ -380,9 +382,33 @@ const Watchlists: React.FC = () => {
     }
   }
 
+  const loadScreenerDataForWatchlist = async (items: WatchlistItem[]) => {
+    const data: Record<string, ScreenerResult> = {}
+
+    // Fetch screener data for each symbol
+    for (const item of items) {
+      try {
+        const result = await screenerApi.querySymbol(item.symbol)
+        if (result.results.length > 0) {
+          data[item.symbol] = result.results[0]
+        }
+      } catch (error) {
+        console.error(`Failed to load screener data for ${item.symbol}:`, error)
+      }
+    }
+
+    setScreenerData(data)
+  }
+
   const handleOpenWatchlist = (id: number) => {
     setActiveWatchlistId(current => (current === id ? current : id))
     setDetailCollapsed(false)
+
+    // Load screener data for the watchlist
+    const watchlist = watchlists.find(w => w.id === id)
+    if (watchlist) {
+      loadScreenerDataForWatchlist(watchlist.items)
+    }
   }
 
   const handleOpenAddItemModal = (watchlistId: number) => {
@@ -433,6 +459,22 @@ const Watchlists: React.FC = () => {
 
       // Refresh watchlists
       await loadWatchlists()
+
+      // Fetch screener data for the newly added stock
+      const watchlist = watchlists.find(w => w.id === activeWatchlistId)
+      if (watchlist) {
+        try {
+          const result = await screenerApi.querySymbol(stockSymbol)
+          if (result.results.length > 0) {
+            setScreenerData(prev => ({
+              ...prev,
+              [stockSymbol]: result.results[0]
+            }))
+          }
+        } catch (error) {
+          console.error(`Failed to load screener data for ${stockSymbol}:`, error)
+        }
+      }
     } catch (error: any) {
       console.error('Failed to add stock:', error)
 
@@ -898,162 +940,141 @@ const Watchlists: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="max-h-96 overflow-y-auto">
+                  <div className="max-h-96 overflow-y-auto space-y-1 p-2">
                     {activeWatchlist.items.length > 0 ? (
-                      <table className="min-w-full divide-y divide-gray-100 text-sm">
-                        <thead className="sticky top-0 bg-white/95 backdrop-blur">
-                          <tr className="text-xs uppercase tracking-wide text-gray-500">
-                            <th className="px-5 py-3 text-left font-semibold">
-                              <button
-                                onClick={() => handleSort('symbol')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors"
-                              >
-                                Symbol
-                                {sortColumn === 'symbol' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">
-                              <button
-                                onClick={() => handleSort('price')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
-                              >
-                                Current Price
-                                {sortColumn === 'price' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">
-                              <button
-                                onClick={() => handleSort('change')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
-                              >
-                                Daily Change
-                                {sortColumn === 'change' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">52W Range</th>
-                            <th className="px-5 py-3 text-right font-semibold">
-                              <button
-                                onClick={() => handleSort('entry')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
-                              >
-                                Entry
-                                {sortColumn === 'entry' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">
-                              <button
-                                onClick={() => handleSort('pnl')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
-                              >
-                                P&L
-                                {sortColumn === 'pnl' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">Target / Stop</th>
-                            <th className="px-5 py-3 text-right font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {getSortedItems(activeWatchlist.items, activeWatchlist.prices).map(item => {
-                            const stockPrice = activeWatchlist.prices.find(price => price.symbol === item.symbol)
-                            const changeClass = stockPrice && stockPrice.change >= 0 ? 'text-green-600' : 'text-red-600'
-                            const symbolClass = stockPrice
-                              ? stockPrice.change >= 0
-                                ? 'text-green-600'
-                                : 'text-red-600'
-                              : 'text-gray-900'
-                            const entry = item.entry_price ?? 0
-                            const pnl = stockPrice && entry
-                              ? stockPrice.current_price - entry
-                              : null
-                            const pnlClass = pnl !== null ? (pnl >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'
+                      getSortedItems(activeWatchlist.items, activeWatchlist.prices).map(item => {
+                        const stockPrice = activeWatchlist.prices.find(price => price.symbol === item.symbol)
+                        const changeClass = stockPrice && stockPrice.change >= 0 ? 'text-green-600' : 'text-red-600'
+                        const entry = item.entry_price ?? 0
+                        const pnl = stockPrice && entry
+                          ? stockPrice.current_price - entry
+                          : null
+                        const pnlClass = pnl !== null ? (pnl >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'
+                        const screener = screenerData[item.symbol]
 
-                            return (
-                              <tr key={item.id} className="transition hover:bg-blue-50/40">
-                                <td className="px-5 py-3">
+                        return (
+                          <div key={item.id} className="group bg-white rounded-lg border border-slate-200 px-4 py-3 hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+                            {/* First Row: Symbol, Price, 52W High, Change, Entry, P&L */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-4">
+                                {/* Symbol and Sector */}
+                                <div className="flex items-center gap-2 min-w-[200px]">
                                   <div
-                                    className={`font-semibold ${symbolClass} cursor-pointer hover:text-blue-600 transition-colors`}
+                                    className="text-base font-bold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
                                     onClick={() => handleOpenStockChart(item.symbol)}
                                   >
                                     {item.symbol}
                                   </div>
-                                  <div className="text-xs text-gray-500">
-                                    {item.sector || '—'}
-                                  </div>
-                                </td>
-                                <td className="px-5 py-3 text-right text-gray-900">
+                                  <div className="text-xs text-gray-600">({item.sector || 'N/A'})</div>
+                                </div>
+
+                                {/* Price */}
+                                <div className="text-base font-semibold text-gray-900 min-w-[100px]">
                                   {stockPrice ? formatCurrency(stockPrice.current_price) : '—'}
-                                </td>
-                                <td className={`px-5 py-3 text-right font-semibold ${changeClass}`}>
+                                </div>
+
+                                {/* 52W High (%) */}
+                                <div className="text-base text-gray-700 min-w-[180px]">
+                                  <span className="text-gray-600">52W:</span>{' '}
+                                  <span className="font-semibold">
+                                    {screener?.high_52w ? formatCurrency(parseFloat(screener.high_52w.toString())) : '—'}
+                                  </span>
+                                  {' '}
+                                  <span className={`font-semibold ${
+                                    screener?.pct_from_52w_high && parseFloat(screener.pct_from_52w_high.toString()) >= -5
+                                      ? 'text-green-600'
+                                      : ''
+                                  }`}>
+                                    ({screener?.pct_from_52w_high ? parseFloat(screener.pct_from_52w_high.toString()).toFixed(0) + '%' : '—'})
+                                  </span>
+                                </div>
+
+                                {/* Change */}
+                                <div className={`text-base font-semibold ${changeClass} min-w-[80px]`}>
                                   {stockPrice ? formatPercent(stockPrice.change_percent) : '—'}
-                                </td>
-                                <td className="px-5 py-3 text-right text-gray-400">—</td>
-                                <td className="px-5 py-3 text-right text-gray-700">
-                                  {item.entry_price ? formatCurrency(item.entry_price) : '—'}
-                                </td>
-                                <td className={`px-5 py-3 text-right font-semibold ${pnlClass}`}>
+                                </div>
+
+                                {/* Entry */}
+                                <div className="text-base text-gray-700 min-w-[100px]">
+                                  <span className="text-gray-600">Entry</span>{' '}
+                                  <span className="font-semibold">
+                                    {item.entry_price ? formatCurrency(item.entry_price) : '—'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* P&L */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-base text-gray-600">P&L</span>
+                                <span className={`text-base font-bold ${pnl !== null ? pnlClass : 'text-gray-400'}`}>
                                   {pnl !== null ? formatCurrency(pnl) : '—'}
-                                </td>
-                                <td className="px-5 py-3 text-right text-gray-700">
-                                  {item.target_price || item.stop_loss
-                                    ? `${item.target_price ? formatCurrency(item.target_price) : '—'} / ${item.stop_loss ? formatCurrency(item.stop_loss) : '—'}`
-                                    : '—'}
-                                </td>
-                                <td className="px-5 py-3 text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      className={tableViewButtonClass}
-                                      onClick={() => navigate(`/watchlists/${activeWatchlist.id}?symbol=${encodeURIComponent(item.symbol)}`)}
-                                      aria-label={`Open ${item.symbol} in watchlist page`}
-                                    >
-                                      <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={tableRemoveButtonClass}
-                                      onClick={() => handleRemoveItem(activeWatchlist.id, item.id, item.symbol)}
-                                      aria-label={`Remove ${item.symbol} from watchlist`}
-                                    >
-                                      <TrashIcon className="h-4 w-4" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
+                                </span>
+
+                                {/* Actions */}
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-3">
+                                  <button
+                                    type="button"
+                                    className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                                    onClick={() => navigate(`/watchlists/${activeWatchlist.id}?symbol=${encodeURIComponent(item.symbol)}`)}
+                                    title="Open full view"
+                                  >
+                                    <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                    onClick={() => handleRemoveItem(activeWatchlist.id, item.id, item.symbol)}
+                                    title="Remove"
+                                  >
+                                    <TrashIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Second Row: Scores below Symbol, RSI below Price, Signals */}
+                            <div className="flex items-center gap-4">
+                              {/* Scores (aligned below Symbol/Sector) */}
+                              <div className="text-sm text-gray-700 min-w-[200px]">
+                                <span className="text-blue-600 font-semibold">D/W/C</span>{' '}
+                                <span className="font-semibold">
+                                  {screener?.trend_score_d ?? '—'}/{screener?.trend_score_w ?? '—'}/{screener?.combined_score ?? '—'}
+                                </span>
+                              </div>
+
+                              {/* RSI (aligned below Price) */}
+                              <div className="text-sm text-gray-700 min-w-[100px]">
+                                <span className="text-gray-600">RSI:</span>{' '}
+                                <span className="font-semibold">
+                                  {screener?.rsi14 ? parseFloat(screener.rsi14.toString()).toFixed(0) : '—'}
+                                </span>
+                              </div>
+
+                              {/* Signals */}
+                              <div className="flex items-center gap-2">
+                                {screener?.donch20_breakout && (
+                                  <span className="text-sm font-semibold text-amber-600">Donch {screener?.trend_score_d ?? ''}</span>
+                                )}
+                                {screener?.sma_bull_stack && (
+                                  <span className="text-sm font-semibold text-sky-600">Stack {screener?.trend_score_w ?? ''}</span>
+                                )}
+                                {screener?.price_above_200 && (
+                                  <span className="text-sm font-semibold text-emerald-600">200</span>
+                                )}
+                                {screener?.macd_cross_up && (
+                                  <span className="text-sm font-semibold text-violet-600">MACD</span>
+                                )}
+                                {screener?.high_tight_zone && (
+                                  <span className="text-sm font-semibold text-rose-600">HTZ</span>
+                                )}
+                                {screener?.close_above_30w && (
+                                  <span className="text-sm font-semibold text-teal-600">Bull</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })
                     ) : (
                       <div className="px-5 py-10 text-center">
                         <ViewColumnsIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
