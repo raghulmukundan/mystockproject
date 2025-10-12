@@ -28,7 +28,7 @@ import {
 import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchlistsApi'
 import { WatchlistItem } from '../types'
 import AddItemModal from '../components/AddItemModal'
-import ProfessionalStockChart from '../components/ProfessionalStockChart'
+import StockDetailView from '../components/StockDetailView'
 
 interface WatchlistWithPrices extends Watchlist {
   prices: StockPrice[]
@@ -500,12 +500,10 @@ const Watchlists: React.FC = () => {
 
   const handleOpenStockChart = (symbol: string) => {
     setActiveStockSymbol(symbol)
-    setDetailCollapsed(true)
   }
 
   const handleCloseStockChart = () => {
     setActiveStockSymbol(null)
-    setDetailCollapsed(false)
   }
 
   const handleCloseWatchlist = () => {
@@ -1071,16 +1069,6 @@ const Watchlists: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              {/* Stock Chart - Always visible when a stock is selected */}
-              {activeStockSymbol && (
-                <div className="mt-4 border-t border-blue-100 bg-white/90 p-5">
-                  <ProfessionalStockChart
-                    symbol={activeStockSymbol}
-                    onClose={handleCloseStockChart}
-                  />
-                </div>
-              )}
             </div>
           </section>
         )}
@@ -1429,6 +1417,15 @@ const Watchlists: React.FC = () => {
       onSave={handleAddItem}
       isLoading={addItemLoading}
     />
+
+    {/* Stock Detail Modal */}
+    {activeStockSymbol && (
+      <StockDetailView
+        symbol={activeStockSymbol}
+        isOpen={!!activeStockSymbol}
+        onClose={handleCloseStockChart}
+      />
+    )}
 
   </>
 )

@@ -8,12 +8,6 @@ console.log('🔧 VITE_API_URL env:', process.env.VITE_API_URL);
 
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@syncfusion/ej2-base/styles': path.resolve(process.cwd(), 'node_modules/@syncfusion/ej2-base/styles'),
-      '@syncfusion/ej2-react-charts': path.resolve(process.cwd(), 'node_modules/@syncfusion/ej2-react-charts/index.js')
-    }
-  },
   server: {
     host: '0.0.0.0',
     port: 3000,
