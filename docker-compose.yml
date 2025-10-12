@@ -131,6 +131,7 @@ services:
       - SCREENER_DEFAULT_SORT=combined_score DESC
       - SCREENER_PAGE_SIZE_DEFAULT=50
       - SCREENER_MAX_PAGE_SIZE=200
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
     volumes:
       - ./api:/app
     networks:

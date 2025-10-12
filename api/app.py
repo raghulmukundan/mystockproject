@@ -53,6 +53,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from pydantic import BaseModel, Field
+import httpx
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
@@ -69,6 +71,7 @@ DB_DSN = os.getenv('DB_DSN', 'postgresql+psycopg://postgres:postgres123@localhos
 DEFAULT_SORT = os.getenv('SCREENER_DEFAULT_SORT', 'combined_score DESC')
 PAGE_SIZE_DEFAULT = int(os.getenv('SCREENER_PAGE_SIZE_DEFAULT', '50'))
 MAX_PAGE_SIZE = int(os.getenv('SCREENER_MAX_PAGE_SIZE', '200'))
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', 'demo')
 
 # Whitelisted sort columns (prevent SQL injection)
 ALLOWED_SORT_COLUMNS = {
@@ -543,6 +546,58 @@ def get_screener(
     except Exception as e:
         logger.exception(f"Screener query failed: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.get("/api/news/{symbol}")
+async def get_company_news(
+    symbol: str,
+    days: int = Query(default=7, ge=1, le=30, description="Number of days of news to fetch")
+):
+    """
+    Fetch company news from Finnhub API
+
+    Args:
+        symbol: Stock symbol (e.g., AAPL, MSFT)
+        days: Number of days of news to fetch (default 7, max 30)
+
+    Returns:
+        List of news articles with headline, summary, source, url, image, datetime
+    """
+    try:
+        # Calculate date range
+        to_date = datetime.now()
+        from_date = to_date - timedelta(days=days)
+
+        # Format dates as YYYY-MM-DD
+        from_str = from_date.strftime('%Y-%m-%d')
+        to_str = to_date.strftime('%Y-%m-%d')
+
+        # Call Finnhub API
+        url = f"https://finnhub.io/api/v1/company-news"
+        params = {
+            'symbol': symbol.upper(),
+            'from': from_str,
+            'to': to_str,
+            'token': FINNHUB_API_KEY
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, timeout=10.0)
+            response.raise_for_status()
+            news_data = response.json()
+
+        # Sort by datetime descending (most recent first)
+        news_data.sort(key=lambda x: x.get('datetime', 0), reverse=True)
+
+        logger.info(f"Fetched {len(news_data)} news articles for {symbol} from Finnhub")
+        return news_data
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Finnhub API error for {symbol}: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"Finnhub API error: {e.response.text}")
+    except Exception as e:
+        logger.exception(f"Failed to fetch news for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch news: {str(e)}")
 
 
 @app.get("/health")

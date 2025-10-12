@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { screenerApi, ScreenerResult } from '../services/screenerApi'
 import TradingViewWidget from './TradingViewWidget'
-import StockNewsWidget from './StockNewsWidget'
+import FinnhubNewsWidget from './FinnhubNewsWidget'
 import FinancialWidget from './FinancialWidget'
 
 interface StockDetailViewProps {
@@ -39,6 +39,11 @@ export default function StockDetailView({
   useEffect(() => {
     if (isOpen) {
       loadScreenerData()
+      // Update page title for AI assistants like Comet to detect the stock
+      document.title = `${symbol} - Stock Watchlist App`
+    } else {
+      // Reset title when modal closes
+      document.title = 'Stock Watchlist App'
     }
   }, [isOpen, symbol])
 
@@ -374,9 +379,7 @@ export default function StockDetailView({
 
               {activeView === 'news' && (
                 <div className="h-full p-4">
-                  <div className="h-full">
-                    <StockNewsWidget symbol={symbol} height="100%" />
-                  </div>
+                  <FinnhubNewsWidget symbol={symbol} height="calc(100vh - 180px)" />
                 </div>
               )}
 

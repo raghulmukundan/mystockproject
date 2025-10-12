@@ -31,6 +31,35 @@ export default defineConfig({
           });
         }
       },
+      // Screener and news endpoints
+      '/api/screener': {
+        target: 'http://screener-api:8000',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('🔄 Screener API:', req.method, req.url, '→', options.target);
+          });
+          proxy.on('error', (err, req, res) => {
+            console.error('❌ Proxy error:', err.message, 'for', req.url);
+          });
+        }
+      },
+      '/api/news': {
+        target: 'http://screener-api:8000',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('🔄 News API:', req.method, req.url, '→', options.target);
+          });
+          proxy.on('error', (err, req, res) => {
+            console.error('❌ Proxy error:', err.message, 'for', req.url);
+          });
+        }
+      },
+      // All other /api endpoints go to backend
       '/api': {
         target: 'http://backend:8000',
         changeOrigin: true,
@@ -38,7 +67,7 @@ export default defineConfig({
         ws: true,
         configure: (proxy, options) => {
           proxy.on('proxyReq', (proxyReq, req, res) => {
-            console.log('🔄 Proxying:', req.method, req.url, '→', options.target);
+            console.log('🔄 Backend API:', req.method, req.url, '→', options.target);
           });
           proxy.on('error', (err, req, res) => {
             console.error('❌ Proxy error:', err.message, 'for', req.url);
