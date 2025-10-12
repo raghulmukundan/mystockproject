@@ -960,7 +960,7 @@ const Watchlists: React.FC = () => {
                                 {/* Symbol and Sector */}
                                 <div className="flex items-center gap-2 min-w-[200px]">
                                   <div
-                                    className="text-base font-bold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
+                                    className="text-sm font-bold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
                                     onClick={() => handleOpenStockChart(item.symbol)}
                                   >
                                     {item.symbol}
@@ -969,12 +969,12 @@ const Watchlists: React.FC = () => {
                                 </div>
 
                                 {/* Price */}
-                                <div className="text-base font-semibold text-gray-900 min-w-[100px]">
+                                <div className="text-sm font-semibold text-gray-900 min-w-[100px]">
                                   {stockPrice ? formatCurrency(stockPrice.current_price) : '—'}
                                 </div>
 
                                 {/* 52W High (%) */}
-                                <div className="text-base text-gray-700 min-w-[180px]">
+                                <div className="text-sm text-gray-700 min-w-[180px]">
                                   <span className="text-gray-600">52W:</span>{' '}
                                   <span className="font-semibold">
                                     {screener?.high_52w ? formatCurrency(parseFloat(screener.high_52w.toString())) : '—'}
@@ -990,12 +990,12 @@ const Watchlists: React.FC = () => {
                                 </div>
 
                                 {/* Change */}
-                                <div className={`text-base font-semibold ${changeClass} min-w-[80px]`}>
+                                <div className={`text-sm font-semibold ${changeClass} min-w-[80px]`}>
                                   {stockPrice ? formatPercent(stockPrice.change_percent) : '—'}
                                 </div>
 
                                 {/* Entry */}
-                                <div className="text-base text-gray-700 min-w-[100px]">
+                                <div className="text-sm text-gray-700 min-w-[100px]">
                                   <span className="text-gray-600">Entry</span>{' '}
                                   <span className="font-semibold">
                                     {item.entry_price ? formatCurrency(item.entry_price) : '—'}
@@ -1026,42 +1026,26 @@ const Watchlists: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Second Row: Scores below Symbol, RSI below Price, P&L below Entry, Signals */}
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-4">
-                                {/* Scores (aligned below Symbol/Sector) */}
-                                <div className="text-sm text-gray-700 min-w-[200px]">
-                                  <span className="text-blue-600 font-semibold">D/W/C</span>{' '}
-                                  <span className="font-semibold">
-                                    {screener?.trend_score_d ?? '—'}/{screener?.trend_score_w ?? '—'}/{screener?.combined_score ?? '—'}
-                                  </span>
-                                </div>
-
-                                {/* RSI (aligned below Price) */}
-                                <div className="text-sm text-gray-700 min-w-[100px]">
-                                  <span className="text-gray-600">RSI:</span>{' '}
-                                  <span className="font-semibold">
-                                    {screener?.rsi14 ? parseFloat(screener.rsi14.toString()).toFixed(0) : '—'}
-                                  </span>
-                                </div>
-
-                                {/* Spacer for 52W */}
-                                <div className="min-w-[180px]"></div>
-
-                                {/* Spacer for Change */}
-                                <div className="min-w-[80px]"></div>
-
-                                {/* P&L (aligned below Entry) */}
-                                <div className="text-sm text-gray-700 min-w-[100px]">
-                                  <span className="text-gray-600">P&L</span>{' '}
-                                  <span className={`font-bold ${pnl !== null ? pnlClass : 'text-gray-400'}`}>
-                                    {pnl !== null ? formatCurrency(pnl) : '—'}
-                                  </span>
-                                </div>
+                            {/* Second Row: Scores below Symbol, RSI below Price, Signals below 52W, P&L below Entry */}
+                            <div className="flex items-center gap-4">
+                              {/* Scores (aligned below Symbol/Sector) */}
+                              <div className="text-sm text-gray-700 min-w-[200px]">
+                                <span className="text-blue-600 font-semibold">D/W/C</span>{' '}
+                                <span className="font-semibold">
+                                  {screener?.trend_score_d ?? '—'}/{screener?.trend_score_w ?? '—'}/{screener?.combined_score ?? '—'}
+                                </span>
                               </div>
 
-                              {/* Signals */}
-                              <div className="flex items-center gap-2">
+                              {/* RSI (aligned below Price) */}
+                              <div className="text-sm text-gray-700 min-w-[100px]">
+                                <span className="text-gray-600">RSI:</span>{' '}
+                                <span className="font-semibold">
+                                  {screener?.rsi14 ? parseFloat(screener.rsi14.toString()).toFixed(0) : '—'}
+                                </span>
+                              </div>
+
+                              {/* Signals (aligned below 52W) */}
+                              <div className="flex items-center gap-2 min-w-[180px]">
                                 {screener?.donch20_breakout && (
                                   <span className="text-sm font-semibold text-amber-600">Donch {screener?.trend_score_d ?? ''}</span>
                                 )}
@@ -1080,6 +1064,17 @@ const Watchlists: React.FC = () => {
                                 {screener?.close_above_30w && (
                                   <span className="text-sm font-semibold text-teal-600">Bull</span>
                                 )}
+                              </div>
+
+                              {/* Spacer for Change */}
+                              <div className="min-w-[80px]"></div>
+
+                              {/* P&L (aligned below Entry) */}
+                              <div className="text-sm text-gray-700 min-w-[100px]">
+                                <span className="text-gray-600">P&L</span>{' '}
+                                <span className={`font-bold ${pnl !== null ? pnlClass : 'text-gray-400'}`}>
+                                  {pnl !== null ? formatCurrency(pnl) : '—'}
+                                </span>
                               </div>
                             </div>
                           </div>
