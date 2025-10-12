@@ -1003,15 +1003,9 @@ const Watchlists: React.FC = () => {
                                 </div>
                               </div>
 
-                              {/* P&L */}
+                              {/* Actions on right */}
                               <div className="flex items-center gap-2">
-                                <span className="text-base text-gray-600">P&L</span>
-                                <span className={`text-base font-bold ${pnl !== null ? pnlClass : 'text-gray-400'}`}>
-                                  {pnl !== null ? formatCurrency(pnl) : '—'}
-                                </span>
-
-                                {/* Actions */}
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-3">
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button
                                     type="button"
                                     className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
@@ -1032,22 +1026,38 @@ const Watchlists: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Second Row: Scores below Symbol, RSI below Price, Signals */}
-                            <div className="flex items-center gap-4">
-                              {/* Scores (aligned below Symbol/Sector) */}
-                              <div className="text-sm text-gray-700 min-w-[200px]">
-                                <span className="text-blue-600 font-semibold">D/W/C</span>{' '}
-                                <span className="font-semibold">
-                                  {screener?.trend_score_d ?? '—'}/{screener?.trend_score_w ?? '—'}/{screener?.combined_score ?? '—'}
-                                </span>
-                              </div>
+                            {/* Second Row: Scores below Symbol, RSI below Price, P&L below Entry, Signals */}
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-4">
+                                {/* Scores (aligned below Symbol/Sector) */}
+                                <div className="text-sm text-gray-700 min-w-[200px]">
+                                  <span className="text-blue-600 font-semibold">D/W/C</span>{' '}
+                                  <span className="font-semibold">
+                                    {screener?.trend_score_d ?? '—'}/{screener?.trend_score_w ?? '—'}/{screener?.combined_score ?? '—'}
+                                  </span>
+                                </div>
 
-                              {/* RSI (aligned below Price) */}
-                              <div className="text-sm text-gray-700 min-w-[100px]">
-                                <span className="text-gray-600">RSI:</span>{' '}
-                                <span className="font-semibold">
-                                  {screener?.rsi14 ? parseFloat(screener.rsi14.toString()).toFixed(0) : '—'}
-                                </span>
+                                {/* RSI (aligned below Price) */}
+                                <div className="text-sm text-gray-700 min-w-[100px]">
+                                  <span className="text-gray-600">RSI:</span>{' '}
+                                  <span className="font-semibold">
+                                    {screener?.rsi14 ? parseFloat(screener.rsi14.toString()).toFixed(0) : '—'}
+                                  </span>
+                                </div>
+
+                                {/* Spacer for 52W */}
+                                <div className="min-w-[180px]"></div>
+
+                                {/* Spacer for Change */}
+                                <div className="min-w-[80px]"></div>
+
+                                {/* P&L (aligned below Entry) */}
+                                <div className="text-sm text-gray-700 min-w-[100px]">
+                                  <span className="text-gray-600">P&L</span>{' '}
+                                  <span className={`font-bold ${pnl !== null ? pnlClass : 'text-gray-400'}`}>
+                                    {pnl !== null ? formatCurrency(pnl) : '—'}
+                                  </span>
+                                </div>
                               </div>
 
                               {/* Signals */}
