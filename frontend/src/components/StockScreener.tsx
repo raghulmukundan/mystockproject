@@ -525,6 +525,16 @@ export default function StockScreener() {
                 label="Donchian Breakout"
               />
               <FilterChip
+                active={filters.highTightZone === true}
+                onClick={() => toggleFilter('highTightZone')}
+                label="High-Tight Zone"
+              />
+              <FilterChip
+                active={filters.bull === true}
+                onClick={() => toggleFilter('bull')}
+                label="Bull (30w MA)"
+              />
+              <FilterChip
                 active={filters.weeklyStrong === true}
                 onClick={() => toggleFilter('weeklyStrong')}
                 label="Weekly Strong"

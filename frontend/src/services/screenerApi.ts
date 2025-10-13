@@ -31,6 +31,8 @@ export interface ScreenerFilters {
   smaBullStack?: boolean
   macdCrossUp?: boolean
   donchBreakout?: boolean
+  highTightZone?: boolean
+  bull?: boolean
   weeklyStrong?: boolean
 
   // Score filters
@@ -193,6 +195,8 @@ class ScreenerApi {
     if (filters.smaBullStack === true) params.append('smaBullStack', 'true')
     if (filters.macdCrossUp === true) params.append('macdCrossUp', 'true')
     if (filters.donchBreakout === true) params.append('donchBreakout', 'true')
+    if (filters.highTightZone === true) params.append('highTightZone', 'true')
+    if (filters.bull === true) params.append('bull', 'true')
     if (filters.weeklyStrong === true) params.append('weeklyStrong', 'true')
 
     // Score filters

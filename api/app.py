@@ -252,6 +252,8 @@ def build_where_clauses(
     sma_bull_stack: Optional[bool],
     macd_cross_up: Optional[bool],
     donch_breakout: Optional[bool],
+    high_tight_zone: Optional[bool],
+    bull: Optional[bool],
     weekly_strong: Optional[bool],
     min_trend_score_d: Optional[int],
     min_trend_score_w: Optional[int],
@@ -318,6 +320,12 @@ def build_where_clauses(
     if donch_breakout is True:
         where_clauses.append("donch20_breakout = TRUE")
 
+    if high_tight_zone is True:
+        where_clauses.append("high_tight_zone = TRUE")
+
+    if bull is True:
+        where_clauses.append("close_above_30w = TRUE")
+
     if weekly_strong is True:
         where_clauses.append("weekly_strong = TRUE")
 
@@ -364,6 +372,8 @@ def get_screener(
     smaBullStack: Optional[bool] = Query(None, description="SMA20 > SMA50 > SMA200"),
     macdCrossUp: Optional[bool] = Query(None, description="MACD cross up signal"),
     donchBreakout: Optional[bool] = Query(None, description="Donchian 20 breakout"),
+    highTightZone: Optional[bool] = Query(None, description="High-Tight Zone pattern"),
+    bull: Optional[bool] = Query(None, description="Above 30-week SMA (close_above_30w)"),
     weeklyStrong: Optional[bool] = Query(None, description="close_above_30w AND stack_10_30_40"),
 
     # Score filters
@@ -400,6 +410,8 @@ def get_screener(
             sma_bull_stack=smaBullStack,
             macd_cross_up=macdCrossUp,
             donch_breakout=donchBreakout,
+            high_tight_zone=highTightZone,
+            bull=bull,
             weekly_strong=weeklyStrong,
             min_trend_score_d=minTrendScoreD,
             min_trend_score_w=minTrendScoreW,

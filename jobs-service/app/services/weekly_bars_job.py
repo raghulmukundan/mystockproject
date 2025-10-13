@@ -98,7 +98,7 @@ class WeeklyBarsJob:
 
                 if exists:
                     # Update if values differ
-                    session.execute(
+                    result = session.execute(
                         text("""
                             UPDATE weekly_bars
                             SET open = :open, high = :high, low = :low,
@@ -117,7 +117,7 @@ class WeeklyBarsJob:
                             'volume': int(row['volume'])
                         }
                     )
-                    if session.execute(text("SELECT ROW_COUNT()")).scalar() > 0:
+                    if result.rowcount > 0:
                         updated += 1
                 else:
                     # Insert new

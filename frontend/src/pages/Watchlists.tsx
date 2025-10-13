@@ -795,76 +795,84 @@ const Watchlists: React.FC = () => {
         {activeWatchlist && (
           <section
             ref={detailContainerRef}
-            className="rounded-3xl border border-blue-100 bg-white/85 shadow-sm backdrop-blur"
+            className="rounded-2xl border border-slate-200/60 bg-white shadow-xl shadow-slate-200/50 overflow-hidden"
           >
-            <div className="flex flex-col gap-4 p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-4 mb-2">
-                    <h2 className="text-2xl font-semibold text-gray-900">{activeWatchlist.name}</h2>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-gray-600">
-                        {activeWatchlist.items.length} stocks
-                      </span>
-                      <span className={`font-semibold ${
-                        safePercent(activeWatchlist.totalChangePercent) >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {formatPercent(activeWatchlist.totalChangePercent)}
-                      </span>
-                      <span className="text-gray-600">
-                        {formatCurrency(activeWatchlist.totalValue)}
-                      </span>
+            {/* Header Section */}
+            <div className="relative bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/30 border-b border-slate-200/60">
+              <div className="px-6 py-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-4 mb-3">
+                      <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeWatchlist.name}</h2>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          {activeWatchlist.items.length} {activeWatchlist.items.length === 1 ? 'stock' : 'stocks'}
+                        </span>
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                          safePercent(activeWatchlist.totalChangePercent) >= 0
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}>
+                          {formatPercent(activeWatchlist.totalChangePercent)}
+                        </span>
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          {formatCurrency(activeWatchlist.totalValue)}
+                        </span>
+                      </div>
                     </div>
+                    {activeWatchlist.description && (
+                      <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">{activeWatchlist.description}</p>
+                    )}
                   </div>
-                  {activeWatchlist.description && (
-                    <p className="text-sm text-gray-600 max-w-2xl">{activeWatchlist.description}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                    onClick={() => navigate(`/watchlists/${activeWatchlist.id}`)}
-                  >
-                    Open full view
-                  </button>
-                  {!detailCollapsed && (
+                  <div className="flex items-center gap-2 ml-4">
                     <button
                       type="button"
-                      className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
-                      onClick={() => setShowInlineAdd(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-all duration-200 hover:shadow-sm"
+                      onClick={() => navigate(`/watchlists/${activeWatchlist.id}`)}
                     >
-                      Add stock
+                      <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                      Full View
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={toggleDetailCollapsed}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-                    title={detailCollapsed ? "Expand watchlist" : "Minimize watchlist"}
-                  >
-                    {detailCollapsed ? (
-                      <ChevronDownIcon className="h-4 w-4" />
-                    ) : (
-                      <ChevronUpIcon className="h-4 w-4" />
+                    {!detailCollapsed && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all duration-200 hover:shadow-sm"
+                        onClick={() => setShowInlineAdd(true)}
+                      >
+                        <PlusIcon className="h-4 w-4" />
+                        Add Stock
+                      </button>
                     )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeDetailView}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-                    title="Close detail view"
-                  >
-                    <XMarkIcon className="h-4 w-4" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={toggleDetailCollapsed}
+                      className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+                      title={detailCollapsed ? "Expand watchlist" : "Minimize watchlist"}
+                    >
+                      {detailCollapsed ? (
+                        <ChevronDownIcon className="h-5 w-5" />
+                      ) : (
+                        <ChevronUpIcon className="h-5 w-5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeDetailView}
+                      className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+                      title="Close detail view"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
+            </div>
 
               {!detailCollapsed && (
-                <div className="rounded-2xl border border-blue-100 bg-white shadow-inner">
+                <div className="bg-white">
                   {/* Inline Add Form - At top for better dropdown visibility */}
                   {showInlineAdd && (
-                    <div className="border-b border-gray-100 bg-blue-50/30 p-5">
+                    <div className="border-b border-slate-200/60 bg-slate-50/50 p-5">
                       <div className="flex items-center gap-4">
                         <div className="flex-1 max-w-md">
                           <div className="relative">
@@ -874,7 +882,7 @@ const Watchlists: React.FC = () => {
                               value={inlineSearchQuery}
                               onChange={(e) => handleInlineSearch(e.target.value)}
                               placeholder="Search stocks (e.g., AAPL, MSFT)"
-                              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              className="w-full pl-10 pr-4 py-3 border border-slate-300 bg-white rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                               onKeyPress={(e) => {
                                 if (e.key === 'Enter') {
                                   setInlineSearchResults([])
@@ -920,13 +928,13 @@ const Watchlists: React.FC = () => {
                             ) : (
                               <>
                                 <CheckIcon className="h-4 w-4" />
-                                Save
+                                Add
                               </>
                             )}
                           </button>
                           <button
                             onClick={handleCancelInlineAdd}
-                            className="px-3 py-3 text-gray-600 hover:text-gray-800 rounded-lg text-sm"
+                            className="px-4 py-3 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg text-sm font-medium transition-all"
                           >
                             Cancel
                           </button>
@@ -940,7 +948,7 @@ const Watchlists: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="max-h-96 overflow-y-auto space-y-1 p-2">
+                  <div className="max-h-96 overflow-y-auto space-y-2 p-3">
                     {activeWatchlist.items.length > 0 ? (
                       getSortedItems(activeWatchlist.items, activeWatchlist.prices).map(item => {
                         const stockPrice = activeWatchlist.prices.find(price => price.symbol === item.symbol)
@@ -953,7 +961,7 @@ const Watchlists: React.FC = () => {
                         const screener = screenerData[item.symbol]
 
                         return (
-                          <div key={item.id} className="group bg-white rounded-lg border border-slate-200 px-4 py-3 hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+                          <div key={item.id} className="group bg-gradient-to-r from-white to-slate-50/50 rounded-xl border border-slate-200/60 px-5 py-3.5 hover:border-blue-400/60 hover:shadow-md hover:shadow-blue-100/50 transition-all duration-200">
                             {/* First Row: Symbol, Price, 52W High, Change, Entry, P&L */}
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-4">
@@ -974,7 +982,10 @@ const Watchlists: React.FC = () => {
                                 </div>
 
                                 {/* 52W High (%) */}
-                                <div className="text-sm text-gray-700 min-w-[180px]">
+                                <div
+                                  className="text-sm text-gray-700 min-w-[180px] cursor-help"
+                                  title="52-Week High and distance from it. Green if within 5% of high (strong relative position)"
+                                >
                                   <span className="text-gray-600">52W:</span>{' '}
                                   <span className="font-semibold">
                                     {screener?.high_52w ? formatCurrency(parseFloat(screener.high_52w.toString())) : '—'}
@@ -1029,7 +1040,10 @@ const Watchlists: React.FC = () => {
                             {/* Second Row: Scores below Symbol, RSI below Price, Signals below 52W, P&L below Entry */}
                             <div className="flex items-center gap-4">
                               {/* Scores (aligned below Symbol/Sector) */}
-                              <div className="text-sm text-gray-700 min-w-[200px]">
+                              <div
+                                className="text-sm text-gray-700 min-w-[200px] cursor-help"
+                                title="Trend Scores (0-100): Daily / Weekly / Combined - Higher is stronger"
+                              >
                                 <span className="text-blue-600 font-semibold">D/W/C</span>{' '}
                                 <span className="font-semibold">
                                   {screener?.trend_score_d ?? '—'}/{screener?.trend_score_w ?? '—'}/{screener?.combined_score ?? '—'}
@@ -1037,7 +1051,10 @@ const Watchlists: React.FC = () => {
                               </div>
 
                               {/* RSI (aligned below Price) */}
-                              <div className="text-sm text-gray-700 min-w-[100px]">
+                              <div
+                                className="text-sm text-gray-700 min-w-[100px] cursor-help"
+                                title="RSI (Relative Strength Index): <30 oversold, >70 overbought"
+                              >
                                 <span className="text-gray-600">RSI:</span>{' '}
                                 <span className="font-semibold">
                                   {screener?.rsi14 ? parseFloat(screener.rsi14.toString()).toFixed(0) : '—'}
@@ -1047,22 +1064,52 @@ const Watchlists: React.FC = () => {
                               {/* Signals (aligned below 52W) */}
                               <div className="flex items-center gap-2 min-w-[180px]">
                                 {screener?.donch20_breakout && (
-                                  <span className="text-sm font-semibold text-amber-600">Donch {screener?.trend_score_d ?? ''}</span>
+                                  <span
+                                    className="text-sm font-semibold text-amber-600 cursor-help"
+                                    title={`Donchian Breakout: Price broke above 20-day high with ${screener?.trend_score_d}/100 daily trend strength`}
+                                  >
+                                    Donch {screener?.trend_score_d ?? ''}
+                                  </span>
                                 )}
                                 {screener?.sma_bull_stack && (
-                                  <span className="text-sm font-semibold text-sky-600">Stack {screener?.trend_score_w ?? ''}</span>
+                                  <span
+                                    className="text-sm font-semibold text-sky-600 cursor-help"
+                                    title={`SMA Bull Stack: Moving averages aligned bullishly with ${screener?.trend_score_w}/100 weekly trend strength`}
+                                  >
+                                    Stack {screener?.trend_score_w ?? ''}
+                                  </span>
                                 )}
                                 {screener?.price_above_200 && (
-                                  <span className="text-sm font-semibold text-emerald-600">200</span>
+                                  <span
+                                    className="text-sm font-semibold text-emerald-600 cursor-help"
+                                    title="Above 200 SMA: Price is above the 200-day moving average (long-term bullish)"
+                                  >
+                                    200
+                                  </span>
                                 )}
                                 {screener?.macd_cross_up && (
-                                  <span className="text-sm font-semibold text-violet-600">MACD</span>
+                                  <span
+                                    className="text-sm font-semibold text-violet-600 cursor-help"
+                                    title="MACD Cross Up: MACD line crossed above signal line (momentum turning bullish)"
+                                  >
+                                    MACD
+                                  </span>
                                 )}
                                 {screener?.high_tight_zone && (
-                                  <span className="text-sm font-semibold text-rose-600">HTZ</span>
+                                  <span
+                                    className="text-sm font-semibold text-rose-600 cursor-help"
+                                    title="High-Tight Zone: Strong uptrend with minimal pullback (powerful pattern)"
+                                  >
+                                    HTZ
+                                  </span>
                                 )}
                                 {screener?.close_above_30w && (
-                                  <span className="text-sm font-semibold text-teal-600">Bull</span>
+                                  <span
+                                    className="text-sm font-semibold text-teal-600 cursor-help"
+                                    title="Weekly Bull: Price closed above 30-week moving average (weekly timeframe bullish)"
+                                  >
+                                    Bull
+                                  </span>
                                 )}
                               </div>
 
@@ -1093,9 +1140,135 @@ const Watchlists: React.FC = () => {
                     )}
 
                   </div>
+
+                  {/* Legend Section */}
+                  <div className="mt-4 px-6 pb-6">
+                    <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl border border-slate-200/60 p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <h3 className="text-sm font-bold text-slate-800">Technical Indicators Guide</h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                        {/* Trend Scores */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                          <div className="font-semibold text-blue-600 mb-2">D/W/C Trend Scores</div>
+                          <div className="space-y-1 text-slate-600">
+                            <div><span className="font-medium">D</span> = Daily (0-100)</div>
+                            <div><span className="font-medium">W</span> = Weekly (0-100)</div>
+                            <div><span className="font-medium">C</span> = Combined (D + W = 0-200)</div>
+                            <div className="mt-2 pt-2 border-t border-slate-200">
+                              <div className="text-xs font-medium mb-1">Individual Score Guide:</div>
+                              <div className="text-xs">0-20: Very weak</div>
+                              <div className="text-xs">20-40: Weak to moderate</div>
+                              <div className="text-xs">40-60: Moderate to strong</div>
+                              <div className="text-xs">60-100: Strong to very strong</div>
+                              <div className="text-xs mt-1 text-blue-600">Combined 100+: Very strong overall</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* RSI */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                          <div className="font-semibold text-gray-700 mb-2">RSI (Relative Strength)</div>
+                          <div className="space-y-1 text-slate-600">
+                            <div>Measures momentum (0-100)</div>
+                            <div className="mt-2 pt-2 border-t border-slate-200">
+                              <div><span className="font-medium">&lt;30:</span> Oversold (potential bounce)</div>
+                              <div><span className="font-medium">30-70:</span> Normal range</div>
+                              <div><span className="font-medium">&gt;70:</span> Overbought (potential pullback)</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 52W High */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                          <div className="font-semibold text-gray-700 mb-2">52W High (%)</div>
+                          <div className="space-y-1 text-slate-600">
+                            <div>Distance from 52-week high</div>
+                            <div className="mt-2 pt-2 border-t border-slate-200">
+                              <div><span className="text-green-600 font-medium">Green (-5% to 0%):</span> Near high (strong)</div>
+                              <div><span className="font-medium">-10%:</span> Moderate pullback</div>
+                              <div><span className="font-medium">-20%+:</span> Significant decline</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Donchian */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-semibold text-amber-600">Donch</span>
+                            <span className="text-xs text-slate-600">(number)</span>
+                          </div>
+                          <div className="space-y-1 text-slate-600">
+                            <div>Price broke above 20-day high</div>
+                            <div className="mt-2 pt-2 border-t border-slate-200">
+                              <div><span className="font-medium">Number</span> = Daily trend score</div>
+                              <div className="text-amber-600 font-medium">Higher is better (30-60+)</div>
+                              <div className="text-xs mt-1">Strong breakout in strong trend</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Stack */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-semibold text-sky-600">Stack</span>
+                            <span className="text-xs text-slate-600">(number)</span>
+                          </div>
+                          <div className="space-y-1 text-slate-600">
+                            <div>SMAs aligned bullishly</div>
+                            <div className="text-xs">(SMA10 &gt; SMA30 &gt; SMA40)</div>
+                            <div className="mt-2 pt-2 border-t border-slate-200">
+                              <div><span className="font-medium">Number</span> = Weekly trend score</div>
+                              <div className="text-sky-600 font-medium">Higher is better (30-60+)</div>
+                              <div className="text-xs mt-1">Strong weekly momentum</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Other Signals */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                          <div className="font-semibold text-gray-700 mb-2">Other Signals (Watchlist)</div>
+                          <div className="space-y-2 text-slate-600">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-emerald-600">200</span>
+                              <span className="text-xs">Above 200-day MA</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-violet-600">MACD</span>
+                              <span className="text-xs">Daily MACD cross up</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-rose-600">HTZ</span>
+                              <span className="text-xs">High-Tight Zone</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-teal-600">Bull</span>
+                              <span className="text-xs">Above 30-week MA</span>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200">
+                              <div className="font-medium mb-1">📊 In Detail Modal Only:</div>
+                              <div>• <span className="font-medium">Wk Stack</span> = Weekly SMA stack (same as "Stack" signal)</div>
+                              <div>• <span className="font-medium">MACD↑W</span> = Weekly MACD cross</div>
+                              <div>• <span className="font-medium">DonchW</span> = Weekly Donchian breakout</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-600">
+                        <div className="flex items-start gap-2">
+                          <span className="font-medium text-blue-600">💡 Pro Tip:</span>
+                          <span>Look for combinations: Multiple signals (Donch 30+, Stack 30+, 200, Bull) with higher scores indicate stronger setups. Lower scores mean signals are present but trends are weaker.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
           </section>
         )}
 
