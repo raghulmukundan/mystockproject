@@ -67,8 +67,10 @@ const Watchlists: React.FC = () => {
   const [sortColumn, setSortColumn] = useState<string>('symbol')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [screenerData, setScreenerData] = useState<Record<string, ScreenerResult>>({})
+  const [showLegendPopover, setShowLegendPopover] = useState(false)
   const navigate = useNavigate()
   const detailContainerRef = useRef<HTMLDivElement | null>(null)
+  const legendPopoverRef = useRef<HTMLDivElement | null>(null)
 
   const previewButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-full text-indigo-500 transition-transform duration-150 hover:-translate-y-0.5 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-200'
   const addButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-full text-emerald-500 transition-transform duration-150 hover:-translate-y-0.5 hover:text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200'
@@ -261,6 +263,23 @@ const Watchlists: React.FC = () => {
       }
     }
   }, [activeWatchlistId, watchlists])
+
+  // Close legend popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (legendPopoverRef.current && !legendPopoverRef.current.contains(event.target as Node)) {
+        setShowLegendPopover(false)
+      }
+    }
+
+    if (showLegendPopover) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showLegendPopover])
 
   const handleCreateInlineWatchlist = async () => {
     if (!createWatchlistName.trim()) {
@@ -804,6 +823,161 @@ const Watchlists: React.FC = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-3">
                       <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeWatchlist.name}</h2>
+                      <div className="relative">
+                        <button
+                          className="group relative inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-all hover:shadow-lg hover:shadow-blue-200 cursor-pointer"
+                          title="Technical Indicators Guide"
+                          onClick={() => setShowLegendPopover(!showLegendPopover)}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+
+                        {/* Legend Popover */}
+                        {showLegendPopover && (
+                          <>
+                            {/* Backdrop */}
+                            <div className="fixed inset-0 bg-black/30 z-[99]" onClick={() => setShowLegendPopover(false)}></div>
+
+                            {/* Popover */}
+                            <div
+                              ref={legendPopoverRef}
+                              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] w-[700px] max-h-[80vh] overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-2xl"
+                            >
+                              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-4 border-b border-slate-200 sticky top-0 z-10">
+                              <div className="flex items-center gap-2">
+                                <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <h3 className="text-sm font-bold text-slate-800">Technical Indicators Guide</h3>
+                                <button
+                                  onClick={() => setShowLegendPopover(false)}
+                                  className="ml-auto text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                  <XMarkIcon className="h-5 w-5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="p-4">
+                              <div className="grid grid-cols-2 gap-4 text-xs">
+                                {/* Trend Scores */}
+                                <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                                  <div className="font-semibold text-blue-600 mb-2">D/W/C Trend Scores</div>
+                                  <div className="space-y-1 text-slate-600">
+                                    <div><span className="font-medium">D</span> = Daily (0-100)</div>
+                                    <div><span className="font-medium">W</span> = Weekly (0-100)</div>
+                                    <div><span className="font-medium">C</span> = Combined (D + W = 0-200)</div>
+                                    <div className="mt-2 pt-2 border-t border-slate-200">
+                                      <div className="text-xs font-medium mb-1">Individual Score Guide:</div>
+                                      <div className="text-xs">0-20: Very weak</div>
+                                      <div className="text-xs">20-40: Weak to moderate</div>
+                                      <div className="text-xs">40-60: Moderate to strong</div>
+                                      <div className="text-xs">60-100: Strong to very strong</div>
+                                      <div className="text-xs mt-1 text-blue-600">Combined 100+: Very strong overall</div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* RSI */}
+                                <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                                  <div className="font-semibold text-gray-700 mb-2">RSI (Relative Strength)</div>
+                                  <div className="space-y-1 text-slate-600">
+                                    <div>Measures momentum (0-100)</div>
+                                    <div className="mt-2 pt-2 border-t border-slate-200">
+                                      <div><span className="font-medium">&lt;30:</span> Oversold (potential bounce)</div>
+                                      <div><span className="font-medium">30-70:</span> Normal range</div>
+                                      <div><span className="font-medium">&gt;70:</span> Overbought (potential pullback)</div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 52W High */}
+                                <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                                  <div className="font-semibold text-gray-700 mb-2">52W High (%)</div>
+                                  <div className="space-y-1 text-slate-600">
+                                    <div>Distance from 52-week high</div>
+                                    <div className="mt-2 pt-2 border-t border-slate-200">
+                                      <div><span className="text-green-600 font-medium">Green (-5% to 0%):</span> Near high (strong)</div>
+                                      <div><span className="font-medium">-10%:</span> Moderate pullback</div>
+                                      <div><span className="font-medium">-20%+:</span> Significant decline</div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Donchian */}
+                                <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="font-semibold text-amber-600">D: (Donch)</span>
+                                    <span className="text-xs text-slate-600">(number)</span>
+                                  </div>
+                                  <div className="space-y-1 text-slate-600">
+                                    <div>Price broke above 20-day high</div>
+                                    <div className="mt-2 pt-2 border-t border-slate-200">
+                                      <div><span className="font-medium">Number</span> = Daily trend score</div>
+                                      <div className="text-amber-600 font-medium">Higher is better (30-60+)</div>
+                                      <div className="text-xs mt-1">Strong breakout in strong trend</div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Stack */}
+                                <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="font-semibold text-sky-600">S: (Stack)</span>
+                                    <span className="text-xs text-slate-600">(number)</span>
+                                  </div>
+                                  <div className="space-y-1 text-slate-600">
+                                    <div>SMAs aligned bullishly</div>
+                                    <div className="text-xs">(SMA10 &gt; SMA30 &gt; SMA40)</div>
+                                    <div className="mt-2 pt-2 border-t border-slate-200">
+                                      <div><span className="font-medium">Number</span> = Weekly trend score</div>
+                                      <div className="text-sky-600 font-medium">Higher is better (30-60+)</div>
+                                      <div className="text-xs mt-1">Strong weekly momentum</div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Other Signals */}
+                                <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                                  <div className="font-semibold text-gray-700 mb-2">Other Signals</div>
+                                  <div className="space-y-2 text-slate-600">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-emerald-600">200</span>
+                                      <span className="text-xs">Above 200-day MA</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-violet-600">M↑</span>
+                                      <span className="text-xs">MACD cross up</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-rose-600">🔥</span>
+                                      <span className="text-xs">High-Tight Zone</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-teal-600">🐂</span>
+                                      <span className="text-xs">Bull (30w MA)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-indigo-600">W⭐</span>
+                                      <span className="text-xs">Weekly Strong</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-600">
+                                <div className="flex items-start gap-2">
+                                  <span className="font-medium text-blue-600">💡 Pro Tip:</span>
+                                  <span>Look for combinations: Multiple signals (D:30+, S:30+, 200, 🐂) with higher scores indicate stronger setups. Lower scores mean signals are present but trends are weaker.</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          </>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
                           {activeWatchlist.items.length} {activeWatchlist.items.length === 1 ? 'stock' : 'stocks'}
@@ -965,25 +1139,62 @@ const Watchlists: React.FC = () => {
                             {/* First Row: Symbol, Price, 52W High, Change, Entry, P&L */}
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-4">
-                                {/* Symbol and Sector */}
-                                <div className="flex items-center gap-2 min-w-[200px]">
+                                {/* Symbol, Type, Sector, Cap */}
+                                <div className="flex items-center gap-2 w-[250px]">
                                   <div
                                     className="text-sm font-bold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
                                     onClick={() => handleOpenStockChart(item.symbol)}
                                   >
                                     {item.symbol}
                                   </div>
-                                  <div className="text-xs text-gray-600">({item.sector || 'N/A'})</div>
+                                  {screener?.asset_type && (
+                                    <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${
+                                      screener.asset_type.toLowerCase() === 'etf'
+                                        ? 'bg-indigo-100 text-indigo-700'
+                                        : 'bg-gray-100 text-gray-600'
+                                    }`}>
+                                      {screener.asset_type.toLowerCase() === 'etf' ? 'ETF' : 'STK'}
+                                    </span>
+                                  )}
+                                  {screener?.market_cap_category && (() => {
+                                    const cap = screener.market_cap_category.toLowerCase()
+                                    let label = ''
+                                    let color = ''
+                                    if (cap.includes('mega')) {
+                                      label = 'XL'
+                                      color = 'bg-emerald-100 text-emerald-700'
+                                    } else if (cap.includes('large')) {
+                                      label = 'L'
+                                      color = 'bg-blue-100 text-blue-700'
+                                    } else if (cap.includes('mid')) {
+                                      label = 'M'
+                                      color = 'bg-purple-100 text-purple-700'
+                                    } else if (cap.includes('small')) {
+                                      label = 'S'
+                                      color = 'bg-orange-100 text-orange-700'
+                                    } else if (cap.includes('micro')) {
+                                      label = 'XS'
+                                      color = 'bg-gray-100 text-gray-700'
+                                    }
+                                    return label ? (
+                                      <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${color}`} title={screener.market_cap_category}>
+                                        {label}
+                                      </span>
+                                    ) : null
+                                  })()}
+                                  <div className="text-xs text-gray-600 truncate">
+                                    {item.sector || 'N/A'}
+                                  </div>
                                 </div>
 
                                 {/* Price */}
-                                <div className="text-sm font-semibold text-gray-900 min-w-[100px]">
+                                <div className="text-sm font-semibold text-gray-900 w-[100px]">
                                   {stockPrice ? formatCurrency(stockPrice.current_price) : '—'}
                                 </div>
 
                                 {/* 52W High (%) */}
                                 <div
-                                  className="text-sm text-gray-700 min-w-[180px] cursor-help"
+                                  className="text-sm text-gray-700 w-[200px] cursor-help"
                                   title="52-Week High and distance from it. Green if within 5% of high (strong relative position)"
                                 >
                                   <span className="text-gray-600">52W:</span>{' '}
@@ -1001,12 +1212,12 @@ const Watchlists: React.FC = () => {
                                 </div>
 
                                 {/* Change */}
-                                <div className={`text-sm font-semibold ${changeClass} min-w-[80px]`}>
+                                <div className={`text-sm font-semibold ${changeClass} w-[80px]`}>
                                   {stockPrice ? formatPercent(stockPrice.change_percent) : '—'}
                                 </div>
 
                                 {/* Entry */}
-                                <div className="text-sm text-gray-700 min-w-[100px]">
+                                <div className="text-sm text-gray-700 w-[120px]">
                                   <span className="text-gray-600">Entry</span>{' '}
                                   <span className="font-semibold">
                                     {item.entry_price ? formatCurrency(item.entry_price) : '—'}
@@ -1041,7 +1252,7 @@ const Watchlists: React.FC = () => {
                             <div className="flex items-center gap-4">
                               {/* Scores (aligned below Symbol/Sector) */}
                               <div
-                                className="text-sm text-gray-700 min-w-[200px] cursor-help"
+                                className="text-sm text-gray-700 w-[250px] cursor-help"
                                 title="Trend Scores (0-100): Daily / Weekly / Combined - Higher is stronger"
                               >
                                 <span className="text-blue-600 font-semibold">D/W/C</span>{' '}
@@ -1052,7 +1263,7 @@ const Watchlists: React.FC = () => {
 
                               {/* RSI (aligned below Price) */}
                               <div
-                                className="text-sm text-gray-700 min-w-[100px] cursor-help"
+                                className="text-sm text-gray-700 w-[100px] cursor-help"
                                 title="RSI (Relative Strength Index): <30 oversold, >70 overbought"
                               >
                                 <span className="text-gray-600">RSI:</span>{' '}
@@ -1062,26 +1273,26 @@ const Watchlists: React.FC = () => {
                               </div>
 
                               {/* Signals (aligned below 52W) */}
-                              <div className="flex items-center gap-2 min-w-[180px]">
+                              <div className="flex items-center gap-2 w-[200px] flex-wrap">
                                 {screener?.donch20_breakout && (
                                   <span
-                                    className="text-sm font-semibold text-amber-600 cursor-help"
+                                    className="text-xs font-semibold text-amber-600 cursor-help"
                                     title={`Donchian Breakout: Price broke above 20-day high with ${screener?.trend_score_d}/100 daily trend strength`}
                                   >
-                                    Donch {screener?.trend_score_d ?? ''}
+                                    D:{screener?.trend_score_d ?? ''}
                                   </span>
                                 )}
                                 {screener?.sma_bull_stack && (
                                   <span
-                                    className="text-sm font-semibold text-sky-600 cursor-help"
+                                    className="text-xs font-semibold text-sky-600 cursor-help"
                                     title={`SMA Bull Stack: Moving averages aligned bullishly with ${screener?.trend_score_w}/100 weekly trend strength`}
                                   >
-                                    Stack {screener?.trend_score_w ?? ''}
+                                    S:{screener?.trend_score_w ?? ''}
                                   </span>
                                 )}
                                 {screener?.price_above_200 && (
                                   <span
-                                    className="text-sm font-semibold text-emerald-600 cursor-help"
+                                    className="text-xs font-semibold text-emerald-600 cursor-help"
                                     title="Above 200 SMA: Price is above the 200-day moving average (long-term bullish)"
                                   >
                                     200
@@ -1089,35 +1300,43 @@ const Watchlists: React.FC = () => {
                                 )}
                                 {screener?.macd_cross_up && (
                                   <span
-                                    className="text-sm font-semibold text-violet-600 cursor-help"
+                                    className="text-xs font-semibold text-violet-600 cursor-help"
                                     title="MACD Cross Up: MACD line crossed above signal line (momentum turning bullish)"
                                   >
-                                    MACD
+                                    M↑
                                   </span>
                                 )}
                                 {screener?.high_tight_zone && (
                                   <span
-                                    className="text-sm font-semibold text-rose-600 cursor-help"
+                                    className="text-xs font-semibold text-rose-600 cursor-help"
                                     title="High-Tight Zone: Strong uptrend with minimal pullback (powerful pattern)"
                                   >
-                                    HTZ
+                                    🔥
                                   </span>
                                 )}
                                 {screener?.close_above_30w && (
                                   <span
-                                    className="text-sm font-semibold text-teal-600 cursor-help"
+                                    className="text-xs font-semibold text-teal-600 cursor-help"
                                     title="Weekly Bull: Price closed above 30-week moving average (weekly timeframe bullish)"
                                   >
-                                    Bull
+                                    🐂
+                                  </span>
+                                )}
+                                {screener?.weekly_strong && (
+                                  <span
+                                    className="text-xs font-semibold text-indigo-600 cursor-help"
+                                    title="Weekly Strong: Above 30w MA AND SMA stack (double confirmation)"
+                                  >
+                                    W⭐
                                   </span>
                                 )}
                               </div>
 
                               {/* Spacer for Change */}
-                              <div className="min-w-[80px]"></div>
+                              <div className="w-[80px]"></div>
 
                               {/* P&L (aligned below Entry) */}
-                              <div className="text-sm text-gray-700 min-w-[100px]">
+                              <div className="text-sm text-gray-700 w-[120px]">
                                 <span className="text-gray-600">P&L</span>{' '}
                                 <span className={`font-bold ${pnl !== null ? pnlClass : 'text-gray-400'}`}>
                                   {pnl !== null ? formatCurrency(pnl) : '—'}
@@ -1139,133 +1358,6 @@ const Watchlists: React.FC = () => {
                       </div>
                     )}
 
-                  </div>
-
-                  {/* Legend Section */}
-                  <div className="mt-4 px-6 pb-6">
-                    <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl border border-slate-200/60 p-5">
-                      <div className="flex items-center gap-2 mb-4">
-                        <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <h3 className="text-sm font-bold text-slate-800">Technical Indicators Guide</h3>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-                        {/* Trend Scores */}
-                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
-                          <div className="font-semibold text-blue-600 mb-2">D/W/C Trend Scores</div>
-                          <div className="space-y-1 text-slate-600">
-                            <div><span className="font-medium">D</span> = Daily (0-100)</div>
-                            <div><span className="font-medium">W</span> = Weekly (0-100)</div>
-                            <div><span className="font-medium">C</span> = Combined (D + W = 0-200)</div>
-                            <div className="mt-2 pt-2 border-t border-slate-200">
-                              <div className="text-xs font-medium mb-1">Individual Score Guide:</div>
-                              <div className="text-xs">0-20: Very weak</div>
-                              <div className="text-xs">20-40: Weak to moderate</div>
-                              <div className="text-xs">40-60: Moderate to strong</div>
-                              <div className="text-xs">60-100: Strong to very strong</div>
-                              <div className="text-xs mt-1 text-blue-600">Combined 100+: Very strong overall</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* RSI */}
-                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
-                          <div className="font-semibold text-gray-700 mb-2">RSI (Relative Strength)</div>
-                          <div className="space-y-1 text-slate-600">
-                            <div>Measures momentum (0-100)</div>
-                            <div className="mt-2 pt-2 border-t border-slate-200">
-                              <div><span className="font-medium">&lt;30:</span> Oversold (potential bounce)</div>
-                              <div><span className="font-medium">30-70:</span> Normal range</div>
-                              <div><span className="font-medium">&gt;70:</span> Overbought (potential pullback)</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 52W High */}
-                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
-                          <div className="font-semibold text-gray-700 mb-2">52W High (%)</div>
-                          <div className="space-y-1 text-slate-600">
-                            <div>Distance from 52-week high</div>
-                            <div className="mt-2 pt-2 border-t border-slate-200">
-                              <div><span className="text-green-600 font-medium">Green (-5% to 0%):</span> Near high (strong)</div>
-                              <div><span className="font-medium">-10%:</span> Moderate pullback</div>
-                              <div><span className="font-medium">-20%+:</span> Significant decline</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Donchian */}
-                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-semibold text-amber-600">Donch</span>
-                            <span className="text-xs text-slate-600">(number)</span>
-                          </div>
-                          <div className="space-y-1 text-slate-600">
-                            <div>Price broke above 20-day high</div>
-                            <div className="mt-2 pt-2 border-t border-slate-200">
-                              <div><span className="font-medium">Number</span> = Daily trend score</div>
-                              <div className="text-amber-600 font-medium">Higher is better (30-60+)</div>
-                              <div className="text-xs mt-1">Strong breakout in strong trend</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Stack */}
-                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-semibold text-sky-600">Stack</span>
-                            <span className="text-xs text-slate-600">(number)</span>
-                          </div>
-                          <div className="space-y-1 text-slate-600">
-                            <div>SMAs aligned bullishly</div>
-                            <div className="text-xs">(SMA10 &gt; SMA30 &gt; SMA40)</div>
-                            <div className="mt-2 pt-2 border-t border-slate-200">
-                              <div><span className="font-medium">Number</span> = Weekly trend score</div>
-                              <div className="text-sky-600 font-medium">Higher is better (30-60+)</div>
-                              <div className="text-xs mt-1">Strong weekly momentum</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Other Signals */}
-                        <div className="bg-white rounded-lg p-3 border border-slate-200/60">
-                          <div className="font-semibold text-gray-700 mb-2">Other Signals (Watchlist)</div>
-                          <div className="space-y-2 text-slate-600">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-emerald-600">200</span>
-                              <span className="text-xs">Above 200-day MA</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-violet-600">MACD</span>
-                              <span className="text-xs">Daily MACD cross up</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-rose-600">HTZ</span>
-                              <span className="text-xs">High-Tight Zone</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-teal-600">Bull</span>
-                              <span className="text-xs">Above 30-week MA</span>
-                            </div>
-                            <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200">
-                              <div className="font-medium mb-1">📊 In Detail Modal Only:</div>
-                              <div>• <span className="font-medium">Wk Stack</span> = Weekly SMA stack (same as "Stack" signal)</div>
-                              <div>• <span className="font-medium">MACD↑W</span> = Weekly MACD cross</div>
-                              <div>• <span className="font-medium">DonchW</span> = Weekly Donchian breakout</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-600">
-                        <div className="flex items-start gap-2">
-                          <span className="font-medium text-blue-600">💡 Pro Tip:</span>
-                          <span>Look for combinations: Multiple signals (Donch 30+, Stack 30+, 200, Bull) with higher scores indicate stronger setups. Lower scores mean signals are present but trends are weaker.</span>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}
