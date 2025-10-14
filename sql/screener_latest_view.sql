@@ -57,6 +57,9 @@ SELECT
     sd.macd_cross_up,
     sd.donch20_breakout,
     sd.high_tight_zone,
+    sd.below_200_sma,
+    sd.macd_cross_down,
+    sd.rsi_cross_50_down,
 
     -- Daily trend score (0-55)
     sd.trend_score_d,
@@ -96,6 +99,10 @@ SELECT
     ws.donch20w_breakout,
     ws.macd_w_cross_up,
     ws.rsi14w_gt_50,
+    ws.below_30w_ma,
+    ws.macd_w_cross_down,
+    ws.stack_broken,
+    ws.rsi14w_lt_50,
 
     -- Weekly trend score (0-70)
     ws.trend_score_w,

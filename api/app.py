@@ -128,6 +128,9 @@ class ScreenerResult(BaseModel):
     macd_cross_up: Optional[bool]
     donch20_breakout: Optional[bool]
     high_tight_zone: Optional[bool]
+    below_200_sma: Optional[bool]
+    macd_cross_down: Optional[bool]
+    rsi_cross_50_down: Optional[bool]
     trend_score_d: Optional[int]
 
     # Trade levels
@@ -161,6 +164,10 @@ class ScreenerResult(BaseModel):
     donch20w_breakout: Optional[bool]
     macd_w_cross_up: Optional[bool]
     rsi14w_gt_50: Optional[bool]
+    below_30w_ma: Optional[bool]
+    macd_w_cross_down: Optional[bool]
+    stack_broken: Optional[bool]
+    rsi14w_lt_50: Optional[bool]
     trend_score_w: Optional[int]
 
     # Derived fields
@@ -255,6 +262,8 @@ def build_where_clauses(
     high_tight_zone: Optional[bool],
     bull: Optional[bool],
     weekly_strong: Optional[bool],
+    bear: Optional[bool],
+    weakening: Optional[bool],
     min_trend_score_d: Optional[int],
     min_trend_score_w: Optional[int],
 ) -> tuple[List[str], Dict[str, Any]]:
@@ -329,6 +338,27 @@ def build_where_clauses(
     if weekly_strong is True:
         where_clauses.append("weekly_strong = TRUE")
 
+    if bear is True:
+        # Strong bearish: below 200 SMA AND (stack broken OR MACD cross down weekly)
+        where_clauses.append("""(
+            below_200_sma = TRUE AND (
+                stack_broken = TRUE OR
+                macd_w_cross_down = TRUE
+            )
+        )""")
+
+    if weakening is True:
+        # Any bearish/warning signal
+        where_clauses.append("""(
+            below_30w_ma = TRUE OR
+            stack_broken = TRUE OR
+            macd_w_cross_down = TRUE OR
+            rsi14w_lt_50 = TRUE OR
+            below_200_sma = TRUE OR
+            macd_cross_down = TRUE OR
+            rsi_cross_50_down = TRUE
+        )""")
+
     # Trend score filters
     if min_trend_score_d is not None:
         where_clauses.append("trend_score_d >= :min_trend_score_d")
@@ -375,6 +405,8 @@ def get_screener(
     highTightZone: Optional[bool] = Query(None, description="High-Tight Zone pattern"),
     bull: Optional[bool] = Query(None, description="Above 30-week SMA (close_above_30w)"),
     weeklyStrong: Optional[bool] = Query(None, description="close_above_30w AND stack_10_30_40"),
+    bear: Optional[bool] = Query(None, description="Strong bearish: below 200 SMA AND (stack broken OR MACD cross down weekly)"),
+    weakening: Optional[bool] = Query(None, description="Has any bearish/weakening signals"),
 
     # Score filters
     minTrendScoreD: Optional[int] = Query(None, description="Minimum daily trend score"),
@@ -413,6 +445,8 @@ def get_screener(
             high_tight_zone=highTightZone,
             bull=bull,
             weekly_strong=weeklyStrong,
+            bear=bear,
+            weakening=weakening,
             min_trend_score_d=minTrendScoreD,
             min_trend_score_w=minTrendScoreW,
         )
@@ -444,6 +478,7 @@ def get_screener(
                 high_252, distance_to_52w_high, sma_slope,
                 sma20_cross_50_up, price_above_200, rsi_cross_50_up,
                 macd_cross_up, donch20_breakout, high_tight_zone,
+                below_200_sma, macd_cross_down, rsi_cross_50_down,
                 trend_score_d,
                 proposed_entry, proposed_stop, target1, target2,
                 risk_reward_ratio, daily_notes,
@@ -452,7 +487,9 @@ def get_screener(
                 macd_w, macd_signal_w, macd_hist_w,
                 avg_vol10w, high_52w, distance_to_52w_high_w, sma_w_slope,
                 stack_10_30_40, close_above_30w, donch20w_breakout,
-                macd_w_cross_up, rsi14w_gt_50, trend_score_w,
+                macd_w_cross_up, rsi14w_gt_50,
+                below_30w_ma, macd_w_cross_down, stack_broken, rsi14w_lt_50,
+                trend_score_w,
                 sma_bull_stack, weekly_strong, combined_score,
                 distance_from_entry_pct, pct_from_52w_high,
                 asset_type, sector, industry, market_cap, market_cap_category, market_cap_numeric
@@ -501,6 +538,9 @@ def get_screener(
                 macd_cross_up=row.macd_cross_up,
                 donch20_breakout=row.donch20_breakout,
                 high_tight_zone=row.high_tight_zone,
+                below_200_sma=row.below_200_sma,
+                macd_cross_down=row.macd_cross_down,
+                rsi_cross_50_down=row.rsi_cross_50_down,
                 trend_score_d=row.trend_score_d,
                 proposed_entry=row.proposed_entry,
                 proposed_stop=row.proposed_stop,
@@ -528,6 +568,10 @@ def get_screener(
                 donch20w_breakout=row.donch20w_breakout,
                 macd_w_cross_up=row.macd_w_cross_up,
                 rsi14w_gt_50=row.rsi14w_gt_50,
+                below_30w_ma=row.below_30w_ma,
+                macd_w_cross_down=row.macd_w_cross_down,
+                stack_broken=row.stack_broken,
+                rsi14w_lt_50=row.rsi14w_lt_50,
                 trend_score_w=row.trend_score_w,
                 sma_bull_stack=row.sma_bull_stack,
                 weekly_strong=row.weekly_strong,

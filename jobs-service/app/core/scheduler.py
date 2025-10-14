@@ -221,23 +221,26 @@ def setup_jobs():
         replace_existing=True,
     )
 
-    # Daily movers calculation after market close and tech analysis
-    scheduler.add_job(
-        func=run_daily_movers_job_scheduled,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30),
-        id="daily_movers_calculation",
-        name="Calculate daily top movers by sector and market cap",
-        replace_existing=True,
-    )
+    # Daily movers calculation - AUTO-TRIGGERED by tech_job completion
+    # DO NOT schedule independently to avoid race conditions
+    # tech_job → daily_movers_job (auto) → daily_signals_job (auto)
+    # scheduler.add_job(
+    #     func=run_daily_movers_job_scheduled,
+    #     trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30),
+    #     id="daily_movers_calculation",
+    #     name="Calculate daily top movers by sector and market cap",
+    #     replace_existing=True,
+    # )
 
-    # Daily signals computation after daily movers (Mon-Fri at 6:45 PM)
-    scheduler.add_job(
-        func=run_daily_signals_job_scheduled,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=45),
-        id="daily_signals_computation",
-        name="Compute daily signal flags, trend scores, and trade setups",
-        replace_existing=True,
-    )
+    # Daily signals computation - AUTO-TRIGGERED by daily_movers completion
+    # DO NOT schedule independently to avoid race conditions
+    # scheduler.add_job(
+    #     func=run_daily_signals_job_scheduled,
+    #     trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=45),
+    #     id="daily_signals_computation",
+    #     name="Compute daily signal flags, trend scores, and trade setups",
+    #     replace_existing=True,
+    # )
 
     # Weekly bars ETL after daily signals on Fridays (7:00 PM)
     scheduler.add_job(

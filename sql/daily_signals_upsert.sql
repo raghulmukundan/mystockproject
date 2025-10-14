@@ -161,6 +161,36 @@ signals_computed AS (
             ELSE FALSE
         END AS high_tight_zone,
 
+        -- BEARISH SIGNALS --
+
+        -- Bearish Signal 1: Price below 200 SMA (opposite of price_above_200)
+        CASE
+            WHEN sma200 IS NOT NULL AND close < sma200 THEN TRUE
+            ELSE FALSE
+        END AS below_200_sma,
+
+        -- Bearish Signal 2: MACD cross down
+        CASE
+            WHEN macd IS NOT NULL
+                AND macd_signal IS NOT NULL
+                AND prev_macd IS NOT NULL
+                AND prev_macd_signal IS NOT NULL
+                AND prev_macd >= prev_macd_signal
+                AND macd < macd_signal
+            THEN TRUE
+            ELSE FALSE
+        END AS macd_cross_down,
+
+        -- Bearish Signal 3: RSI cross 50 down
+        CASE
+            WHEN rsi14 IS NOT NULL
+                AND prev_rsi14 IS NOT NULL
+                AND prev_rsi14 >= 50
+                AND rsi14 < 50
+            THEN TRUE
+            ELSE FALSE
+        END AS rsi_cross_50_down,
+
         -- Store these for trade level calculations
         sma20,
         sma50,
@@ -182,6 +212,9 @@ scores_and_levels AS (
         macd_cross_up,
         donch20_breakout,
         high_tight_zone,
+        below_200_sma,
+        macd_cross_down,
+        rsi_cross_50_down,
 
         -- Daily trend score
         -- Formula: 20*price_above_200 + 15*sma20_cross_50_up + 10*macd_cross_up + 10*donch20_breakout
@@ -269,6 +302,9 @@ INSERT INTO signals_daily_hist (
     macd_cross_up,
     donch20_breakout,
     high_tight_zone,
+    below_200_sma,
+    macd_cross_down,
+    rsi_cross_50_down,
     trend_score_d,
     proposed_entry,
     proposed_stop,
@@ -287,6 +323,9 @@ SELECT
     macd_cross_up,
     donch20_breakout,
     high_tight_zone,
+    below_200_sma,
+    macd_cross_down,
+    rsi_cross_50_down,
     trend_score_d,
     proposed_entry,
     proposed_stop,
@@ -304,6 +343,9 @@ DO UPDATE SET
     macd_cross_up = EXCLUDED.macd_cross_up,
     donch20_breakout = EXCLUDED.donch20_breakout,
     high_tight_zone = EXCLUDED.high_tight_zone,
+    below_200_sma = EXCLUDED.below_200_sma,
+    macd_cross_down = EXCLUDED.macd_cross_down,
+    rsi_cross_50_down = EXCLUDED.rsi_cross_50_down,
     trend_score_d = EXCLUDED.trend_score_d,
     proposed_entry = EXCLUDED.proposed_entry,
     proposed_stop = EXCLUDED.proposed_stop,
@@ -325,6 +367,9 @@ INSERT INTO signals_daily_latest (
     macd_cross_up,
     donch20_breakout,
     high_tight_zone,
+    below_200_sma,
+    macd_cross_down,
+    rsi_cross_50_down,
     trend_score_d,
     proposed_entry,
     proposed_stop,
@@ -343,6 +388,9 @@ SELECT DISTINCT ON (symbol)
     macd_cross_up,
     donch20_breakout,
     high_tight_zone,
+    below_200_sma,
+    macd_cross_down,
+    rsi_cross_50_down,
     trend_score_d,
     proposed_entry,
     proposed_stop,
@@ -360,6 +408,9 @@ DO UPDATE SET
     price_above_200 = EXCLUDED.price_above_200,
     rsi_cross_50_up = EXCLUDED.rsi_cross_50_up,
     macd_cross_up = EXCLUDED.macd_cross_up,
+    below_200_sma = EXCLUDED.below_200_sma,
+    macd_cross_down = EXCLUDED.macd_cross_down,
+    rsi_cross_50_down = EXCLUDED.rsi_cross_50_down,
     donch20_breakout = EXCLUDED.donch20_breakout,
     high_tight_zone = EXCLUDED.high_tight_zone,
     trend_score_d = EXCLUDED.trend_score_d,

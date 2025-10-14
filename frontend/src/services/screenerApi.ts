@@ -34,6 +34,8 @@ export interface ScreenerFilters {
   highTightZone?: boolean
   bull?: boolean
   weeklyStrong?: boolean
+  bear?: boolean
+  weakening?: boolean
 
   // Score filters
   minTrendScoreD?: number
@@ -79,6 +81,9 @@ export interface ScreenerResult {
   macd_cross_up: boolean | null
   donch20_breakout: boolean | null
   high_tight_zone: boolean | null
+  below_200_sma: boolean | null
+  macd_cross_down: boolean | null
+  rsi_cross_50_down: boolean | null
   trend_score_d: number | null
 
   // Trade levels (Decimal fields come as strings)
@@ -112,6 +117,10 @@ export interface ScreenerResult {
   donch20w_breakout: boolean | null
   macd_w_cross_up: boolean | null
   rsi14w_gt_50: boolean | null
+  below_30w_ma: boolean | null
+  macd_w_cross_down: boolean | null
+  stack_broken: boolean | null
+  rsi14w_lt_50: boolean | null
   trend_score_w: number | null
 
   // Derived fields
@@ -198,6 +207,8 @@ class ScreenerApi {
     if (filters.highTightZone === true) params.append('highTightZone', 'true')
     if (filters.bull === true) params.append('bull', 'true')
     if (filters.weeklyStrong === true) params.append('weeklyStrong', 'true')
+    if (filters.bear === true) params.append('bear', 'true')
+    if (filters.weakening === true) params.append('weakening', 'true')
 
     // Score filters
     if (filters.minTrendScoreD !== undefined) {

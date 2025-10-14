@@ -532,12 +532,22 @@ export default function StockScreener() {
               <FilterChip
                 active={filters.bull === true}
                 onClick={() => toggleFilter('bull')}
-                label="Bull (30w MA)"
+                label="🐂 Bull"
               />
               <FilterChip
                 active={filters.weeklyStrong === true}
                 onClick={() => toggleFilter('weeklyStrong')}
                 label="Weekly Strong"
+              />
+              <FilterChip
+                active={filters.bear === true}
+                onClick={() => toggleFilter('bear')}
+                label="🐻 Bear"
+              />
+              <FilterChip
+                active={filters.weakening === true}
+                onClick={() => toggleFilter('weakening')}
+                label="⚠️ Weakening"
               />
             </div>
           </div>

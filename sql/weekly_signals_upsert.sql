@@ -67,7 +67,39 @@ signals_computed AS (
         CASE
             WHEN rsi14w > 50 THEN TRUE
             ELSE FALSE
-        END AS rsi14w_gt_50
+        END AS rsi14w_gt_50,
+
+        -- BEARISH SIGNALS --
+
+        -- Bearish Signal: Close below SMA30w (opposite of close_above_30w)
+        CASE
+            WHEN close < sma30w THEN TRUE
+            ELSE FALSE
+        END AS below_30w_ma,
+
+        -- Bearish Signal: SMA Stack broken (NOT 10w > 30w > 40w)
+        CASE
+            WHEN NOT (sma10w > sma30w AND sma30w > sma40w) THEN TRUE
+            ELSE FALSE
+        END AS stack_broken,
+
+        -- Bearish Signal: MACD cross down (current macd_w < macd_signal_w AND prev macd_w >= prev macd_signal_w)
+        CASE
+            WHEN macd_w IS NOT NULL
+                AND macd_signal_w IS NOT NULL
+                AND prev_macd_w IS NOT NULL
+                AND prev_macd_signal_w IS NOT NULL
+                AND macd_w < macd_signal_w
+                AND prev_macd_w >= prev_macd_signal_w
+            THEN TRUE
+            ELSE FALSE
+        END AS macd_w_cross_down,
+
+        -- Bearish Signal: RSI14w < 50
+        CASE
+            WHEN rsi14w < 50 THEN TRUE
+            ELSE FALSE
+        END AS rsi14w_lt_50
 
     FROM ranked_weekly
 ),
@@ -80,6 +112,10 @@ scores_computed AS (
         donch20w_breakout,
         macd_w_cross_up,
         rsi14w_gt_50,
+        below_30w_ma,
+        stack_broken,
+        macd_w_cross_down,
+        rsi14w_lt_50,
 
         -- Trend Score: 20*close_above_30w + 15*stack_10_30_40 + 15*macd_w_cross_up + 10*donch20w_breakout + 10*rsi14w_gt_50
         (
@@ -104,6 +140,10 @@ INSERT INTO weekly_signals_hist (
     donch20w_breakout,
     macd_w_cross_up,
     rsi14w_gt_50,
+    below_30w_ma,
+    stack_broken,
+    macd_w_cross_down,
+    rsi14w_lt_50,
     trend_score_w,
     updated_at
 )
@@ -115,6 +155,10 @@ SELECT
     donch20w_breakout,
     macd_w_cross_up,
     rsi14w_gt_50,
+    below_30w_ma,
+    stack_broken,
+    macd_w_cross_down,
+    rsi14w_lt_50,
     trend_score_w,
     NOW()
 FROM scores_computed
@@ -125,6 +169,10 @@ DO UPDATE SET
     donch20w_breakout = EXCLUDED.donch20w_breakout,
     macd_w_cross_up = EXCLUDED.macd_w_cross_up,
     rsi14w_gt_50 = EXCLUDED.rsi14w_gt_50,
+    below_30w_ma = EXCLUDED.below_30w_ma,
+    stack_broken = EXCLUDED.stack_broken,
+    macd_w_cross_down = EXCLUDED.macd_w_cross_down,
+    rsi14w_lt_50 = EXCLUDED.rsi14w_lt_50,
     trend_score_w = EXCLUDED.trend_score_w,
     updated_at = NOW();
 
@@ -139,6 +187,10 @@ INSERT INTO weekly_signals_latest (
     donch20w_breakout,
     macd_w_cross_up,
     rsi14w_gt_50,
+    below_30w_ma,
+    stack_broken,
+    macd_w_cross_down,
+    rsi14w_lt_50,
     trend_score_w,
     updated_at
 )
@@ -150,6 +202,10 @@ SELECT DISTINCT ON (symbol)
     donch20w_breakout,
     macd_w_cross_up,
     rsi14w_gt_50,
+    below_30w_ma,
+    stack_broken,
+    macd_w_cross_down,
+    rsi14w_lt_50,
     trend_score_w,
     NOW()
 FROM weekly_signals_hist
@@ -162,6 +218,10 @@ DO UPDATE SET
     donch20w_breakout = EXCLUDED.donch20w_breakout,
     macd_w_cross_up = EXCLUDED.macd_w_cross_up,
     rsi14w_gt_50 = EXCLUDED.rsi14w_gt_50,
+    below_30w_ma = EXCLUDED.below_30w_ma,
+    stack_broken = EXCLUDED.stack_broken,
+    macd_w_cross_down = EXCLUDED.macd_w_cross_down,
+    rsi14w_lt_50 = EXCLUDED.rsi14w_lt_50,
     trend_score_w = EXCLUDED.trend_score_w,
     updated_at = NOW();
 
