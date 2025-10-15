@@ -28,7 +28,8 @@ import {
 import { watchlistsApiService, Watchlist, StockPrice } from '../services/watchlistsApi'
 import { WatchlistItem } from '../types'
 import AddItemModal from '../components/AddItemModal'
-import ProfessionalStockChart from '../components/ProfessionalStockChart'
+import StockDetailView from '../components/StockDetailView'
+import { screenerApi, ScreenerResult } from '../services/screenerApi'
 
 interface WatchlistWithPrices extends Watchlist {
   prices: StockPrice[]
@@ -65,8 +66,15 @@ const Watchlists: React.FC = () => {
   const [inlineError, setInlineError] = useState('')
   const [sortColumn, setSortColumn] = useState<string>('symbol')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [screenerData, setScreenerData] = useState<Record<string, ScreenerResult>>({})
+  const [showLegendPopover, setShowLegendPopover] = useState(false)
+  const [showDescription, setShowDescription] = useState(false)
+  const [filterMarketCap, setFilterMarketCap] = useState<string[]>([])
+  const [filterAssetType, setFilterAssetType] = useState<string[]>([])
+  const [filterSignals, setFilterSignals] = useState<string[]>([])
   const navigate = useNavigate()
   const detailContainerRef = useRef<HTMLDivElement | null>(null)
+  const legendPopoverRef = useRef<HTMLDivElement | null>(null)
 
   const previewButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-full text-indigo-500 transition-transform duration-150 hover:-translate-y-0.5 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-200'
   const addButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-full text-emerald-500 transition-transform duration-150 hover:-translate-y-0.5 hover:text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200'
@@ -260,6 +268,23 @@ const Watchlists: React.FC = () => {
     }
   }, [activeWatchlistId, watchlists])
 
+  // Close legend popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (legendPopoverRef.current && !legendPopoverRef.current.contains(event.target as Node)) {
+        setShowLegendPopover(false)
+      }
+    }
+
+    if (showLegendPopover) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showLegendPopover])
+
   const handleCreateInlineWatchlist = async () => {
     if (!createWatchlistName.trim()) {
       setCreateWatchlistError('Please enter a watchlist name')
@@ -316,8 +341,54 @@ const Watchlists: React.FC = () => {
     }
   }
 
-  const getSortedItems = (items: any[], prices: any[]) => {
-    return [...items].sort((a, b) => {
+  const getFilteredAndSortedItems = (items: any[], prices: any[]) => {
+    // First filter items
+    let filtered = items.filter(item => {
+      const screener = screenerData[item.symbol]
+      if (!screener) return true // Show items without screener data
+
+      // Market cap filter
+      if (filterMarketCap.length > 0 && screener.market_cap_category) {
+        const cap = screener.market_cap_category.toLowerCase()
+        const matches = filterMarketCap.some(f => {
+          if (f === 'XL') return cap.includes('mega')
+          if (f === 'L') return cap.includes('large')
+          if (f === 'M') return cap.includes('mid')
+          if (f === 'S') return cap.includes('small')
+          if (f === 'XS') return cap.includes('micro')
+          return false
+        })
+        if (!matches) return false
+      }
+
+      // Asset type filter
+      if (filterAssetType.length > 0 && screener.asset_type) {
+        const type = screener.asset_type.toLowerCase() === 'etf' ? 'ETF' : 'STK'
+        if (!filterAssetType.includes(type)) return false
+      }
+
+      // Signal filters
+      if (filterSignals.length > 0) {
+        const hasSignal = filterSignals.every(signal => {
+          switch (signal) {
+            case 'donch': return screener.donch20_breakout
+            case 'stack': return screener.sma_bull_stack
+            case '200': return screener.price_above_200
+            case 'macd': return screener.macd_cross_up
+            case 'htz': return screener.high_tight_zone
+            case 'bull': return screener.close_above_30w
+            case 'weekly': return screener.weekly_strong
+            default: return true
+          }
+        })
+        if (!hasSignal) return false
+      }
+
+      return true
+    })
+
+    // Then sort
+    return [...filtered].sort((a, b) => {
       let aValue, bValue
 
       switch (sortColumn) {
@@ -380,9 +451,33 @@ const Watchlists: React.FC = () => {
     }
   }
 
+  const loadScreenerDataForWatchlist = async (items: WatchlistItem[]) => {
+    const data: Record<string, ScreenerResult> = {}
+
+    // Fetch screener data for each symbol
+    for (const item of items) {
+      try {
+        const result = await screenerApi.querySymbol(item.symbol)
+        if (result.results.length > 0) {
+          data[item.symbol] = result.results[0]
+        }
+      } catch (error) {
+        console.error(`Failed to load screener data for ${item.symbol}:`, error)
+      }
+    }
+
+    setScreenerData(data)
+  }
+
   const handleOpenWatchlist = (id: number) => {
     setActiveWatchlistId(current => (current === id ? current : id))
     setDetailCollapsed(false)
+
+    // Load screener data for the watchlist
+    const watchlist = watchlists.find(w => w.id === id)
+    if (watchlist) {
+      loadScreenerDataForWatchlist(watchlist.items)
+    }
   }
 
   const handleOpenAddItemModal = (watchlistId: number) => {
@@ -433,6 +528,22 @@ const Watchlists: React.FC = () => {
 
       // Refresh watchlists
       await loadWatchlists()
+
+      // Fetch screener data for the newly added stock
+      const watchlist = watchlists.find(w => w.id === activeWatchlistId)
+      if (watchlist) {
+        try {
+          const result = await screenerApi.querySymbol(stockSymbol)
+          if (result.results.length > 0) {
+            setScreenerData(prev => ({
+              ...prev,
+              [stockSymbol]: result.results[0]
+            }))
+          }
+        } catch (error) {
+          console.error(`Failed to load screener data for ${stockSymbol}:`, error)
+        }
+      }
     } catch (error: any) {
       console.error('Failed to add stock:', error)
 
@@ -500,12 +611,10 @@ const Watchlists: React.FC = () => {
 
   const handleOpenStockChart = (symbol: string) => {
     setActiveStockSymbol(symbol)
-    setDetailCollapsed(true)
   }
 
   const handleCloseStockChart = () => {
     setActiveStockSymbol(null)
-    setDetailCollapsed(false)
   }
 
   const handleCloseWatchlist = () => {
@@ -755,76 +864,344 @@ const Watchlists: React.FC = () => {
         {activeWatchlist && (
           <section
             ref={detailContainerRef}
-            className="rounded-3xl border border-blue-100 bg-white/85 shadow-sm backdrop-blur"
+            className="rounded-2xl border border-slate-200/60 bg-white shadow-xl shadow-slate-200/50 overflow-hidden"
           >
-            <div className="flex flex-col gap-4 p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-4 mb-2">
-                    <h2 className="text-2xl font-semibold text-gray-900">{activeWatchlist.name}</h2>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-gray-600">
-                        {activeWatchlist.items.length} stocks
-                      </span>
-                      <span className={`font-semibold ${
-                        safePercent(activeWatchlist.totalChangePercent) >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {formatPercent(activeWatchlist.totalChangePercent)}
-                      </span>
-                      <span className="text-gray-600">
-                        {formatCurrency(activeWatchlist.totalValue)}
-                      </span>
+            {/* Header Section */}
+            <div className="relative bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/30 border-b border-slate-200/60">
+              <div className="px-6 py-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-4 mb-3">
+                      <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeWatchlist.name}</h2>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          {activeWatchlist.items.length} {activeWatchlist.items.length === 1 ? 'stock' : 'stocks'}
+                        </span>
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                          safePercent(activeWatchlist.totalChangePercent) >= 0
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}>
+                          {formatPercent(activeWatchlist.totalChangePercent)}
+                        </span>
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          {formatCurrency(activeWatchlist.totalValue)}
+                        </span>
+                      </div>
                     </div>
+
+                    {/* Filters Section */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {/* Market Cap Filters */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-600 font-medium">Cap:</span>
+                        {['XL', 'L', 'M', 'S', 'XS'].map((cap) => (
+                          <button
+                            key={cap}
+                            onClick={() => {
+                              setFilterMarketCap(prev =>
+                                prev.includes(cap) ? prev.filter(c => c !== cap) : [...prev, cap]
+                              )
+                            }}
+                            className={`px-2 py-1 text-[10px] font-bold rounded transition-all ${
+                              filterMarketCap.includes(cap)
+                                ? cap === 'XL' ? 'bg-emerald-500 text-white'
+                                : cap === 'L' ? 'bg-blue-500 text-white'
+                                : cap === 'M' ? 'bg-purple-500 text-white'
+                                : cap === 'S' ? 'bg-orange-500 text-white'
+                                : 'bg-gray-500 text-white'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            {cap}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Asset Type Filters */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-600 font-medium">Type:</span>
+                        {['STK', 'ETF'].map((type) => (
+                          <button
+                            key={type}
+                            onClick={() => {
+                              setFilterAssetType(prev =>
+                                prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+                              )
+                            }}
+                            className={`px-2 py-1 text-[10px] font-bold rounded transition-all ${
+                              filterAssetType.includes(type)
+                                ? type === 'ETF' ? 'bg-indigo-500 text-white' : 'bg-gray-600 text-white'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            {type}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Signal Filters */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-600 font-medium">Signals:</span>
+                        {[
+                          { key: 'donch', label: 'D', color: 'amber' },
+                          { key: 'stack', label: 'S', color: 'sky' },
+                          { key: '200', label: '200', color: 'emerald' },
+                          { key: 'macd', label: 'M↑', color: 'violet' },
+                          { key: 'htz', label: '🔥', color: 'rose' },
+                          { key: 'bull', label: '🐂', color: 'teal' },
+                          { key: 'weekly', label: 'W⭐', color: 'indigo' }
+                        ].map((signal) => (
+                          <button
+                            key={signal.key}
+                            onClick={() => {
+                              setFilterSignals(prev =>
+                                prev.includes(signal.key) ? prev.filter(s => s !== signal.key) : [...prev, signal.key]
+                              )
+                            }}
+                            className={`px-2 py-1 text-[10px] font-bold rounded transition-all ${
+                              filterSignals.includes(signal.key)
+                                ? `bg-${signal.color}-500 text-white`
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            {signal.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Clear Filters */}
+                      {(filterMarketCap.length > 0 || filterAssetType.length > 0 || filterSignals.length > 0) && (
+                        <button
+                          onClick={() => {
+                            setFilterMarketCap([])
+                            setFilterAssetType([])
+                            setFilterSignals([])
+                          }}
+                          className="px-2 py-1 text-[10px] font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-all"
+                        >
+                          Clear All
+                        </button>
+                      )}
+
+                      {/* Description Toggle */}
+                      {activeWatchlist.description && (
+                        <button
+                          onClick={() => setShowDescription(!showDescription)}
+                          className="ml-auto px-2 py-1 text-[10px] font-medium text-slate-600 hover:text-slate-700 hover:bg-slate-100 rounded transition-all flex items-center gap-1"
+                        >
+                          {showDescription ? <ChevronUpIcon className="h-3 w-3" /> : <ChevronDownIcon className="h-3 w-3" />}
+                          Info
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Collapsible Description */}
+                    {showDescription && activeWatchlist.description && (
+                      <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <p className="text-sm text-slate-600 leading-relaxed">{activeWatchlist.description}</p>
+                      </div>
+                    )}
                   </div>
-                  {activeWatchlist.description && (
-                    <p className="text-sm text-gray-600 max-w-2xl">{activeWatchlist.description}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                    onClick={() => navigate(`/watchlists/${activeWatchlist.id}`)}
-                  >
-                    Open full view
-                  </button>
-                  {!detailCollapsed && (
+                  <div className="flex items-center gap-2 ml-4">
+                    {!detailCollapsed && (
+                      <button
+                        type="button"
+                        className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-all duration-200 hover:shadow-sm"
+                        onClick={() => setShowInlineAdd(true)}
+                        title="Add Stock"
+                      >
+                        <PlusIcon className="h-5 w-5" />
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
-                      onClick={() => setShowInlineAdd(true)}
+                      className="p-2 text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-all duration-200 hover:shadow-sm"
+                      onClick={() => setShowLegendPopover(!showLegendPopover)}
+                      title="Technical Indicators Guide"
                     >
-                      Add stock
+                      <SparklesIcon className="h-5 w-5" />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={toggleDetailCollapsed}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-                    title={detailCollapsed ? "Expand watchlist" : "Minimize watchlist"}
-                  >
-                    {detailCollapsed ? (
-                      <ChevronDownIcon className="h-4 w-4" />
-                    ) : (
-                      <ChevronUpIcon className="h-4 w-4" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeDetailView}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-                    title="Close detail view"
-                  >
-                    <XMarkIcon className="h-4 w-4" />
-                  </button>
+                    <button
+                      type="button"
+                      className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all duration-200 hover:shadow-sm"
+                      onClick={() => navigate(`/watchlists/${activeWatchlist.id}`)}
+                      title="Full View"
+                    >
+                      <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleDetailCollapsed}
+                      className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+                      title={detailCollapsed ? "Expand watchlist" : "Minimize watchlist"}
+                    >
+                      {detailCollapsed ? (
+                        <ChevronDownIcon className="h-5 w-5" />
+                      ) : (
+                        <ChevronUpIcon className="h-5 w-5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeDetailView}
+                      className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+                      title="Close detail view"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
+            </div>
+
+            {/* Legend Popover Modal */}
+            {showLegendPopover && (
+              <>
+                {/* Backdrop */}
+                <div className="fixed inset-0 bg-black/30 z-[99]" onClick={() => setShowLegendPopover(false)}></div>
+
+                {/* Popover */}
+                <div
+                  ref={legendPopoverRef}
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] w-[700px] max-h-[80vh] overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-2xl"
+                >
+                  <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-4 border-b border-slate-200 sticky top-0 z-10 bg-white">
+                    <div className="flex items-center gap-2">
+                      <SparklesIcon className="h-5 w-5 text-purple-600" />
+                      <h3 className="text-sm font-bold text-slate-800">Technical Indicators Guide</h3>
+                      <button
+                        onClick={() => setShowLegendPopover(false)}
+                        className="ml-auto text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <XMarkIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-4">
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      {/* Trend Scores */}
+                      <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                        <div className="font-semibold text-blue-600 mb-2">D/W/C Trend Scores</div>
+                        <div className="space-y-1 text-slate-600">
+                          <div><span className="font-medium">D</span> = Daily (0-100)</div>
+                          <div><span className="font-medium">W</span> = Weekly (0-100)</div>
+                          <div><span className="font-medium">C</span> = Combined (D + W = 0-200)</div>
+                          <div className="mt-2 pt-2 border-t border-slate-200">
+                            <div className="text-xs font-medium mb-1">Individual Score Guide:</div>
+                            <div className="text-xs">0-20: Very weak</div>
+                            <div className="text-xs">20-40: Weak to moderate</div>
+                            <div className="text-xs">40-60: Moderate to strong</div>
+                            <div className="text-xs">60-100: Strong to very strong</div>
+                            <div className="text-xs mt-1 text-blue-600">Combined 100+: Very strong overall</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* RSI */}
+                      <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                        <div className="font-semibold text-gray-700 mb-2">RSI (Relative Strength)</div>
+                        <div className="space-y-1 text-slate-600">
+                          <div>Measures momentum (0-100)</div>
+                          <div className="mt-2 pt-2 border-t border-slate-200">
+                            <div><span className="font-medium">&lt;30:</span> Oversold (potential bounce)</div>
+                            <div><span className="font-medium">30-70:</span> Normal range</div>
+                            <div><span className="font-medium">&gt;70:</span> Overbought (potential pullback)</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 52W High */}
+                      <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                        <div className="font-semibold text-gray-700 mb-2">52W High (%)</div>
+                        <div className="space-y-1 text-slate-600">
+                          <div>Distance from 52-week high</div>
+                          <div className="mt-2 pt-2 border-t border-slate-200">
+                            <div><span className="text-green-600 font-medium">Green (-5% to 0%):</span> Near high (strong)</div>
+                            <div><span className="font-medium">-10%:</span> Moderate pullback</div>
+                            <div><span className="font-medium">-20%+:</span> Significant decline</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Donchian */}
+                      <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-semibold text-amber-600">D: (Donch)</span>
+                          <span className="text-xs text-slate-600">(number)</span>
+                        </div>
+                        <div className="space-y-1 text-slate-600">
+                          <div>Price broke above 20-day high</div>
+                          <div className="mt-2 pt-2 border-t border-slate-200">
+                            <div><span className="font-medium">Number</span> = Daily trend score</div>
+                            <div className="text-amber-600 font-medium">Higher is better (30-60+)</div>
+                            <div className="text-xs mt-1">Strong breakout in strong trend</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stack */}
+                      <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-semibold text-sky-600">S: (Stack)</span>
+                          <span className="text-xs text-slate-600">(number)</span>
+                        </div>
+                        <div className="space-y-1 text-slate-600">
+                          <div>SMAs aligned bullishly</div>
+                          <div className="text-xs">(SMA10 &gt; SMA30 &gt; SMA40)</div>
+                          <div className="mt-2 pt-2 border-t border-slate-200">
+                            <div><span className="font-medium">Number</span> = Weekly trend score</div>
+                            <div className="text-sky-600 font-medium">Higher is better (30-60+)</div>
+                            <div className="text-xs mt-1">Strong weekly momentum</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Other Signals */}
+                      <div className="bg-white rounded-lg p-3 border border-slate-200/60">
+                        <div className="font-semibold text-gray-700 mb-2">Other Signals</div>
+                        <div className="space-y-2 text-slate-600">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-emerald-600">200</span>
+                            <span className="text-xs">Above 200-day MA</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-violet-600">M↑</span>
+                            <span className="text-xs">MACD cross up</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-rose-600">🔥</span>
+                            <span className="text-xs">High-Tight Zone</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-teal-600">🐂</span>
+                            <span className="text-xs">Bull (30w MA)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-indigo-600">W⭐</span>
+                            <span className="text-xs">Weekly Strong</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-600">
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-blue-600">💡 Pro Tip:</span>
+                        <span>Look for combinations: Multiple signals (D:30+, S:30+, 200, 🐂) with higher scores indicate stronger setups. Lower scores mean signals are present but trends are weaker.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
               {!detailCollapsed && (
-                <div className="rounded-2xl border border-blue-100 bg-white shadow-inner">
+                <div className="bg-white">
                   {/* Inline Add Form - At top for better dropdown visibility */}
                   {showInlineAdd && (
-                    <div className="border-b border-gray-100 bg-blue-50/30 p-5">
+                    <div className="border-b border-slate-200/60 bg-slate-50/50 p-5">
                       <div className="flex items-center gap-4">
                         <div className="flex-1 max-w-md">
                           <div className="relative">
@@ -834,7 +1211,7 @@ const Watchlists: React.FC = () => {
                               value={inlineSearchQuery}
                               onChange={(e) => handleInlineSearch(e.target.value)}
                               placeholder="Search stocks (e.g., AAPL, MSFT)"
-                              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              className="w-full pl-10 pr-4 py-3 border border-slate-300 bg-white rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                               onKeyPress={(e) => {
                                 if (e.key === 'Enter') {
                                   setInlineSearchResults([])
@@ -880,13 +1257,13 @@ const Watchlists: React.FC = () => {
                             ) : (
                               <>
                                 <CheckIcon className="h-4 w-4" />
-                                Save
+                                Add
                               </>
                             )}
                           </button>
                           <button
                             onClick={handleCancelInlineAdd}
-                            className="px-3 py-3 text-gray-600 hover:text-gray-800 rounded-lg text-sm"
+                            className="px-4 py-3 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg text-sm font-medium transition-all"
                           >
                             Cancel
                           </button>
@@ -900,162 +1277,230 @@ const Watchlists: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="max-h-96 overflow-y-auto">
+                  <div className="max-h-96 overflow-y-auto space-y-2 p-3">
                     {activeWatchlist.items.length > 0 ? (
-                      <table className="min-w-full divide-y divide-gray-100 text-sm">
-                        <thead className="sticky top-0 bg-white/95 backdrop-blur">
-                          <tr className="text-xs uppercase tracking-wide text-gray-500">
-                            <th className="px-5 py-3 text-left font-semibold">
-                              <button
-                                onClick={() => handleSort('symbol')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors"
-                              >
-                                Symbol
-                                {sortColumn === 'symbol' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">
-                              <button
-                                onClick={() => handleSort('price')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
-                              >
-                                Current Price
-                                {sortColumn === 'price' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">
-                              <button
-                                onClick={() => handleSort('change')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
-                              >
-                                Daily Change
-                                {sortColumn === 'change' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">52W Range</th>
-                            <th className="px-5 py-3 text-right font-semibold">
-                              <button
-                                onClick={() => handleSort('entry')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
-                              >
-                                Entry
-                                {sortColumn === 'entry' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">
-                              <button
-                                onClick={() => handleSort('pnl')}
-                                className="flex items-center gap-1 hover:text-gray-700 transition-colors ml-auto"
-                              >
-                                P&L
-                                {sortColumn === 'pnl' && (
-                                  sortDirection === 'asc' ? (
-                                    <ChevronUpIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronDownIcon className="h-3 w-3" />
-                                  )
-                                )}
-                              </button>
-                            </th>
-                            <th className="px-5 py-3 text-right font-semibold">Target / Stop</th>
-                            <th className="px-5 py-3 text-right font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {getSortedItems(activeWatchlist.items, activeWatchlist.prices).map(item => {
-                            const stockPrice = activeWatchlist.prices.find(price => price.symbol === item.symbol)
-                            const changeClass = stockPrice && stockPrice.change >= 0 ? 'text-green-600' : 'text-red-600'
-                            const symbolClass = stockPrice
-                              ? stockPrice.change >= 0
-                                ? 'text-green-600'
-                                : 'text-red-600'
-                              : 'text-gray-900'
-                            const entry = item.entry_price ?? 0
-                            const pnl = stockPrice && entry
-                              ? stockPrice.current_price - entry
-                              : null
-                            const pnlClass = pnl !== null ? (pnl >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'
+                      getFilteredAndSortedItems(activeWatchlist.items, activeWatchlist.prices).map(item => {
+                        const stockPrice = activeWatchlist.prices.find(price => price.symbol === item.symbol)
+                        const changeClass = stockPrice && stockPrice.change >= 0 ? 'text-green-600' : 'text-red-600'
+                        const entry = item.entry_price ?? 0
+                        const pnl = stockPrice && entry
+                          ? stockPrice.current_price - entry
+                          : null
+                        const pnlClass = pnl !== null ? (pnl >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'
+                        const screener = screenerData[item.symbol]
 
-                            return (
-                              <tr key={item.id} className="transition hover:bg-blue-50/40">
-                                <td className="px-5 py-3">
+                        return (
+                          <div key={item.id} className="group bg-gradient-to-r from-white to-slate-50/50 rounded-xl border border-slate-200/60 px-5 py-3.5 hover:border-blue-400/60 hover:shadow-md hover:shadow-blue-100/50 transition-all duration-200">
+                            {/* First Row: Symbol, Price, 52W High, Change, Entry, P&L */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-4">
+                                {/* Symbol, Type, Sector, Cap */}
+                                <div className="flex items-center gap-2 w-[250px]">
                                   <div
-                                    className={`font-semibold ${symbolClass} cursor-pointer hover:text-blue-600 transition-colors`}
+                                    className="text-sm font-bold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
                                     onClick={() => handleOpenStockChart(item.symbol)}
                                   >
                                     {item.symbol}
                                   </div>
-                                  <div className="text-xs text-gray-500">
-                                    {item.sector || '—'}
+                                  {screener?.asset_type && (
+                                    <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${
+                                      screener.asset_type.toLowerCase() === 'etf'
+                                        ? 'bg-indigo-100 text-indigo-700'
+                                        : 'bg-gray-100 text-gray-600'
+                                    }`}>
+                                      {screener.asset_type.toLowerCase() === 'etf' ? 'ETF' : 'STK'}
+                                    </span>
+                                  )}
+                                  {screener?.market_cap_category && (() => {
+                                    const cap = screener.market_cap_category.toLowerCase()
+                                    let label = ''
+                                    let color = ''
+                                    if (cap.includes('mega')) {
+                                      label = 'XL'
+                                      color = 'bg-emerald-100 text-emerald-700'
+                                    } else if (cap.includes('large')) {
+                                      label = 'L'
+                                      color = 'bg-blue-100 text-blue-700'
+                                    } else if (cap.includes('mid')) {
+                                      label = 'M'
+                                      color = 'bg-purple-100 text-purple-700'
+                                    } else if (cap.includes('small')) {
+                                      label = 'S'
+                                      color = 'bg-orange-100 text-orange-700'
+                                    } else if (cap.includes('micro')) {
+                                      label = 'XS'
+                                      color = 'bg-gray-100 text-gray-700'
+                                    }
+                                    return label ? (
+                                      <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${color}`} title={screener.market_cap_category}>
+                                        {label}
+                                      </span>
+                                    ) : null
+                                  })()}
+                                  <div className="text-xs text-gray-600 truncate">
+                                    {item.sector || 'N/A'}
                                   </div>
-                                </td>
-                                <td className="px-5 py-3 text-right text-gray-900">
+                                </div>
+
+                                {/* Price */}
+                                <div className="text-sm font-semibold text-gray-900 w-[100px]">
                                   {stockPrice ? formatCurrency(stockPrice.current_price) : '—'}
-                                </td>
-                                <td className={`px-5 py-3 text-right font-semibold ${changeClass}`}>
+                                </div>
+
+                                {/* 52W High (%) */}
+                                <div
+                                  className="text-sm text-gray-700 w-[200px] cursor-help"
+                                  title="52-Week High and distance from it. Green if within 5% of high (strong relative position)"
+                                >
+                                  <span className="text-gray-600">52W:</span>{' '}
+                                  <span className="font-semibold">
+                                    {screener?.high_52w ? formatCurrency(parseFloat(screener.high_52w.toString())) : '—'}
+                                  </span>
+                                  {' '}
+                                  <span className={`font-semibold ${
+                                    screener?.pct_from_52w_high && parseFloat(screener.pct_from_52w_high.toString()) >= -5
+                                      ? 'text-green-600'
+                                      : ''
+                                  }`}>
+                                    ({screener?.pct_from_52w_high ? parseFloat(screener.pct_from_52w_high.toString()).toFixed(0) + '%' : '—'})
+                                  </span>
+                                </div>
+
+                                {/* Change */}
+                                <div className={`text-sm font-semibold ${changeClass} w-[80px]`}>
                                   {stockPrice ? formatPercent(stockPrice.change_percent) : '—'}
-                                </td>
-                                <td className="px-5 py-3 text-right text-gray-400">—</td>
-                                <td className="px-5 py-3 text-right text-gray-700">
-                                  {item.entry_price ? formatCurrency(item.entry_price) : '—'}
-                                </td>
-                                <td className={`px-5 py-3 text-right font-semibold ${pnlClass}`}>
+                                </div>
+
+                                {/* Entry */}
+                                <div className="text-sm text-gray-700 w-[120px]">
+                                  <span className="text-gray-600">Entry</span>{' '}
+                                  <span className="font-semibold">
+                                    {item.entry_price ? formatCurrency(item.entry_price) : '—'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Actions on right */}
+                              <div className="flex items-center gap-2">
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    type="button"
+                                    className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                                    onClick={() => navigate(`/watchlists/${activeWatchlist.id}?symbol=${encodeURIComponent(item.symbol)}`)}
+                                    title="Open full view"
+                                  >
+                                    <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                    onClick={() => handleRemoveItem(activeWatchlist.id, item.id, item.symbol)}
+                                    title="Remove"
+                                  >
+                                    <TrashIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Second Row: Scores below Symbol, RSI below Price, Signals below 52W, P&L below Entry */}
+                            <div className="flex items-center gap-4">
+                              {/* Scores (aligned below Symbol/Sector) */}
+                              <div
+                                className="text-sm text-gray-700 w-[250px] cursor-help"
+                                title="Trend Scores (0-100): Daily / Weekly / Combined - Higher is stronger"
+                              >
+                                <span className="text-blue-600 font-semibold">D/W/C</span>{' '}
+                                <span className="font-semibold">
+                                  {screener?.trend_score_d ?? '—'}/{screener?.trend_score_w ?? '—'}/{screener?.combined_score ?? '—'}
+                                </span>
+                              </div>
+
+                              {/* RSI (aligned below Price) */}
+                              <div
+                                className="text-sm text-gray-700 w-[100px] cursor-help"
+                                title="RSI (Relative Strength Index): <30 oversold, >70 overbought"
+                              >
+                                <span className="text-gray-600">RSI:</span>{' '}
+                                <span className="font-semibold">
+                                  {screener?.rsi14 ? parseFloat(screener.rsi14.toString()).toFixed(0) : '—'}
+                                </span>
+                              </div>
+
+                              {/* Signals (aligned below 52W) */}
+                              <div className="flex items-center gap-2 w-[200px] flex-wrap">
+                                {screener?.donch20_breakout && (
+                                  <span
+                                    className="text-xs font-semibold text-amber-600 cursor-help"
+                                    title={`Donchian Breakout: Price broke above 20-day high with ${screener?.trend_score_d}/100 daily trend strength`}
+                                  >
+                                    D:{screener?.trend_score_d ?? ''}
+                                  </span>
+                                )}
+                                {screener?.sma_bull_stack && (
+                                  <span
+                                    className="text-xs font-semibold text-sky-600 cursor-help"
+                                    title={`SMA Bull Stack: Moving averages aligned bullishly with ${screener?.trend_score_w}/100 weekly trend strength`}
+                                  >
+                                    S:{screener?.trend_score_w ?? ''}
+                                  </span>
+                                )}
+                                {screener?.price_above_200 && (
+                                  <span
+                                    className="text-xs font-semibold text-emerald-600 cursor-help"
+                                    title="Above 200 SMA: Price is above the 200-day moving average (long-term bullish)"
+                                  >
+                                    200
+                                  </span>
+                                )}
+                                {screener?.macd_cross_up && (
+                                  <span
+                                    className="text-xs font-semibold text-violet-600 cursor-help"
+                                    title="MACD Cross Up: MACD line crossed above signal line (momentum turning bullish)"
+                                  >
+                                    M↑
+                                  </span>
+                                )}
+                                {screener?.high_tight_zone && (
+                                  <span
+                                    className="text-xs font-semibold text-rose-600 cursor-help"
+                                    title="High-Tight Zone: Strong uptrend with minimal pullback (powerful pattern)"
+                                  >
+                                    🔥
+                                  </span>
+                                )}
+                                {screener?.close_above_30w && (
+                                  <span
+                                    className="text-xs font-semibold text-teal-600 cursor-help"
+                                    title="Weekly Bull: Price closed above 30-week moving average (weekly timeframe bullish)"
+                                  >
+                                    🐂
+                                  </span>
+                                )}
+                                {screener?.weekly_strong && (
+                                  <span
+                                    className="text-xs font-semibold text-indigo-600 cursor-help"
+                                    title="Weekly Strong: Above 30w MA AND SMA stack (double confirmation)"
+                                  >
+                                    W⭐
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Spacer for Change */}
+                              <div className="w-[80px]"></div>
+
+                              {/* P&L (aligned below Entry) */}
+                              <div className="text-sm text-gray-700 w-[120px]">
+                                <span className="text-gray-600">P&L</span>{' '}
+                                <span className={`font-bold ${pnl !== null ? pnlClass : 'text-gray-400'}`}>
                                   {pnl !== null ? formatCurrency(pnl) : '—'}
-                                </td>
-                                <td className="px-5 py-3 text-right text-gray-700">
-                                  {item.target_price || item.stop_loss
-                                    ? `${item.target_price ? formatCurrency(item.target_price) : '—'} / ${item.stop_loss ? formatCurrency(item.stop_loss) : '—'}`
-                                    : '—'}
-                                </td>
-                                <td className="px-5 py-3 text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      className={tableViewButtonClass}
-                                      onClick={() => navigate(`/watchlists/${activeWatchlist.id}?symbol=${encodeURIComponent(item.symbol)}`)}
-                                      aria-label={`Open ${item.symbol} in watchlist page`}
-                                    >
-                                      <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={tableRemoveButtonClass}
-                                      onClick={() => handleRemoveItem(activeWatchlist.id, item.id, item.symbol)}
-                                      aria-label={`Remove ${item.symbol} from watchlist`}
-                                    >
-                                      <TrashIcon className="h-4 w-4" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })
                     ) : (
                       <div className="px-5 py-10 text-center">
                         <ViewColumnsIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -1071,17 +1516,6 @@ const Watchlists: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              {/* Stock Chart - Always visible when a stock is selected */}
-              {activeStockSymbol && (
-                <div className="mt-4 border-t border-blue-100 bg-white/90 p-5">
-                  <ProfessionalStockChart
-                    symbol={activeStockSymbol}
-                    onClose={handleCloseStockChart}
-                  />
-                </div>
-              )}
-            </div>
           </section>
         )}
 
@@ -1429,6 +1863,15 @@ const Watchlists: React.FC = () => {
       onSave={handleAddItem}
       isLoading={addItemLoading}
     />
+
+    {/* Stock Detail Modal */}
+    {activeStockSymbol && (
+      <StockDetailView
+        symbol={activeStockSymbol}
+        isOpen={!!activeStockSymbol}
+        onClose={handleCloseStockChart}
+      />
+    )}
 
   </>
 )

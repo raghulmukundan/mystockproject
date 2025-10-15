@@ -34,6 +34,24 @@ JOB_TABLE_MAPPINGS = {
             {"table": "failed_files", "fk": "import_job_id"}
         ]
     },
+    "daily_signals": {
+        "parent": "daily_signals_jobs",
+        "children": []
+    },
+    "weekly_bars": {
+        "parent": "weekly_bars_jobs",
+        "children": []
+    },
+    "weekly_technicals": {
+        "parent": "weekly_technicals_jobs",
+        "children": [
+            {"table": "weekly_technicals_job_errors", "fk": "job_id"}
+        ]
+    },
+    "weekly_signals": {
+        "parent": "weekly_signals_jobs",
+        "children": []
+    },
     # General job execution tracking (standalone table)
     "general_jobs": {
         "parent": "job_execution_status",

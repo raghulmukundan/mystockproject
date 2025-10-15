@@ -1,16 +1,20 @@
-# Stock Project Docker Management
-# This Makefile validates configurations and manages Docker services safely
+# Stock Project Management
+# Docker services, analytics pipeline, and database migrations
 
 .PHONY: help validate validate-configs test-proxy-configs start-docker build-docker stop-docker restart-docker clean logs status
+.PHONY: migrate migrate-daily migrate-screener weekly-bars weekly-tech weekly-signals weekly-all daily-signals screener-api verify
+
+# Database configuration
+DB_DSN ?= postgresql://stockuser:stockpass123@localhost:5432/stockwatchlist
+PYTHON := python3
 
 # Default target
 help:
-	@echo "📋 Stock Project Docker Management"
+	@echo "📋 Stock Project Management"
 	@echo ""
 	@echo "🔍 Validation Commands:"
 	@echo "  make validate           - Run full validation pipeline"
 	@echo "  make validate-configs   - Validate proxy configurations only"
-	@echo "  make test-proxy-configs - Run enhanced proxy config tests"
 	@echo ""
 	@echo "🐳 Docker Commands:"
 	@echo "  make start-docker       - Validate configs then start Docker"
@@ -18,10 +22,16 @@ help:
 	@echo "  make stop-docker        - Stop all Docker services"
 	@echo "  make restart-docker     - Restart Docker services"
 	@echo "  make clean              - Stop and remove all containers/images"
-	@echo ""
-	@echo "📊 Monitoring Commands:"
 	@echo "  make logs               - Show Docker logs"
 	@echo "  make status             - Show Docker status"
+	@echo ""
+	@echo "📊 Analytics Pipeline:"
+	@echo "  make migrate            - Run weekly schema migrations"
+	@echo "  make migrate-daily      - Run daily signals migrations"
+	@echo "  make migrate-screener   - Run screener view + indexes"
+	@echo "  make weekly-all         - Run complete weekly pipeline"
+	@echo "  make daily-signals      - Compute daily signals"
+	@echo "  make verify             - Verify data counts"
 	@echo ""
 
 # Validate configurations before Docker operations
@@ -146,3 +156,54 @@ ci: validate test-proxy-configs
 quick-check: validate-configs
 	@echo ""
 	@echo "⚡ Quick configuration check completed"
+
+# ============================================================================
+# Analytics Pipeline
+# ============================================================================
+
+migrate:
+	@echo "Running weekly schema migrations..."
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -f - < migrations/001_weekly.sql
+	@echo "✅ Weekly migrations complete"
+
+migrate-daily:
+	@echo "Running daily signals schema migrations..."
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -f - < migrations/002_daily_signals.sql
+	@echo "✅ Daily signals migrations complete"
+
+migrate-screener:
+	@echo "Running screener view and indexes migrations..."
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -f - < sql/screener_latest_view.sql
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -f - < migrations/003_indexes.sql
+	@echo "✅ Screener migrations complete"
+
+weekly-bars:
+	@echo "Running weekly bars ETL..."
+	@DB_DSN=$(DB_DSN) $(PYTHON) jobs/weekly_bars_etl.py --weeks=120
+	@echo "✅ Weekly bars ETL complete"
+
+weekly-tech:
+	@echo "Running weekly technicals ETL..."
+	@DB_DSN=$(DB_DSN) $(PYTHON) jobs/weekly_technicals_etl.py
+	@echo "✅ Weekly technicals ETL complete"
+
+weekly-signals:
+	@echo "Running weekly signals computation..."
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -f - < sql/weekly_signals_upsert.sql
+	@echo "✅ Weekly signals complete"
+
+weekly-all: weekly-bars weekly-tech weekly-signals
+	@echo ""
+	@echo "✅ WEEKLY PIPELINE COMPLETE"
+
+daily-signals:
+	@echo "Running daily signals computation..."
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -f - < sql/daily_signals_upsert.sql
+	@echo "✅ Daily signals complete"
+
+verify:
+	@echo "Data Verification:"
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -c "SELECT COUNT(*) AS technical_latest FROM technical_latest;"
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -c "SELECT COUNT(*) AS signals_daily FROM signals_daily_latest;"
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -c "SELECT COUNT(*) AS weekly_signals FROM weekly_signals_latest;"
+	@docker-compose exec -T postgres psql -U stockuser -d stockwatchlist -c "SELECT COUNT(*) AS screener FROM screener_latest;"

@@ -13,11 +13,12 @@ import DailyMoversTable from '../components/DailyMoversTable'
 import DailyMoversHeatmap from '../components/DailyMoversHeatmap'
 import MarketSummaryCard from '../components/MarketSummaryCard'
 import SectorPerformanceSummary from '../components/SectorPerformanceSummary'
+import StockScreener from '../components/StockScreener'
 import { dailyMoversApi, DailyMoversResponse } from '../services/dailyMoversApi'
 import { universeApi } from '../lib/universeApi'
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'movers'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'screener' | 'movers'>('overview')
   const [dailyMoversData, setDailyMoversData] = useState<DailyMoversResponse | null>(null)
   const [summaryData, setSummaryData] = useState<{total_movers: number, total_gainers: number, total_losers: number} | null>(null)
   const [loading, setLoading] = useState(true)
@@ -253,6 +254,16 @@ export default function Dashboard() {
                 Overview
               </button>
               <button
+                onClick={() => setActiveTab('screener')}
+                className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'screener'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Screener
+              </button>
+              <button
                 onClick={() => setActiveTab('movers')}
                 className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'movers'
@@ -324,6 +335,11 @@ export default function Dashboard() {
           </div>
             </div>
           </>
+        )}
+
+        {/* Screener Tab */}
+        {activeTab === 'screener' && (
+          <StockScreener />
         )}
 
         {/* Movers Tab */}

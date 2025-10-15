@@ -109,6 +109,7 @@ services:
       - TECH_MIN_ROWS=10
     volumes:
       - ./jobs-service:/app
+      - ./sql:/sql
     networks:
       - app-network
     depends_on:
@@ -119,6 +120,27 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  screener-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      - DB_DSN=postgresql+psycopg://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}
+      - SCREENER_DEFAULT_SORT=combined_score DESC
+      - SCREENER_PAGE_SIZE_DEFAULT=50
+      - SCREENER_MAX_PAGE_SIZE=200
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
+    volumes:
+      - ./api:/app
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   frontend:
     build: ./frontend
     ports:
@@ -126,7 +148,6 @@ services:
     environment:
       - TZ=America/Chicago
       - VITE_API_URL=http://backend:8000
-      - VITE_SYNCFUSION_LICENSE_KEY=${SYNCFUSION_LICENSE_KEY:-}
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -136,6 +157,7 @@ services:
       - backend
       - external-apis
       - jobs-service
+      - screener-api
 
 networks:
   app-network:

@@ -135,6 +135,26 @@ export const jobsApiService = {
     return response.data
   },
 
+  async runDailySignalsComputation(): Promise<{ message: string }> {
+    const response = await jobsApi.post('/jobs/daily_signals_computation/run')
+    return response.data
+  },
+
+  async runWeeklyBarsEtl(): Promise<{ message: string }> {
+    const response = await jobsApi.post('/jobs/weekly_bars_etl/run')
+    return response.data
+  },
+
+  async runWeeklyTechnicalsEtl(): Promise<{ message: string }> {
+    const response = await jobsApi.post('/jobs/weekly_technicals_etl/run')
+    return response.data
+  },
+
+  async runWeeklySignalsComputation(): Promise<{ message: string }> {
+    const response = await jobsApi.post('/jobs/weekly_signals_computation/run')
+    return response.data
+  },
+
   // Technical job detailed endpoints
   async getTechJobList(limit: number = 20): Promise<any[]> {
     const response = await jobsApi.get(`/technical/job/list?limit=${limit}`)

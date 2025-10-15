@@ -20,6 +20,10 @@ from app.services.ttl_cleanup_job import cleanup_old_job_records
 from app.services.token_validation_job import validate_schwab_token_job
 from app.services.daily_movers_job import run_daily_movers_job
 from app.services.asset_metadata_enrichment_job import run_asset_metadata_enrichment_job
+from app.services.daily_signals_job import run_daily_signals_job
+from app.services.weekly_bars_job import run_weekly_bars_job
+from app.services.weekly_technicals_job import run_weekly_technicals_job
+from app.services.weekly_signals_job import run_weekly_signals_job
 import asyncio
 import logging
 
@@ -921,6 +925,230 @@ async def run_asset_metadata_enrichment_now():
         thread.start()
 
         return {"message": "Asset metadata enrichment started successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _run_daily_signals_thread():
+    """Run daily signals computation in a separate thread"""
+    import logging
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+    logger = logging.getLogger(__name__)
+
+    job_name = "daily_signals_computation"
+    job_id = None
+
+    try:
+        job_id = begin_job(job_name)
+
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(run_daily_signals_job(job_id=job_id))
+
+        loop.close()
+
+        # Record completion with results
+        total_symbols = result.get('total_symbols', 0) if result else 0
+        complete_job(job_id, records_processed=total_symbols)
+        prune_history(job_name, keep=5)
+
+        logger.info("Daily signals computation completed successfully")
+    except Exception as e:
+        logger.error(f"Daily signals computation failed: {str(e)}")
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
+
+@router.post("/jobs/daily_signals_computation/run")
+async def run_daily_signals_now():
+    """Manually trigger daily signals computation"""
+    try:
+        if is_job_running("daily_signals_computation"):
+            raise HTTPException(status_code=409, detail="Daily signals computation is already running")
+
+        thread = threading.Thread(
+            target=_run_daily_signals_thread,
+            daemon=True
+        )
+        thread.start()
+
+        return {"message": "Daily signals computation started successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _run_weekly_bars_thread():
+    """Run weekly bars ETL in a separate thread"""
+    import logging
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+    logger = logging.getLogger(__name__)
+
+    job_name = "weekly_bars_etl"
+    job_id = None
+
+    try:
+        job_id = begin_job(job_name)
+
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(run_weekly_bars_job(job_id=job_id))
+
+        loop.close()
+
+        # Record completion with results
+        total_records = result.get('inserted', 0) + result.get('updated', 0) if result else 0
+        complete_job(job_id, records_processed=total_records)
+        prune_history(job_name, keep=5)
+
+        logger.info("Weekly bars ETL completed successfully")
+    except Exception as e:
+        logger.error(f"Weekly bars ETL failed: {str(e)}")
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
+
+@router.post("/jobs/weekly_bars_etl/run")
+async def run_weekly_bars_now():
+    """Manually trigger weekly bars ETL"""
+    try:
+        if is_job_running("weekly_bars_etl"):
+            raise HTTPException(status_code=409, detail="Weekly bars ETL is already running")
+
+        thread = threading.Thread(
+            target=_run_weekly_bars_thread,
+            daemon=True
+        )
+        thread.start()
+
+        return {"message": "Weekly bars ETL started successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _run_weekly_technicals_thread():
+    """Run weekly technicals ETL in a separate thread"""
+    import logging
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+    logger = logging.getLogger(__name__)
+
+    job_name = "weekly_technicals_etl"
+    job_id = None
+
+    try:
+        job_id = begin_job(job_name)
+
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(run_weekly_technicals_job(job_id=job_id))
+
+        loop.close()
+
+        # Record completion with results
+        symbols_processed = result.get('symbols_processed', 0) if result else 0
+        complete_job(job_id, records_processed=symbols_processed)
+        prune_history(job_name, keep=5)
+
+        logger.info("Weekly technicals ETL completed successfully")
+    except Exception as e:
+        logger.error(f"Weekly technicals ETL failed: {str(e)}")
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
+
+@router.post("/jobs/weekly_technicals_etl/run")
+async def run_weekly_technicals_now():
+    """Manually trigger weekly technicals ETL"""
+    try:
+        if is_job_running("weekly_technicals_etl"):
+            raise HTTPException(status_code=409, detail="Weekly technicals ETL is already running")
+
+        thread = threading.Thread(
+            target=_run_weekly_technicals_thread,
+            daemon=True
+        )
+        thread.start()
+
+        return {"message": "Weekly technicals ETL started successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _run_weekly_signals_thread():
+    """Run weekly signals computation in a separate thread"""
+    import logging
+    from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+    logger = logging.getLogger(__name__)
+
+    job_name = "weekly_signals_computation"
+    job_id = None
+
+    try:
+        job_id = begin_job(job_name)
+
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(run_weekly_signals_job(job_id=job_id))
+
+        loop.close()
+
+        # Record completion with results
+        total_symbols = result.get('total_symbols', 0) if result else 0
+        complete_job(job_id, records_processed=total_symbols)
+        prune_history(job_name, keep=5)
+
+        logger.info("Weekly signals computation completed successfully")
+    except Exception as e:
+        logger.error(f"Weekly signals computation failed: {str(e)}")
+        if job_id is not None:
+            fail_job(job_id, str(e))
+            prune_history(job_name, keep=5)
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
+
+@router.post("/jobs/weekly_signals_computation/run")
+async def run_weekly_signals_now():
+    """Manually trigger weekly signals computation"""
+    try:
+        if is_job_running("weekly_signals_computation"):
+            raise HTTPException(status_code=409, detail="Weekly signals computation is already running")
+
+        thread = threading.Thread(
+            target=_run_weekly_signals_thread,
+            daemon=True
+        )
+        thread.start()
+
+        return {"message": "Weekly signals computation started successfully"}
     except HTTPException:
         raise
     except Exception as e:
