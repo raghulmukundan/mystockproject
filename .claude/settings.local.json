@@ -67,7 +67,9 @@
       "Bash(git fetch:*)",
       "Bash(set VITE_BUILD_IGNORE_TS_ERRORS=true)",
       "WebFetch(domain:finnhub.io)",
-      "WebFetch(domain:www.tradingview.com)"
+      "WebFetch(domain:www.tradingview.com)",
+      "Bash(del /q backend\\src\\services\\tech\\*.py)",
+      "Bash(test:*)"
     ],
     "deny": [],
     "ask": []

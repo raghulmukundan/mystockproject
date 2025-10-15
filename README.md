@@ -174,6 +174,21 @@ npm run test  # Run Vitest
 4. Set up reverse proxy (nginx) for HTTPS
 5. Configure monitoring and logging
 
+## Documentation
+
+### Essential Docs
+- [Consolidation Summary](docs/CONSOLIDATION_COMPLETE.md) - Jobs consolidation and bug fixes
+- [Job Chains](docs/JOB_CHAINS.md) - Job dependencies and execution chains
+- [Production Backend](docs/PRODUCTION_BACKEND_COMPLETE.md) - Complete backend architecture
+- [Indicators & Scoring](docs/INDICATORS_AND_SCORING.md) - Technical indicators explained
+- [Screener API](docs/SCREENER_API_README.md) - Screener API documentation
+- [Screener UI](docs/SCREENER_UI_COMPLETE.md) - Screener frontend guide
+
+### Setup Guides
+- [API Setup Guide](docs/API_SETUP_GUIDE.md) - External API configuration
+- [Secure API Setup](docs/SECURE_API_SETUP.md) - Security best practices
+- [PostgreSQL Setup (Windows)](docs/setup-postgres-windows.md) - Database setup
+
 ## License
 
 MIT License
