@@ -279,6 +279,18 @@ def get_jobs_summary(db: Session = Depends(get_db)):
     
     return result
 
+@router.get("/jobs/chains")
+def get_job_chains():
+    """Get all job chain configurations"""
+    from app.core.job_chain_manager import get_all_chains
+    return get_all_chains()
+
+@router.get("/jobs/chains/{job_name}")
+def get_job_chain_info(job_name: str):
+    """Get job chain information for a specific job"""
+    from app.core.job_chain_manager import get_job_chain_info
+    return get_job_chain_info(job_name)
+
 @router.get("/jobs/next-market-refresh", response_model=NextMarketRefreshResponse)
 def get_next_market_refresh(db: Session = Depends(get_db)):
     """Return the next effective market data refresh time considering market hours."""

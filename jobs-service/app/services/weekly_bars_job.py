@@ -212,14 +212,9 @@ async def run_weekly_bars_job(job_id: int = None):
 
         logger.info(f"✅ JOB COMPLETE: {job_name} - {result['inserted']} inserted, {result['updated']} updated, {result['symbols_processed']} symbols")
 
-        # Trigger weekly technicals ETL after weekly bars completes
-        logger.info("🔗 CHAINING: Triggering weekly_technicals_etl after weekly_bars completion")
-        from app.services.weekly_technicals_job import run_weekly_technicals_job
-        try:
-            await run_weekly_technicals_job()
-            logger.info("✅ CHAINING: weekly_technicals_etl completed successfully")
-        except Exception as chain_error:
-            logger.error(f"❌ CHAINING: weekly_technicals_etl failed: {str(chain_error)}")
+        # Trigger next job in chain using centralized chain manager
+        from app.core.job_chain_manager import trigger_next_job_in_chain
+        await trigger_next_job_in_chain(job_name)
 
         return result
 

@@ -19,8 +19,9 @@ import { PricesBrowser as PricesBrowserComponent } from '../components/PricesBro
 import APITester from '../components/APITester';
 import JobStatus from './JobStatus';
 import { JobSettings } from './JobSettings';
-import jobsApi, { jobsApiService, JobSummaryResponse } from '../services/jobsApi';
+import jobsApi, { jobsApiService, JobSummaryResponse, JobChainsResponse } from '../services/jobsApi';
 import { formatChicago } from '../utils/dateUtils';
+import { ArrowRightIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/solid';
 
 const jobNameOverrides: Record<string, string> = {
   update_market_data: 'Market Data Refresh',
@@ -151,12 +152,22 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [jobLoading, setJobLoading] = useState<string | null>(null);
   const [eodDates, setEodDates] = useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [jobChains, setJobChains] = useState<JobChainsResponse>({});
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    daily: true,
+    weekly: false,
+    other: false
+  });
 
   const loadJobs = async () => {
     try {
       setLoading(true);
-      const data = await jobsApiService.getJobsSummary();
-      setJobs(data);
+      const [jobsData, chainsData] = await Promise.all([
+        jobsApiService.getJobsSummary(),
+        jobsApiService.getJobChains()
+      ]);
+      setJobs(jobsData);
+      setJobChains(chainsData);
     } catch (error) {
       console.error('Failed to load jobs summary', error);
       setFeedback({ type: 'error', message: 'Unable to load job summaries right now.' });
@@ -289,8 +300,18 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
     }
   };
 
-  const eodJob = jobs.find(job => job.job_name.toLowerCase().includes('eod')) || null;
-  const otherJobs = jobs.filter(job => !job.job_name.toLowerCase().includes('eod'));
+  // Toggle section expansion
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // Categorize jobs
+  const dailyJobNames = ['eod_price_scan', 'technical_compute', 'daily_movers_calculation', 'daily_signals_computation'];
+  const weeklyJobNames = ['weekly_bars_etl', 'weekly_technicals_etl', 'weekly_signals_computation'];
+
+  const dailyJobs = jobs.filter(job => dailyJobNames.includes(job.job_name));
+  const weeklyJobs = jobs.filter(job => weeklyJobNames.includes(job.job_name));
+  const otherJobs = jobs.filter(job => !dailyJobNames.includes(job.job_name) && !weeklyJobNames.includes(job.job_name));
 
   const renderJobCard = (job: JobSummaryResponse, options: { showEodControls?: boolean } = {}) => {
     const showEodControls = options.showEodControls === true;
@@ -332,10 +353,21 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
       </div>
     );
 
+    const chainInfo = jobChains[job.job_name];
+    const hasChain = chainInfo && chainInfo.next_job;
+
     const scheduleBlock = (
       <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
         <div className="font-medium text-slate-600">Schedule</div>
         <div>{job.schedule_display}</div>
+        {hasChain && (
+          <div className="mt-2 flex items-center gap-1.5 rounded border border-indigo-200 bg-indigo-50 p-2 text-indigo-700">
+            <ArrowRightIcon className="h-3 w-3 flex-shrink-0" />
+            <span className="text-[11px] font-medium">
+              Auto-triggers: <span className="font-semibold">{formatJobName(chainInfo.next_job!)}</span>
+            </span>
+          </div>
+        )}
         {job.last_run?.error_message && (
           <div className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-red-700">
             {job.last_run.error_message}
@@ -431,6 +463,59 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
     );
   };
 
+  const renderSection = (
+    sectionKey: string,
+    title: string,
+    jobs: JobSummaryResponse[],
+    description: string,
+    accentColor: string
+  ) => {
+    const isExpanded = expandedSections[sectionKey];
+    const eodJob = sectionKey === 'daily' ? jobs.find(j => j.job_name === 'eod_price_scan') : null;
+    const otherJobsInSection = sectionKey === 'daily'
+      ? jobs.filter(j => j.job_name !== 'eod_price_scan')
+      : jobs;
+
+    if (jobs.length === 0) return null;
+
+    return (
+      <div key={sectionKey} className="space-y-3">
+        <button
+          onClick={() => toggleSection(sectionKey)}
+          className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left transition-all hover:border-slate-300 hover:shadow-sm"
+        >
+          <div className="flex items-center gap-3">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${accentColor}`}>
+              {isExpanded ? (
+                <ChevronDownIcon className="h-5 w-5 text-white" />
+              ) : (
+                <ChevronRightIcon className="h-5 w-5 text-white" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+              <p className="text-xs text-slate-500">{description}</p>
+            </div>
+          </div>
+          <Badge variant="secondary" className="ml-2">
+            {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}
+          </Badge>
+        </button>
+
+        {isExpanded && (
+          <div className="space-y-4 pl-2">
+            {eodJob && renderJobCard(eodJob, { showEodControls: true })}
+            {otherJobsInSection.length > 0 && (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {otherJobsInSection.map(job => renderJobCard(job))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {feedback && (
@@ -455,18 +540,29 @@ const RunJobsPanel: React.FC<{ onNavigateToStatus: () => void }> = ({ onNavigate
           No jobs found. Configure jobs under the Job Settings tab first.
         </div>
       ) : (
-        <>
-          {eodJob && (
-            <div className="space-y-4">
-              {renderJobCard(eodJob, { showEodControls: true })}
-            </div>
+        <div className="space-y-4">
+          {renderSection(
+            'daily',
+            'Daily Jobs',
+            dailyJobs,
+            'Daily processing chain: EOD scan → Technical analysis → Movers → Signals',
+            'from-indigo-500 to-purple-500'
           )}
-          {otherJobs.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {otherJobs.map(job => renderJobCard(job))}
-            </div>
+          {renderSection(
+            'weekly',
+            'Weekly Jobs',
+            weeklyJobs,
+            'Weekly processing chain: Bars → Technicals → Signals',
+            'from-emerald-500 to-teal-500'
           )}
-        </>
+          {renderSection(
+            'other',
+            'Other Jobs',
+            otherJobs,
+            'Maintenance, data refresh, and standalone jobs',
+            'from-slate-500 to-slate-600'
+          )}
+        </div>
       )}
     </div>
   );

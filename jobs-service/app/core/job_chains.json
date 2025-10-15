@@ -1,0 +1,72 @@
+{
+  "job_chains": {
+    "eod_price_scan": {
+      "next_job": "technical_compute",
+      "description": "EOD scan triggers technical analysis",
+      "conditions": {
+        "weekday_only": true,
+        "max_hour": 22
+      }
+    },
+    "technical_compute": {
+      "next_job": "daily_movers_calculation",
+      "description": "Technical analysis triggers daily movers calculation",
+      "conditions": {
+        "weekday_only": false,
+        "max_hour": 23
+      }
+    },
+    "daily_movers_calculation": {
+      "next_job": "daily_signals_computation",
+      "description": "Daily movers triggers daily signals computation",
+      "conditions": {
+        "weekday_only": false,
+        "max_hour": 23
+      }
+    },
+    "daily_signals_computation": {
+      "next_job": null,
+      "description": "End of daily chain"
+    },
+    "weekly_bars_etl": {
+      "next_job": "weekly_technicals_etl",
+      "description": "Weekly bars triggers weekly technicals",
+      "conditions": {
+        "weekday_only": false,
+        "max_hour": 23
+      }
+    },
+    "weekly_technicals_etl": {
+      "next_job": "weekly_signals_computation",
+      "description": "Weekly technicals triggers weekly signals",
+      "conditions": {
+        "weekday_only": false,
+        "max_hour": 23
+      }
+    },
+    "weekly_signals_computation": {
+      "next_job": null,
+      "description": "End of weekly chain"
+    },
+    "nasdaq_universe_refresh": {
+      "next_job": null,
+      "description": "Standalone job - no chaining"
+    },
+    "update_market_data": {
+      "next_job": null,
+      "description": "Standalone job - no chaining"
+    },
+    "job_ttl_cleanup": {
+      "next_job": null,
+      "description": "Standalone job - no chaining"
+    },
+    "schwab_token_validation": {
+      "next_job": null,
+      "description": "Standalone job - no chaining"
+    },
+    "asset_metadata_enrichment": {
+      "next_job": null,
+      "description": "Standalone job - no chaining"
+    }
+  }
+}

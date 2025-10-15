@@ -82,11 +82,13 @@ def compute_indicators_tail(df: pd.DataFrame) -> pd.DataFrame:
         out["adx14"] = np.nan
 
     # Donchian channels
+    # Note: pandas_ta.donchian returns [lower, mid, upper] - we need upper (high) and lower (low)
     if data_length >= 5:
         dc = ta.donchian(out["high"], out["low"], lower_length=donch_period, upper_length=donch_period)
-        if dc is not None and not dc.empty and len(dc.columns) >= 2:
-            out["donch20_high"] = dc.iloc[:, 0]
-            out["donch20_low"]  = dc.iloc[:, 1]
+        if dc is not None and not dc.empty and len(dc.columns) >= 3:
+            # Column 0 = lower (low), Column 1 = mid, Column 2 = upper (high)
+            out["donch20_high"] = dc.iloc[:, 2]  # Upper band (20-day high)
+            out["donch20_low"]  = dc.iloc[:, 0]  # Lower band (20-day low)
         else:
             out["donch20_high"] = np.nan
             out["donch20_low"]  = np.nan
@@ -193,6 +195,60 @@ def load_tail_df(db: Session, symbol: str, cutoff: str) -> Optional[pd.DataFrame
         return None
 
 
+def compute_eligibility_metrics(db: Session, symbol: str, latest: dict, df: pd.DataFrame) -> dict:
+    """
+    Compute eligibility metrics for trend gating and tie-breaking.
+
+    Returns dict with:
+    - avg_dollar_vol: close × avg_vol20
+    - atr_pct: ATR14 / close
+    - near_breakout: within 3% of 20-day Donchian high
+    - macd_hist_trending_up: MACD histogram positive and increasing
+    """
+    metrics = {
+        "avg_dollar_vol": None,
+        "atr_pct": None,
+        "near_breakout": False,
+        "macd_hist_trending_up": False,
+    }
+
+    try:
+        close = latest.get("close")
+        avg_vol20 = latest.get("avg_vol20")
+        atr14 = latest.get("atr14")
+        donch20_high = latest.get("donch20_high")
+        macd_hist = latest.get("macd_hist")
+
+        # 1. Average Dollar Volume = close × avg_vol20
+        if close and avg_vol20 and close > 0 and avg_vol20 > 0:
+            metrics["avg_dollar_vol"] = float(close * avg_vol20)
+
+        # 2. ATR Percentage = ATR14 / close
+        if atr14 and close and close > 0:
+            metrics["atr_pct"] = float(atr14 / close)
+
+        # 3. Near Breakout = within 3% of Donchian 20-day high
+        if close and donch20_high and donch20_high > 0:
+            proximity = (close - donch20_high) / donch20_high
+            metrics["near_breakout"] = proximity >= -0.03  # Within 3% below or above
+
+        # 4. MACD Histogram Trending Up = positive and > prior day
+        if macd_hist is not None and len(df) >= 2:
+            # Get prior day's MACD histogram
+            if "macd_hist" in df.columns:
+                # Get second-to-last row (prior day)
+                prior_macd_hist = df["macd_hist"].iloc[-2] if len(df) >= 2 else None
+                if prior_macd_hist is not None and not pd.isna(prior_macd_hist):
+                    metrics["macd_hist_trending_up"] = (
+                        macd_hist > 0 and macd_hist > float(prior_macd_hist)
+                    )
+
+    except Exception as e:
+        logger.warning(f"Error computing eligibility metrics for {symbol}: {e}")
+
+    return metrics
+
+
 def upsert_latest_row(db: Session, latest: dict):
     """Upsert a row into technical_latest table"""
     try:
@@ -209,12 +265,14 @@ def upsert_latest_row(db: Session, latest: dict):
                     symbol, date, close, volume, sma20, sma50, sma200,
                     rsi14, adx14, atr14, donch20_high, donch20_low,
                     macd, macd_signal, macd_hist, avg_vol20, high_252,
-                    distance_to_52w_high, rel_volume, sma_slope
+                    distance_to_52w_high, rel_volume, sma_slope,
+                    avg_dollar_vol, atr_pct, near_breakout, macd_hist_trending_up
                 ) VALUES (
                     :symbol, :date, :close, :volume, :sma20, :sma50, :sma200,
                     :rsi14, :adx14, :atr14, :donch20_high, :donch20_low,
                     :macd, :macd_signal, :macd_hist, :avg_vol20, :high_252,
-                    :distance_to_52w_high, :rel_volume, :sma_slope
+                    :distance_to_52w_high, :rel_volume, :sma_slope,
+                    :avg_dollar_vol, :atr_pct, :near_breakout, :macd_hist_trending_up
                 )
             """),
             latest
@@ -461,6 +519,10 @@ async def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
                         "sma_slope": _to_float(last_row.get("sma_slope")),
                     }
 
+                    # Compute eligibility metrics
+                    eligibility_metrics = compute_eligibility_metrics(db, sym, latest, df2)
+                    latest.update(eligibility_metrics)
+
                     # Upsert to latest table
                     upsert_latest_row(db, latest)
                     latest_rows_upserted += 1
@@ -498,6 +560,37 @@ async def run_technical_compute(symbols: Optional[List[str]] = None) -> dict:
             prune_history(job_name, keep=5)
 
             logger.info(f"Technical analysis completed: total={total_symbols} updated={updated_symbols} skipped_empty={skipped_empty} skipped_short_tail={skipped_short_tail} skipped_no_today={skipped_no_today} errors={errors}")
+
+            # Log eligibility metrics summary
+            try:
+                eligibility_stats = db.execute(text("""
+                    SELECT
+                        COUNT(*) as total,
+                        COUNT(avg_dollar_vol) as has_avg_dollar_vol,
+                        COUNT(atr_pct) as has_atr_pct,
+                        COUNT(CASE WHEN near_breakout = TRUE THEN 1 END) as near_breakout_count,
+                        COUNT(CASE WHEN macd_hist_trending_up = TRUE THEN 1 END) as macd_trending_up_count,
+                        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY atr_pct) as median_atr_pct,
+                        PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY atr_pct) as p90_atr_pct
+                    FROM technical_latest
+                    WHERE date = :date
+                """), {"date": latest_trade_date}).fetchone()
+
+                median_atr = eligibility_stats.median_atr_pct if eligibility_stats.median_atr_pct else 0
+                p90_atr = eligibility_stats.p90_atr_pct if eligibility_stats.p90_atr_pct else 0
+
+                logger.info(
+                    f"Eligibility Metrics Summary: "
+                    f"total={eligibility_stats.total} "
+                    f"has_avg_dollar_vol={eligibility_stats.has_avg_dollar_vol} "
+                    f"has_atr_pct={eligibility_stats.has_atr_pct} "
+                    f"near_breakout={eligibility_stats.near_breakout_count} "
+                    f"macd_trending={eligibility_stats.macd_trending_up_count} "
+                    f"median_atr_pct={median_atr:.4f} "
+                    f"p90_atr_pct={p90_atr:.4f}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to compute eligibility metrics summary: {e}")
 
             return {
                 "latest_trade_date": latest_trade_date,

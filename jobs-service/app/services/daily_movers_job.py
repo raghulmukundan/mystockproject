@@ -6,6 +6,7 @@ import asyncio
 import logging
 from app.services.daily_movers_impl import run_daily_movers_compute
 from app.services.job_status import begin_job, complete_job, fail_job, prune_history
+from app.core.job_chain_manager import trigger_next_job_in_chain
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +31,8 @@ async def run_daily_movers_job():
 
         logger.info(f"✅ JOB COMPLETE: {job_name} - Daily movers analysis completed successfully: {total_movers} movers calculated across {result.get('sectors_processed', 0)} sectors")
 
-        # Trigger daily signals computation after daily movers completes
-        logger.info("🔗 CHAINING: Triggering daily_signals_computation after daily_movers completion")
-        from app.services.daily_signals_job import run_daily_signals_job
-        try:
-            await run_daily_signals_job()
-            logger.info("✅ CHAINING: daily_signals_computation completed successfully")
-        except Exception as chain_error:
-            logger.error(f"❌ CHAINING: daily_signals_computation failed: {str(chain_error)}")
+        # Trigger next job in chain using centralized chain manager
+        await trigger_next_job_in_chain(job_name)
 
         return result
 

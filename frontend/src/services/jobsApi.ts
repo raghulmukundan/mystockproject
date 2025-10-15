@@ -75,6 +75,28 @@ export interface JobWithHistoryResponse {
   job_history: JobStatusResponse[]
 }
 
+export interface JobChainInfo {
+  job_name: string
+  next_job: string | null
+  description: string
+  conditions: {
+    weekday_only?: boolean
+    max_hour?: number
+  }
+  has_chain: boolean
+}
+
+export interface JobChainsResponse {
+  [jobName: string]: {
+    next_job: string | null
+    description: string
+    conditions?: {
+      weekday_only?: boolean
+      max_hour?: number
+    }
+  }
+}
+
 export const jobsApiService = {
   // Get job summaries
   async getJobsSummary(): Promise<JobSummaryResponse[]> {
@@ -85,6 +107,18 @@ export const jobsApiService = {
   // Get all jobs with history (database-driven)
   async getAllJobsWithHistory(): Promise<JobWithHistoryResponse[]> {
     const response = await jobsApi.get('/jobs/all-with-history')
+    return response.data
+  },
+
+  // Get job chains
+  async getJobChains(): Promise<JobChainsResponse> {
+    const response = await jobsApi.get('/jobs/chains')
+    return response.data
+  },
+
+  // Get chain info for a specific job
+  async getJobChainInfo(jobName: string): Promise<JobChainInfo> {
+    const response = await jobsApi.get(`/jobs/chains/${jobName}`)
     return response.data
   },
 

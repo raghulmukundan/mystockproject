@@ -48,31 +48,6 @@ async def _get_symbol_count():
     except:
         return "many"
 
-async def _trigger_technical_analysis_after_eod():
-    """Trigger technical analysis after EOD scan completion"""
-    try:
-        from app.services.tech_job import run_tech_job
-        from datetime import datetime, time
-
-        # Check if it's a weekday (Monday=0, Sunday=6)
-        now = datetime.now()
-        if now.weekday() >= 5:  # Saturday=5, Sunday=6
-            logger.info("Skipping technical analysis - weekend day")
-            return
-
-        # Check if it's reasonable business hours (not too late)
-        current_time = now.time()
-        if current_time > time(22, 0):  # After 10 PM
-            logger.warning("Skipping technical analysis - too late in the day")
-            return
-
-        logger.info("🔥 TRIGGER: Starting technical analysis after EOD completion...")
-        result = await run_tech_job()
-        logger.info(f"🎯 TRIGGER SUCCESS: Technical analysis triggered by EOD completion: {result.get('updated_symbols', 0)} symbols processed")
-
-    except Exception as e:
-        logger.error(f"Failed to trigger technical analysis after EOD: {str(e)}")
-        # Don't re-raise - EOD job should still be considered successful
 
 def run_eod_scan_job():
     """EOD scan job wrapper"""
@@ -111,11 +86,9 @@ async def _run_eod_scan_job():
 
         logger.info(f"✅ JOB COMPLETE: {job_name} - EOD scan completed: {processed} symbols requested, {symbols_fetched} symbols fetched")
 
-        # Trigger technical analysis job after successful EOD completion
-        # This ensures technical analysis only runs when EOD data is fresh and available
-        logger.info(f"🔗 JOB CHAIN: {job_name} → technical_compute - Triggering technical analysis after EOD completion...")
-        await _trigger_technical_analysis_after_eod()
-        logger.info(f"🎯 JOB CHAIN: {job_name} → technical_compute - Technical analysis trigger completed")
+        # Trigger next job in chain using centralized chain manager
+        from app.core.job_chain_manager import trigger_next_job_in_chain
+        await trigger_next_job_in_chain(job_name)
 
     except Exception as e:
         logger.error(f"❌ JOB FAILED: {job_name} - EOD scan failed: {str(e)}")

@@ -298,14 +298,9 @@ async def run_weekly_technicals_job(job_id: int = None):
 
         logger.info(f"✅ JOB COMPLETE: {job_name} - {result['symbols_processed']} symbols, {result['inserted']} inserted, {result['updated']} updated")
 
-        # Trigger weekly signals computation after weekly technicals completes
-        logger.info("🔗 CHAINING: Triggering weekly_signals_computation after weekly_technicals completion")
-        from app.services.weekly_signals_job import run_weekly_signals_job
-        try:
-            await run_weekly_signals_job()
-            logger.info("✅ CHAINING: weekly_signals_computation completed successfully")
-        except Exception as chain_error:
-            logger.error(f"❌ CHAINING: weekly_signals_computation failed: {str(chain_error)}")
+        # Trigger next job in chain using centralized chain manager
+        from app.core.job_chain_manager import trigger_next_job_in_chain
+        await trigger_next_job_in_chain(job_name)
 
         return result
 
