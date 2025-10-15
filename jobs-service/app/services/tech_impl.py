@@ -118,9 +118,9 @@ def compute_indicators_tail(df: pd.DataFrame) -> pd.DataFrame:
 
     # Volume and price metrics with adaptive periods
     out["avg_vol20"] = out["volume"].rolling(vol_period, min_periods=max(1, vol_period // 2)).mean()
-    out["high_252"]  = out["close"].rolling(high_period, min_periods=max(1, high_period // 5)).max()
+    out["high_252"]  = out["high"].rolling(high_period, min_periods=max(1, high_period // 5)).max()  # Use 'high' not 'close' for 52w high
 
-    out["distance_to_52w_high"] = np.where(out["high_252"] > 0, (out["high_252"] - out["close"]) / out["high_252"], np.nan)
+    out["distance_to_52w_high"] = np.where(out["high_252"] > 0, (out["close"] - out["high_252"]) / out["high_252"], np.nan)  # Negative when below high
     out["rel_volume"] = np.where(out["avg_vol20"] > 0, out["volume"] / out["avg_vol20"], np.nan)
     out["sma_slope"]  = out.get("sma20", np.nan) - out.get("sma50", np.nan) if not pd.isna(out.get("sma20", np.nan)).all() and not pd.isna(out.get("sma50", np.nan)).all() else np.nan
 

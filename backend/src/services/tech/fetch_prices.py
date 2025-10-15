@@ -3,13 +3,9 @@ from typing import List, Optional
 
 import pandas as pd
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-from src.db.models import SessionLocal, HistoricalPrice
-
-try:
-    from app.models.daily_ohlc_price import DailyOHLCPrice  # daily OHLC from Schwab upsert
-except Exception:
-    DailyOHLCPrice = None  # type: ignore
+from src.db.models import SessionLocal
 
 
 def _to_date(d: str) -> datetime:
@@ -17,77 +13,45 @@ def _to_date(d: str) -> datetime:
 
 
 def get_latest_trade_date(db: Session) -> Optional[str]:
-    """Return the latest trade date from prices_daily_ohlc if present, else from historical_prices."""
-    latest = None
-    if DailyOHLCPrice is not None:
-        row = db.query(DailyOHLCPrice.date).order_by(DailyOHLCPrice.date.desc()).first()
-        if row and row[0]:
-            latest = row[0]
-    if not latest:
-        row2 = db.query(HistoricalPrice.date).order_by(HistoricalPrice.date.desc()).first()
-        if row2 and row2[0]:
-            latest = row2[0]
-    return latest
+    """Return the latest trade date from unified_price_data view."""
+    result = db.execute(text("SELECT MAX(date) FROM unified_price_data"))
+    row = result.fetchone()
+    return row[0] if row and row[0] else None
 
 
 def get_symbols_for_date(db: Session, date_str: str, symbols: Optional[List[str]] = None) -> List[str]:
-    """Symbols updated on a given date, or filter given list against availability."""
-    if DailyOHLCPrice is not None:
-        q = db.query(DailyOHLCPrice.symbol).filter(DailyOHLCPrice.date == date_str)
-        if symbols:
-            symbols = [s.upper() for s in symbols]
-            q = q.filter(DailyOHLCPrice.symbol.in_(symbols))
-        rows = q.distinct().all()
-        return [r[0] for r in rows if r and r[0]]
-    # Fallback to historical_prices if prices_daily_ohlc is absent
-    q = db.query(HistoricalPrice.symbol).filter(HistoricalPrice.date == date_str)
+    """Symbols available on a given date from unified_price_data view."""
     if symbols:
-        symbols = [s.upper() for s in symbols]
-        q = q.filter(HistoricalPrice.symbol.in_(symbols))
-    rows = q.distinct().all()
+        symbols_upper = [s.upper() for s in symbols]
+        placeholders = ','.join([f':sym{i}' for i in range(len(symbols_upper))])
+        query = text(f"SELECT DISTINCT symbol FROM unified_price_data WHERE date = :date AND symbol IN ({placeholders})")
+        params = {'date': date_str}
+        for i, sym in enumerate(symbols_upper):
+            params[f'sym{i}'] = sym
+        result = db.execute(query, params)
+    else:
+        result = db.execute(text("SELECT DISTINCT symbol FROM unified_price_data WHERE date = :date"), {"date": date_str})
+
+    rows = result.fetchall()
     return [r[0] for r in rows if r and r[0]]
 
 
 def load_tail_df(db: Session, symbol: str, cutoff_date: str) -> pd.DataFrame:
-    """Merge recent bars from historical_prices and prices_daily_ohlc, prefer prices_daily_ohlc when duplicate dates."""
+    """Load price data from unified_price_data view (combines historical_prices + prices_daily_ohlc)."""
     cols = ["date", "open", "high", "low", "close", "volume"]
-    hp_rows = db.query(HistoricalPrice.date, HistoricalPrice.open, HistoricalPrice.high, HistoricalPrice.low,
-                       HistoricalPrice.close, HistoricalPrice.volume).filter(
-        HistoricalPrice.symbol == symbol,
-        HistoricalPrice.date >= cutoff_date,
-        HistoricalPrice.asset_type == 'stock',  # ensure only stocks
-    ).all()
-    hp = pd.DataFrame(hp_rows, columns=cols)
-  
-    if DailyOHLCPrice is not None:
-        cp_rows = db.query(DailyOHLCPrice.date, DailyOHLCPrice.open, DailyOHLCPrice.high, DailyOHLCPrice.low,
-                           DailyOHLCPrice.close, DailyOHLCPrice.volume).filter(
-            DailyOHLCPrice.symbol == symbol,
-            DailyOHLCPrice.date >= cutoff_date,
-        ).all()
-        cp = pd.DataFrame(cp_rows, columns=cols)
-    else:
-        cp = pd.DataFrame(columns=cols)
 
-    if hp.empty and cp.empty:
-        return pd.DataFrame(columns=cols)
+    # Query unified_price_data view which already handles the merging logic
+    query = text("""
+        SELECT date, open, high, low, close, volume
+        FROM unified_price_data
+        WHERE symbol = :symbol AND date >= :cutoff_date
+        ORDER BY date ASC
+    """)
 
-    frames = []
-    if not hp.empty:
-        hp["_src"] = "H"
-        frames.append(hp)
-    if not cp.empty:
-        cp["_src"] = "C"
-        frames.append(cp)
+    result = db.execute(query, {"symbol": symbol, "cutoff_date": cutoff_date})
+    rows = result.fetchall()
 
-    # Concatenate only non-empty frames to avoid pandas future warnings
-    if not frames:
-        return pd.DataFrame(columns=cols)
-    df = pd.concat(frames, ignore_index=True)
-    # prefer current over historical on duplicate dates
-    df = df.sort_values(["date", "_src"])  # H before C
-    df = df.drop_duplicates(subset=["date"], keep="last")  # keep C when duplicate
-    df = df.sort_values("date").reset_index(drop=True)
+    df = pd.DataFrame(rows, columns=cols)
     return df
 
 

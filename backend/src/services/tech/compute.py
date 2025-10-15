@@ -25,8 +25,9 @@ def compute_indicators_tail(df: pd.DataFrame) -> pd.DataFrame:
     out["adx14"]  = adx.get("ADX_14", adx.iloc[:, 0])
 
     dc = ta.donchian(out["high"], out["low"], lower_length=20, upper_length=20)
-    out["donch20_high"] = dc.iloc[:, 0]
-    out["donch20_low"]  = dc.iloc[:, 1]
+    # Donchian returns: [0]=DCL (lower), [1]=DCM (middle), [2]=DCU (upper)
+    out["donch20_high"] = dc.iloc[:, 2]  # Upper band (highest high over 20 periods)
+    out["donch20_low"]  = dc.iloc[:, 0]  # Lower band (lowest low over 20 periods)
 
     macd = ta.macd(out["close"])  # 12,26,9
     out["macd"]        = macd.get("MACD_12_26_9", macd.iloc[:, 0])
@@ -34,9 +35,9 @@ def compute_indicators_tail(df: pd.DataFrame) -> pd.DataFrame:
     out["macd_hist"]   = macd.get("MACDh_12_26_9", macd.iloc[:, 2])
 
     out["avg_vol20"] = out["volume"].rolling(20, min_periods=20).mean()
-    out["high_252"]  = out["close"].rolling(252, min_periods=252).max()
+    out["high_252"]  = out["high"].rolling(252, min_periods=252).max()  # 52-week high (252 trading days)
 
-    out["distance_to_52w_high"] = np.where(out["high_252"] > 0, (out["high_252"] - out["close"]) / out["high_252"], np.nan)
+    out["distance_to_52w_high"] = np.where(out["high_252"] > 0, (out["close"] - out["high_252"]) / out["high_252"], np.nan)
     out["rel_volume"] = np.where(out["avg_vol20"] > 0, out["volume"] / out["avg_vol20"], np.nan)
     out["sma_slope"]  = out["sma20"] - out["sma50"]
 
