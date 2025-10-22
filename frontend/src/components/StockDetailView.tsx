@@ -269,6 +269,43 @@ export default function StockDetailView({
                     )}
                   </div>
                 </div>
+
+                {/* Eligibility Metrics */}
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Eligibility</h3>
+                  <div className="bg-slate-900 rounded-lg p-2.5 border border-slate-700 space-y-1">
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-[11px] text-slate-400">$ Vol</span>
+                        <span className="text-[11px] font-medium text-slate-200">
+                          {screenerData.avg_dollar_vol
+                            ? '$' + (parseFloat(screenerData.avg_dollar_vol.toString()) / 1000000).toFixed(1) + 'M'
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[11px] text-slate-400">ATR%</span>
+                        <span className="text-[11px] font-medium text-slate-200">
+                          {screenerData.atr_pct
+                            ? (parseFloat(screenerData.atr_pct.toString()) * 100).toFixed(2) + '%'
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[11px] text-slate-400">Breakout</span>
+                        <span className={`text-[11px] font-medium ${screenerData.near_breakout ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          {screenerData.near_breakout ? 'Near' : 'No'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[11px] text-slate-400">MACD↑</span>
+                        <span className={`text-[11px] font-medium ${screenerData.macd_hist_trending_up ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          {screenerData.macd_hist_trending_up ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="p-6 text-center">

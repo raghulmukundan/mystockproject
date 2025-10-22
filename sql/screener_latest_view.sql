@@ -48,6 +48,12 @@ SELECT
     -- Daily trend
     td.sma_slope,
 
+    -- Eligibility metrics
+    td.avg_dollar_vol,
+    td.atr_pct,
+    td.near_breakout,
+    td.macd_hist_trending_up,
+
     -- ========================================================================
     -- DAILY SIGNALS (from signals_daily_latest)
     -- ========================================================================

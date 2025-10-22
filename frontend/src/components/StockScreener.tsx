@@ -448,6 +448,31 @@ export default function StockScreener() {
               />
             </div>
 
+            {/* Min Avg Dollar Volume */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Min Avg Dollar Vol</label>
+              <input
+                type="number"
+                placeholder="e.g., 1000000"
+                value={filters.minAvgDollarVol ?? ''}
+                onChange={(e) => updateFilter('minAvgDollarVol', e.target.value ? parseFloat(e.target.value) : undefined)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Max ATR% */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Max ATR% (Volatility)</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="e.g., 0.05 (5%)"
+                value={filters.maxAtrPct ?? ''}
+                onChange={(e) => updateFilter('maxAtrPct', e.target.value ? parseFloat(e.target.value) : undefined)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
             {/* Sort By */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">Sort By</label>
@@ -548,6 +573,16 @@ export default function StockScreener() {
                 active={filters.weakening === true}
                 onClick={() => toggleFilter('weakening')}
                 label="⚠️ Weakening"
+              />
+              <FilterChip
+                active={filters.nearBreakout === true}
+                onClick={() => toggleFilter('nearBreakout')}
+                label="Near Breakout"
+              />
+              <FilterChip
+                active={filters.macdTrendingUp === true}
+                onClick={() => toggleFilter('macdTrendingUp')}
+                label="MACD Trending ↑"
               />
             </div>
           </div>
@@ -709,6 +744,7 @@ export default function StockScreener() {
 
             {/* Additional Info */}
             <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Stock Info</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <p className="text-gray-500 mb-1">Type</p>
@@ -732,6 +768,49 @@ export default function StockScreener() {
                     {searchedStock.pct_from_52w_high !== null && searchedStock.pct_from_52w_high !== undefined
                       ? parseFloat(searchedStock.pct_from_52w_high.toString()).toFixed(1) + '%'
                       : 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Eligibility Metrics */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Eligibility Metrics</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500 mb-1">Avg Dollar Vol</p>
+                  <p className="font-medium text-gray-900">
+                    {searchedStock.avg_dollar_vol
+                      ? '$' + (parseFloat(searchedStock.avg_dollar_vol.toString()) / 1000000).toFixed(1) + 'M'
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 mb-1">ATR %</p>
+                  <p className="font-medium text-gray-900">
+                    {searchedStock.atr_pct
+                      ? (parseFloat(searchedStock.atr_pct.toString()) * 100).toFixed(2) + '%'
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 mb-1">Near Breakout</p>
+                  <p className="font-medium text-gray-900">
+                    {searchedStock.near_breakout ? (
+                      <span className="text-green-600">Yes</span>
+                    ) : (
+                      <span className="text-gray-600">No</span>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 mb-1">MACD Trending Up</p>
+                  <p className="font-medium text-gray-900">
+                    {searchedStock.macd_hist_trending_up ? (
+                      <span className="text-green-600">Yes</span>
+                    ) : (
+                      <span className="text-gray-600">No</span>
+                    )}
                   </p>
                 </div>
               </div>

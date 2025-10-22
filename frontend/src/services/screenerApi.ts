@@ -41,6 +41,12 @@ export interface ScreenerFilters {
   minTrendScoreD?: number
   minTrendScoreW?: number
 
+  // Eligibility metric filters
+  minAvgDollarVol?: number
+  maxAtrPct?: number
+  nearBreakout?: boolean
+  macdTrendingUp?: boolean
+
   // Sorting and pagination
   sort?: string
   page: number
@@ -73,6 +79,12 @@ export interface ScreenerResult {
   high_252: string | number | null
   distance_to_52w_high: string | number | null
   sma_slope: string | number | null
+
+  // Eligibility metrics
+  avg_dollar_vol: string | number | null
+  atr_pct: string | number | null
+  near_breakout: boolean | null
+  macd_hist_trending_up: boolean | null
 
   // Daily signals
   sma20_cross_50_up: boolean | null
@@ -217,6 +229,16 @@ class ScreenerApi {
     if (filters.minTrendScoreW !== undefined) {
       params.append('minTrendScoreW', filters.minTrendScoreW.toString())
     }
+
+    // Eligibility metric filters
+    if (filters.minAvgDollarVol !== undefined) {
+      params.append('minAvgDollarVol', filters.minAvgDollarVol.toString())
+    }
+    if (filters.maxAtrPct !== undefined) {
+      params.append('maxAtrPct', filters.maxAtrPct.toString())
+    }
+    if (filters.nearBreakout === true) params.append('nearBreakout', 'true')
+    if (filters.macdTrendingUp === true) params.append('macdTrendingUp', 'true')
 
     // Sorting and pagination
     if (filters.sort) params.append('sort', filters.sort)

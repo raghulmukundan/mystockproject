@@ -81,7 +81,8 @@ ALLOWED_SORT_COLUMNS = {
     'risk_reward_ratio', 'distance_from_entry_pct',
     'sma20', 'sma50', 'sma200', 'macd', 'macd_hist',
     'daily_date', 'weekly_date',
-    'sector', 'market_cap_numeric'
+    'sector', 'market_cap_numeric',
+    'avg_dollar_vol', 'atr_pct'
 }
 
 # ============================================================================
@@ -120,6 +121,12 @@ class ScreenerResult(BaseModel):
     high_252: Optional[Decimal]
     distance_to_52w_high: Optional[Decimal]
     sma_slope: Optional[Decimal]
+
+    # Eligibility metrics
+    avg_dollar_vol: Optional[Decimal]
+    atr_pct: Optional[Decimal]
+    near_breakout: Optional[bool]
+    macd_hist_trending_up: Optional[bool]
 
     # Daily signals
     sma20_cross_50_up: Optional[bool]
@@ -266,6 +273,10 @@ def build_where_clauses(
     weakening: Optional[bool],
     min_trend_score_d: Optional[int],
     min_trend_score_w: Optional[int],
+    min_avg_dollar_vol: Optional[float],
+    max_atr_pct: Optional[float],
+    near_breakout: Optional[bool],
+    macd_trending_up: Optional[bool],
 ) -> tuple[List[str], Dict[str, Any]]:
     """
     Build WHERE clauses and parameter dict from filters.
@@ -368,6 +379,21 @@ def build_where_clauses(
         where_clauses.append("trend_score_w >= :min_trend_score_w")
         params['min_trend_score_w'] = min_trend_score_w
 
+    # Eligibility metric filters
+    if min_avg_dollar_vol is not None:
+        where_clauses.append("avg_dollar_vol >= :min_avg_dollar_vol")
+        params['min_avg_dollar_vol'] = min_avg_dollar_vol
+
+    if max_atr_pct is not None:
+        where_clauses.append("atr_pct <= :max_atr_pct")
+        params['max_atr_pct'] = max_atr_pct
+
+    if near_breakout is True:
+        where_clauses.append("near_breakout = TRUE")
+
+    if macd_trending_up is True:
+        where_clauses.append("macd_hist_trending_up = TRUE")
+
     return where_clauses, params
 
 
@@ -412,6 +438,12 @@ def get_screener(
     minTrendScoreD: Optional[int] = Query(None, description="Minimum daily trend score"),
     minTrendScoreW: Optional[int] = Query(None, description="Minimum weekly trend score"),
 
+    # Eligibility metric filters
+    minAvgDollarVol: Optional[float] = Query(None, description="Minimum average dollar volume"),
+    maxAtrPct: Optional[float] = Query(None, description="Maximum ATR percentage (volatility)"),
+    nearBreakout: Optional[bool] = Query(None, description="Near breakout (within 3% of Donchian high)"),
+    macdTrendingUp: Optional[bool] = Query(None, description="MACD histogram trending up"),
+
     # Sorting and pagination
     sort: str = Query(DEFAULT_SORT, description="Sort column (e.g., 'combined_score DESC')"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
@@ -449,6 +481,10 @@ def get_screener(
             weakening=weakening,
             min_trend_score_d=minTrendScoreD,
             min_trend_score_w=minTrendScoreW,
+            min_avg_dollar_vol=minAvgDollarVol,
+            max_atr_pct=maxAtrPct,
+            near_breakout=nearBreakout,
+            macd_trending_up=macdTrendingUp,
         )
 
         where_sql = ""
@@ -476,6 +512,7 @@ def get_screener(
                 donch20_high, donch20_low,
                 macd, macd_signal, macd_hist,
                 high_252, distance_to_52w_high, sma_slope,
+                avg_dollar_vol, atr_pct, near_breakout, macd_hist_trending_up,
                 sma20_cross_50_up, price_above_200, rsi_cross_50_up,
                 macd_cross_up, donch20_breakout, high_tight_zone,
                 below_200_sma, macd_cross_down, rsi_cross_50_down,
@@ -532,6 +569,10 @@ def get_screener(
                 high_252=row.high_252,
                 distance_to_52w_high=row.distance_to_52w_high,
                 sma_slope=row.sma_slope,
+                avg_dollar_vol=row.avg_dollar_vol,
+                atr_pct=row.atr_pct,
+                near_breakout=row.near_breakout,
+                macd_hist_trending_up=row.macd_hist_trending_up,
                 sma20_cross_50_up=row.sma20_cross_50_up,
                 price_above_200=row.price_above_200,
                 rsi_cross_50_up=row.rsi_cross_50_up,

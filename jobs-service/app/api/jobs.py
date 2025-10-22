@@ -424,10 +424,10 @@ def _run_eod_scan_thread(start_date: Optional[str] = None, end_date: Optional[st
         # Trigger technical analysis after successful EOD completion
         # This ensures technical analysis only runs when EOD data is fresh and available
         logger.info("EOD scan completed successfully. Triggering technical analysis...")
-        from app.services.eod_scan_job import _trigger_technical_analysis_after_eod
+        from app.services.tech_job import run_tech_job
         loop2 = asyncio.new_event_loop()
         asyncio.set_event_loop(loop2)
-        loop2.run_until_complete(_trigger_technical_analysis_after_eod())
+        loop2.run_until_complete(run_tech_job())
         loop2.close()
 
     except Exception as e:
